@@ -1,0 +1,176 @@
+import logging
+import math
+import re
+import shutil
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+
+from ..config import settings
+from ..services.frame_rendering import average_frames, frame_count, write_frames
+from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
+from ..services.window_spacing import default_spacing, resolve_step
+
+router = APIRouter(prefix="/jobs", tags=["jobs"])
+log = logging.getLogger(__name__)
+
+_JOB_ID = re.compile(r"^[0-9a-f]{32}$")
+_FRAME_CACHE = "public, max-age=31536000, immutable"
+_COPY_CHUNK = 1024 * 1024
+
+
+def _allowed_window_sizes() -> list[int]:
+    sizes, size = [], 1
+    while size <= settings.max_window_size:
+        if size >= settings.min_window_size:
+            sizes.append(size)
+        size *= 2
+    return sizes
+
+
+def _parse_window_size(text: str | None) -> int:
+    allowed = _allowed_window_sizes()
+    message = f"The window size must be a power of 2 from {allowed[0]} to {allowed[-1]} ({', '.join(map(str, allowed))})."
+    try:
+        value = float(text)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=message) from None
+    if not value.is_integer() or int(value) not in allowed:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
+def _parse_frame_rate(text: str | None) -> float:
+    message = f"The frame rate must be a number from {settings.min_frame_rate:g} to {settings.max_frame_rate:g}."
+    try:
+        value = float(text)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=message) from None
+    if not settings.min_frame_rate <= value <= settings.max_frame_rate:  # also false for NaN
+        raise HTTPException(status_code=400, detail=message)
+    return int(value) if value.is_integer() else value
+
+
+def _parse_window_spacing(text: str | None) -> float | None:
+    """The requested spacing, or None when the field is missing or empty."""
+    if text is None or not text.strip():
+        return None
+    message = "The window spacing must be a number greater than 0."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or value <= 0:
+        raise HTTPException(status_code=400, detail=message)
+    return value
+
+
+def _format_bytes(n: int) -> str:
+    return f"{n // (1024 * 1024)} MB" if n >= 1024 * 1024 else f"{n} bytes"
+
+
+def _save_upload(upload: UploadFile, path: Path) -> None:
+    """Stream the upload to ``path``, refusing anything over the size limit."""
+    written = 0
+    with path.open("wb") as out:
+        while chunk := upload.file.read(_COPY_CHUNK):
+            written += len(chunk)
+            if written > settings.max_audio_bytes:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"The file is larger than the {_format_bytes(settings.max_audio_bytes)} limit.",
+                )
+            out.write(chunk)
+
+
+def _remove_job(job_id: str) -> None:
+    for root in (settings.audio_temp_dir, settings.frames_temp_dir):
+        shutil.rmtree(root / job_id, ignore_errors=True)
+
+
+@router.post("")
+def create_job(
+    file: UploadFile | None = File(None),
+    window_size: str | None = Form(None),
+    frame_rate: str | None = Form(None),
+    window_spacing: str | None = Form(None),
+) -> dict:
+    window = _parse_window_size(window_size)
+    fps = _parse_frame_rate(frame_rate)
+    requested_spacing = _parse_window_spacing(window_spacing)
+    if file is None:
+        raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
+
+    file_name = Path((file.filename or "audio.wav").replace("\\", "/")).name  # for display only, never a path
+    job_id = uuid.uuid4().hex
+    audio_path = settings.audio_temp_dir / job_id / "audio.wav"
+    frames_dir = settings.frames_temp_dir / job_id
+    try:
+        audio_path.parent.mkdir(parents=True, exist_ok=True)
+        _save_upload(file, audio_path)
+
+        file_rate, left, right = read_wav(audio_path, display_name=file_name)
+        samples = left.shape[0]
+        if samples == 0:
+            raise HTTPException(status_code=400, detail="The file contains no audio.")
+        frames = frame_count(samples, file_rate, fps)
+        if frames > settings.max_frames:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"This would create {frames:,} frames; the limit is {settings.max_frames:,}. "
+                    "Lower the frame rate or use a shorter file."
+                ),
+            )
+
+        if requested_spacing is None:  # not given: the default that gives each frame its own window
+            requested_spacing = default_spacing(file_rate, fps, window)
+        spacing, step, raised = resolve_step(requested_spacing, window)
+        windows = window_count(samples, step)
+        if windows > settings.max_windows:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"This would create {windows:,} windows; the limit is {settings.max_windows:,}. "
+                    "Use a larger window spacing."
+                ),
+            )
+        result = analyze_channels(left, right, file_rate, window, step=step)
+        write_frames(average_frames(result, fps, frames), frames_dir)
+    except HTTPException:
+        _remove_job(job_id)
+        raise
+    except AudioAnalysisError as exc:
+        _remove_job(job_id)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        _remove_job(job_id)
+        log.exception("Creating frames failed for upload %r", file.filename)
+        raise HTTPException(status_code=500, detail="Something went wrong while creating the frames.") from None
+
+    return {
+        "job_id": job_id,
+        "file_name": file_name,
+        "sample_rate": file_rate,
+        "duration_seconds": samples / file_rate,
+        "window_size": window,
+        "frame_rate": fps,
+        "frame_count": frames,
+        "window_spacing": spacing,
+        "step_samples": step,
+        "window_count": result.window_count,
+        "spacing_raised": raised,
+        "frame_url_template": f"/api/jobs/{job_id}/frames/{{index}}",
+    }
+
+
+@router.get("/{job_id}/frames/{index}")
+def get_frame(job_id: str, index: str) -> FileResponse:
+    if not _JOB_ID.fullmatch(job_id) or not index.isascii() or not index.isdigit():
+        raise HTTPException(status_code=404, detail="Frame not found.")
+    path = settings.frames_temp_dir / job_id / f"frame_{int(index):06d}.png"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Frame not found.")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": _FRAME_CACHE})

@@ -218,3 +218,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# App data
+backend/uploads/
+
+# Sample audio for analysis (large)
+backend/audio/

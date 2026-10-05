@@ -1,0 +1,15 @@
+# Project hooks. Mandatory (optional: false) hooks run automatically.
+# Chain tasks and implement after planning, so that
+# /speckit-specify followed by /speckit-plan carries a feature through to code.
+hooks:
+  after_plan:
+    - extension: project
+      command: speckit.tasks
+      enabled: true
+      optional: false
+      description: Generate tasks.md from the plan
+    - extension: project
+      command: speckit.implement
+      enabled: true
+      optional: false
+      description: Implement all tasks in tasks.md
