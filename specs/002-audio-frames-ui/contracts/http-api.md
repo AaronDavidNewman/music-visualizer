@@ -54,14 +54,14 @@ Returns one frame image.
 | `job_id` | 32 lowercase hex characters, otherwise 404 |
 | `index` | Non-negative integer, otherwise 404 |
 
-**Success**: `200 OK`, `Content-Type: image/png`, with a long-lived `Cache-Control` header. The image is 220 × 160 grayscale.
+**Success**: `200 OK`, `Content-Type: image/png`, with a long-lived `Cache-Control` header. The image is 252 × 168 (was 220 × 160 before feature 005) and, since feature 007, a color PNG (it was grayscale): an indexed-colour file that decodes to exact RGB values.
 **Errors**: `404` with `{"detail": "Frame not found."}` if the job or frame does not exist.
 
 ## Image content contract
 
-- 11 columns by 8 rows of 20 × 20 pixel squares, no margins or gaps.
-- Note index *n* (0 = lowest) is at row `n // 11`, column `n % 11`, so index 0 is top-left.
-- Square gray level is `round(255 * value / file_max)`.
+- 12 columns by 7 rows of 21 × 24 pixel tiles, no margins or gaps (replaced the 11 × 8 squares in feature 005; see [the layout contract](../../005-octave-grid-layout/contracts/image-layout.md)).
+- Note index *n* (0 = lowest) is at row `n // 12`, column `n % 12`, so index 0 is top-left, each row is an octave, and the tile below a note is the same note one octave higher. Notes 84 to 87 are not drawn.
+- Square gray level is `round(255 * (level / 255) ** (1 / brightness))`, where `level = round(255 * value / file_max)` and `brightness` is a whole number from 2 to 100 (default 2, the square root; see feature 004). Black stays black and the loudest value stays white; quieter values are brightened.
 
 ## UI contract (what the user can do and see)
 

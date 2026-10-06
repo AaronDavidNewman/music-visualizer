@@ -6,6 +6,8 @@ export interface JobResult {
   window_size: number;
   frame_rate: number;
   frame_count: number;
+  brightness: number;
+  smoothing: number;
   window_spacing: number;
   step_samples: number;
   window_count: number;
@@ -13,18 +15,24 @@ export interface JobResult {
   frame_url_template: string;
 }
 
+/** What the user chooses besides the file. */
+export interface JobSettings {
+  windowSize: number;
+  frameRate: number;
+  windowSpacing: number;
+  brightness: number;
+  smoothing: number;
+}
+
 /** Uploads the file and waits for the frames to be created. Rejects with a message fit to show the user. */
-export async function submitJob(
-  file: File,
-  windowSize: number,
-  frameRate: number,
-  windowSpacing: number,
-): Promise<JobResult> {
+export async function submitJob(file: File, settings: JobSettings): Promise<JobResult> {
   const body = new FormData();
   body.append("file", file);
-  body.append("window_size", String(windowSize));
-  body.append("frame_rate", String(frameRate));
-  body.append("window_spacing", String(windowSpacing));
+  body.append("window_size", String(settings.windowSize));
+  body.append("frame_rate", String(settings.frameRate));
+  body.append("window_spacing", String(settings.windowSpacing));
+  body.append("brightness", String(settings.brightness));
+  body.append("smoothing", String(settings.smoothing));
 
   let res: Response;
   try {

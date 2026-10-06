@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import FramePlayer from "./components/FramePlayer.vue";
 import UploadForm from "./components/UploadForm.vue";
-import { submitJob, type JobResult } from "./api";
+import { submitJob, type JobResult, type JobSettings } from "./api";
 import { formatSpacing } from "./lib/spacing";
 
 type Status = "idle" | "busy" | "done" | "error";
@@ -11,11 +11,11 @@ const status = ref<Status>("idle");
 const result = ref<JobResult | null>(null);
 const errorMessage = ref("");
 
-async function onSubmit(file: File, windowSize: number, frameRate: number, windowSpacing: number) {
+async function onSubmit(file: File, settings: JobSettings) {
   status.value = "busy";
   errorMessage.value = "";
   try {
-    result.value = await submitJob(file, windowSize, frameRate, windowSpacing);
+    result.value = await submitJob(file, settings);
     status.value = "done";
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : "Something went wrong.";
@@ -42,6 +42,8 @@ async function onSubmit(file: File, windowSize: number, frameRate: number, windo
         <li>Window size: {{ result.window_size }}</li>
         <li>Frame rate: {{ result.frame_rate }} fps</li>
         <li>Frames: {{ result.frame_count }}</li>
+        <li>Brightness: {{ result.brightness }}</li>
+        <li>Smoothing: {{ result.smoothing.toFixed(2) }}</li>
         <li>Window spacing: {{ formatSpacing(result.window_spacing) }}</li>
         <li>Step: {{ Number(result.step_samples.toFixed(2)) }} samples</li>
         <li>Windows analyzed: {{ result.window_count }}</li>

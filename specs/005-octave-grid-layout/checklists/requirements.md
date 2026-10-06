@@ -1,7 +1,7 @@
-# Specification Quality Checklist: Audio Upload and Frame Visualization UI
+# Specification Quality Checklist: Octave Grid Layout
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-10-04
+**Created**: 2026-10-05
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -31,7 +31,9 @@
 
 ## Notes
 
-- Validated in 1 iteration, no failing items.
-- Interpretations made as assumptions, not clarification markers: brightness is linear and relative to the file's loudest value; the 88 squares formed an 11 by 8 grid (replaced by the 12 × 7 octave grid in feature 005); "animation" means in-UI playback; sample rate comes from the file; the upload limit is raised from the current 20 MB to 200 MB.
-- The spec names the existing note analysis (feature 001) as a dependency, and "server" and "temporary directory" come from the user's description. No frameworks or libraries are named.
-- Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
+- Two clarifications were resolved by the user and recorded in the spec's Clarifications section:
+  - **Tile shape**: each tile is 87.5% as wide as it is tall, so the image is exactly 3:2 because (12 × 0.875) ÷ 7 = 1.5. (The original wording, "scale the row height by .875", would have given about 1.96:1, and the user confirmed the factor applies to the column width.)
+  - **Extra notes**: the grid shows 84 notes (an 84-key piano); the highest four, 7040 to 8372 Hz, are left out of the picture. The analysis still calculates all 88 values.
+- Interpretation recorded as an assumption, not a marker: "above" is taken literally, so the lowest octave is the top row and the tile below a note is the same note one octave higher. The lowest note stays top-left.
+- Re-validated after the clarifications: 16/16 items passing (was 12/16).
+- Items marked incomplete require spec updates before `/speckit-plan`.

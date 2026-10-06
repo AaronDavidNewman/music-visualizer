@@ -5,11 +5,21 @@ import shutil
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from ..config import settings
-from ..services.frame_rendering import average_frames, frame_count, write_frames
+from ..services.frame_rendering import (
+    DEFAULT_BRIGHTNESS,
+    DEFAULT_SMOOTHING,
+    MAX_BRIGHTNESS,
+    MAX_SMOOTHING,
+    MIN_BRIGHTNESS,
+    MIN_SMOOTHING,
+    average_frames,
+    frame_count,
+    write_frames,
+)
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
 from ..services.window_spacing import default_spacing, resolve_step
 
@@ -67,6 +77,45 @@ def _parse_window_spacing(text: str | None) -> float | None:
     return value
 
 
+async def _sent_fields(request: Request) -> set[str]:
+    """Names of the form fields the client actually sent.
+
+    FastAPI reports an empty form value as missing, which would make ``brightness=`` silently use the
+    default. This tells "not sent" apart from "sent empty", so an empty brightness can be refused.
+    """
+    return set((await request.form()).keys())
+
+
+def _parse_brightness(text: str | None, sent: bool) -> int:
+    """The requested brightness. Not sent means the default; anything sent must be a whole number 2..100."""
+    if text is None and not sent:
+        return DEFAULT_BRIGHTNESS
+    text = text or ""
+    message = f"The brightness must be a whole number from {MIN_BRIGHTNESS} to {MAX_BRIGHTNESS}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not value.is_integer() or not MIN_BRIGHTNESS <= value <= MAX_BRIGHTNESS:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
+def _parse_smoothing(text: str | None, sent: bool) -> float:
+    """The requested smoothing. Not sent means the default; anything sent must be a number 0.0..0.8."""
+    if text is None and not sent:
+        return DEFAULT_SMOOTHING
+    text = text or ""
+    message = f"The smoothing must be a number from {MIN_SMOOTHING} to {MAX_SMOOTHING}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not MIN_SMOOTHING <= value <= MAX_SMOOTHING:
+        raise HTTPException(status_code=400, detail=message)
+    return value + 0.0  # turns -0.0 into 0.0
+
+
 def _format_bytes(n: int) -> str:
     return f"{n // (1024 * 1024)} MB" if n >= 1024 * 1024 else f"{n} bytes"
 
@@ -96,10 +145,15 @@ def create_job(
     window_size: str | None = Form(None),
     frame_rate: str | None = Form(None),
     window_spacing: str | None = Form(None),
+    brightness: str | None = Form(None),
+    smoothing: str | None = Form(None),
+    sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
     fps = _parse_frame_rate(frame_rate)
     requested_spacing = _parse_window_spacing(window_spacing)
+    brightness_root = _parse_brightness(brightness, "brightness" in sent)
+    smoothing_value = _parse_smoothing(smoothing, "smoothing" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -138,7 +192,10 @@ def create_job(
                 ),
             )
         result = analyze_channels(left, right, file_rate, window, step=step)
-        write_frames(average_frames(result, fps, frames), frames_dir)
+        # write_frames smooths the note values and then each tile's hue, both with the same smoothing
+        write_frames(
+            average_frames(result, fps, frames), frames_dir, brightness=brightness_root, smoothing=smoothing_value
+        )
     except HTTPException:
         _remove_job(job_id)
         raise
@@ -158,6 +215,8 @@ def create_job(
         "window_size": window,
         "frame_rate": fps,
         "frame_count": frames,
+        "brightness": brightness_root,
+        "smoothing": smoothing_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

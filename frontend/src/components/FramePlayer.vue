@@ -130,6 +130,9 @@ onBeforeUnmount(pause);
 }
 .frame {
   width: min(100%, 660px);
+  /* Frames are 252 x 168 pixels (12 x 7 tiles of 21 x 24). Declaring the ratio reserves the right
+     space before a frame loads, so the image keeps 3:2 at any width and never changes size between frames. */
+  aspect-ratio: 3 / 2;
   image-rendering: pixelated;
   border: 1px solid #ccc;
   background: #000;

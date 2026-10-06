@@ -22,7 +22,7 @@ No `NEEDS CLARIFICATION` items were open. These are the design decisions.
 
 ## Decision 4: Image format and layout
 
-- **Decision**: 8-bit grayscale PNG, 11 columns × 8 rows of 20 × 20 pixel squares (220 × 160), note *n* at row `n // 11`, column `n % 11`. Brightness is `round(255 * value / file_max)`, and all black if the file maximum is 0. Built with numpy (`np.repeat` on both axes) and saved with Pillow at a low PNG compression level.
+- **Decision**: 8-bit grayscale PNG (a color PNG since feature 007), 12 columns × 7 rows of 21 × 24 pixel tiles (252 × 168, exactly 3:2), note *n* at row `n // 12`, column `n % 12` (feature 005 replaced the original 11 × 8 grid of 20 × 20 squares, 220 × 160). Brightness is `round(255 * value / file_max)` (all black if the file maximum is 0), then boosted for display with `round(255 * (level / 255) ** (1 / brightness))` in `render_frame` (brightness 2, the square root, by default; feature 004 makes it a setting), because the linear scale looked too dark on real music. Built with numpy (`np.repeat` on both axes) and saved with Pillow at a low PNG compression level.
 - **Rationale**: Straight from FR-009 and FR-010. PNG is lossless, so brightness values are exact and testable. A low compression level keeps writing fast; the images are tiny.
 - **Alternatives considered**: JPEG (lossy, changes values); one sprite sheet (more client logic, and the spec asks for one image per frame); drawing with Pillow shapes (slower than array repetition).
 

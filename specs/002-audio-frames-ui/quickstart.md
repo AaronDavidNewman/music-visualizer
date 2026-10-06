@@ -43,7 +43,7 @@ Open http://localhost:5173.
 
 ## 3. Walk through the user stories
 
-1. **Submit (Story 1)**: Choose `backend/audio/fotr-intro1-echo.wav`. Leave window size 4096 and frame rate 30, then submit. Expected: a busy indicator, then the first frame (an 11 × 8 grid of gray squares), a summary with duration about 340.8 s, sample rate 44100, and 10,224 frames.
+1. **Submit (Story 1)**: Choose `backend/audio/fotr-intro1-echo.wav`. Leave window size 4096 and frame rate 30, then submit. Expected: a busy indicator, then the first frame (a 12 × 7 grid of gray tiles, 252 × 168 pixels, since feature 005), a summary with duration about 340.8 s, sample rate 44100, and 10,224 frames.
 2. **Silent and steady-note files**: Submit a silent WAV, then a one-note WAV. Expected: all squares black for silence. One clearly brightest square for the single note.
 3. **Animation (Story 2)**: Press play. Expected: frames advance at about 30 per second, the time display counts up, and playback stops at the last frame. Turn looping on and check that it restarts. Drag the slider and check the matching frame and time show.
 4. **Errors (Story 3)**:

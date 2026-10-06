@@ -40,11 +40,11 @@ A submission is created whole or not at all. If any step fails, both of its fold
 
 ## Frame
 
-Derived, not stored. Frame *f* (0-based) has start time `f / frame_rate` seconds and 88 values, the mean of the note values of the windows starting in `[f / frame_rate, (f + 1) / frame_rate)`. If no window starts in that period, it takes the values of the window covering the start of the period.
+Derived, not stored. Frame *f* (0-based) has start time `f / frame_rate` seconds and 88 values, the mean of the note values of the windows starting in `[f / frame_rate, (f + 1) / frame_rate)`. If no window starts in that period, it takes the values of the window covering the start of the period. Since feature 006 these per-frame values can then be smoothed over time (a running average per note, off by default) before they are scaled to gray levels.
 
 ## Frame Image
 
-`<frames_temp_dir>/<job_id>/frame_<f, 6 digits>.png`: 8-bit grayscale, 220 × 160 pixels, an 11-column by 8-row grid of 20 × 20 squares. Note *n* occupies row `n // 11` and column `n % 11`. Square brightness is `round(255 * value / file_max)`, where `file_max` is the largest note value in any frame, and 0 if `file_max` is 0.
+`<frames_temp_dir>/<job_id>/frame_<f, 6 digits>.png`: 8-bit grayscale (a color PNG since feature 007: each tile is a flat color whose brightest channel is the gray level), 252 × 168 pixels, a 12-column by 7-row grid of 21 × 24 tiles (feature 005; originally 220 × 160, an 11-column by 8-row grid of 20 × 20 squares). Note *n* occupies row `n // 12` and column `n % 12`, and notes 84 to 87 are not drawn. Tile brightness is first `level = round(255 * value / file_max)`, where `file_max` is the largest note value in any frame (0 if `file_max` is 0), and the pixel is then `round(255 * (level / 255) ** (1 / brightness))`, a root boost that keeps 0 black and 255 white but brightens quiet values (added after review because frames looked too dark). `brightness` is a whole number from 2 to 100 and defaults to 2, the square root (feature 004).
 
 ## Client state (frontend)
 

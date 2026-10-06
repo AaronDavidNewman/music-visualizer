@@ -1,7 +1,7 @@
-# Specification Quality Checklist: Audio Upload and Frame Visualization UI
+# Specification Quality Checklist: Note Smoothing
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-10-04
+**Created**: 2026-10-05
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -32,6 +32,7 @@
 ## Notes
 
 - Validated in 1 iteration, no failing items.
-- Interpretations made as assumptions, not clarification markers: brightness is linear and relative to the file's loudest value; the 88 squares formed an 11 by 8 grid (replaced by the 12 × 7 octave grid in feature 005); "animation" means in-UI playback; sample rate comes from the file; the upload limit is raised from the current 20 MB to 200 MB.
-- The spec names the existing note analysis (feature 001) as a dependency, and "server" and "temporary directory" come from the user's description. No frameworks or libraries are named.
+- **Interpretation to confirm** (recorded as an assumption, not a marker, because the request gives enough to choose a reading): the formula `s*x[n-1] + (1-s)*x[n]` is applied as a running average, so `x[n-1]` is the previous *smoothed* value. The spec gives a worked example (0, 10, 0, 0 at s = 0.5 gives 0, 5, 2.5, 1.25). If the previous *raw* value was meant, the same input gives 0, 5, 5, 0, and FR-001, SC-002 and SC-004 would change.
+- Other assumptions: default 0.0; slider step 0.01 so the right end is exactly 0.8; smoothing is applied before the 0–255 scaling, so the scale follows the smoothed maximum; smoothing works per animation frame and is not adjusted for the frame rate.
+- An empty smoothing value is refused on the server (like brightness), unlike an omitted field, which means 0.0.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.

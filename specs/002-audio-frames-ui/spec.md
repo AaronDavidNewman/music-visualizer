@@ -12,7 +12,7 @@
 
 ### User Story 1 - Submit an audio file and see its frames (Priority: P1)
 
-A user opens the application, picks a `.wav` file from their computer, sets the window size and the frame rate, and submits. The file is sent to the server and stored in a temporary location. The server analyzes it and produces one grayscale image per animation frame. When it finishes, the user sees the first frame, along with how many frames were made and how long the audio is.
+A user opens the application, picks a `.wav` file from their computer, sets the window size and the frame rate, and submits. The file is sent to the server and stored in a temporary location. The server analyzes it and produces one image per animation frame (grayscale originally; colored since feature 007). When it finishes, the user sees the first frame, along with how many frames were made and how long the audio is.
 
 **Why this priority**: This is the whole workflow end to end: select, submit, analyze, produce images, display. Nothing else is useful until it works.
 
@@ -87,9 +87,9 @@ If the file or the settings can't be used, or the server fails, the user gets a 
 - **FR-005**: The server MUST read the sample rate from the WAV file itself and use it for the analysis. The user does not enter it.
 - **FR-006**: The server MUST analyze the audio into 88 note values per window using the existing note analysis (feature 001) with the chosen window size.
 - **FR-007**: The server MUST divide the audio into frame periods of length 1 ÷ frame rate seconds, starting at time 0. For each frame period it MUST average the 88-value results of all windows that start within the period. If no window starts within the period, it MUST use the window that covers the start of the period.
-- **FR-008**: The server MUST produce one grayscale image per frame period, in time order. The number of images is the audio duration times the frame rate, rounded up.
-- **FR-009**: Each image MUST be a rectangle made of 88 equally sized squares, one per note, arranged in a grid of 11 columns and 8 rows. The lowest note is the top-left square, and notes ascend left to right, then top to bottom. Squares do not overlap, and the image has no gaps or margins.
-- **FR-010**: Each square's brightness MUST be proportional to its note value divided by the largest note value anywhere in the file. A value of 0 is black, and the loudest value in the file is white. No other volume normalization is applied.
+- **FR-008**: The server MUST produce one image per frame period, in time order (grayscale originally; colored since feature 007). The number of images is the audio duration times the frame rate, rounded up.
+- **FR-009**: Each image MUST be a rectangle made of equally sized tiles, one per note, with no gaps or margins. *Superseded by feature 005:* the tiles are now 84 rectangles in a grid of 12 columns and 7 rows (21 × 24 pixels each, 252 × 168 overall, exactly 3:2). Tile (row *r*, column *c*) is note 12 × *r* + *c*, so each row is an octave and the tile below a note is the same note one octave higher. The lowest note is the top-left tile, and the four highest notes are not drawn. (Originally this was 88 squares in 11 columns and 8 rows.)
+- **FR-010**: Each square's brightness MUST be based on its note value divided by the largest note value anywhere in the file, then brightened with the brightness-th root (`255 * (level / 255) ** (1 / brightness)` on the 0–255 scale) so quiet notes are visible. The brightness is a whole number from 2 to 100 chosen by the user (feature 004); the default, 2, is the square root. A value of 0 is black, and the loudest value in the file is white. No other volume normalization is applied. *Since feature 007* this brightness is the tile's HSV value: the tile is colored (saturation 50%, hue from related notes), its brightest color channel equals the gray level above, and the loudest tile's brightest channel is 255 (a pastel white), not pure gray white.
 - **FR-011**: The server MUST save the images in a temporary directory that is separate from the uploaded-audio directory, in a location unique to that submission, named so their order is clear.
 - **FR-012**: The server MUST report back the number of frames, the audio duration, the sample rate, and the window size and frame rate used, and MUST make each image retrievable by the UI.
 - **FR-013**: The UI MUST show a busy or progress indication from submission until the results arrive, and MUST prevent a second submission while one is running.
@@ -106,7 +106,7 @@ If the file or the settings can't be used, or the server fails, the user gets a 
 - **Submission (job)**: One upload plus its settings. It has an identifier, the original file name, window size, frame rate, sample rate (from the file), duration, frame count, and a status (running, done, failed with a message).
 - **Uploaded Audio**: The user's `.wav` file as stored in the temporary upload directory for its submission.
 - **Frame**: One animation step: its index, its start time, and 88 averaged note values.
-- **Frame Image**: The grayscale picture for one frame, stored in the temporary image directory for its submission.
+- **Frame Image**: The picture for one frame (grayscale originally, colored since feature 007), stored in the temporary image directory for its submission.
 - **Settings**: The window size and the frame rate chosen by the user.
 
 ## Success Criteria *(mandatory)*
@@ -127,9 +127,9 @@ If the file or the settings can't be used, or the server fails, the user gets a 
 - **Sample rate**: The user enters only the window size and frame rate. The sample rate comes from the WAV file header, so the sample-rate mismatch case from feature 001 does not arise here.
 - **Defaults and ranges**: Window size is chosen from a dropdown of 4096, 8192, 16384 and 32768 and defaults to 4096 (changed from the original 256–32768 free entry at the user's request). Frame rate defaults to 30 and must be from 1 to 60. These can be adjusted later.
 - **Limits**: The upload limit is 200 MB, because the sample WAV in the project is about 90 MB and the current 20 MB limit would reject normal songs. The frame limit is 30,000 frames per submission. Both are server settings.
-- **Brightness scaling**: "Relative loudness" is read as each note's value relative to the loudest value in the whole file, using a straight linear scale. One scale for the whole file keeps brightness comparable between frames in the animation. Other scales (logarithmic, per-frame, across files) are the volume normalization the user said to defer.
-- **Image layout**: 88 squares fit an 11 by 8 grid exactly, giving a full rectangle with no empty cells, so that layout is used. Rows are not aligned to octaves. A different layout (for example a single row or a keyboard layout) can replace it later without changing the workflow.
-- **Image size**: Each square is large enough to see clearly on screen (for example 20 by 20 pixels, giving a 220 by 160 image) and the UI scales the image up for display. Pixel sizes are not otherwise fixed.
+- **Brightness scaling**: "Relative loudness" is read as each note's value relative to the loudest value in the whole file, on a linear scale, followed by a root boost that the user requested after seeing the images were too dark: first a fixed square root, now the brightness-th root with brightness 2 as the default (feature 004). One scale for the whole file keeps brightness comparable between frames in the animation. Other scales (logarithmic, per-frame, across files) are the volume normalization the user said to defer.
+- **Image layout**: Replaced by feature 005. The original layout was an 11 by 8 grid of squares that was not aligned to octaves; it is now a 12 by 7 grid of 21 × 24 pixel tiles with one octave per row (see FR-009 and the feature 005 spec). The workflow is unchanged.
+- **Image size**: Each tile is large enough to see clearly on screen, and the UI scales the image for display. Originally 20 by 20 pixel squares gave a 220 by 160 image; the images are now 252 × 168 pixels (feature 005).
 - **Animation**: "Made into an animation" means the UI plays the frames in order. Producing a video or animated file for download is out of scope for this feature.
 - **Temporary storage**: "Temporary directory" means locations under the server's temporary file area, with a separate one for uploaded audio and a separate one for images, and a unique subfolder for each submission. Automatic clean-up of old submissions is out of scope for now. The OS temporary-file clean-up applies.
 - **Users and access**: This is a single-user local tool. There are no accounts, and no access controls on the images beyond hard-to-guess submission identifiers.

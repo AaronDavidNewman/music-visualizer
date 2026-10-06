@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import {
+  BRIGHTNESS_RANGE,
+  DEFAULT_BRIGHTNESS,
+  DEFAULT_SMOOTHING,
   DEFAULT_WINDOW_SIZE,
   FRAME_RATE_RANGE,
+  SMOOTHING_RANGE,
   WINDOW_SIZES,
+  formatSmoothing,
+  validateBrightness,
   validateFile,
   validateFrameRate,
+  validateSmoothing,
   validateWindowSize,
 } from "../lib/validation";
 import {
@@ -19,13 +26,16 @@ import {
   validateSpacing,
 } from "../lib/spacing";
 import { readSampleRate } from "../lib/wavHeader";
+import type { JobSettings } from "../api";
 
 defineProps<{ busy: boolean }>();
-const emit = defineEmits<{ submit: [file: File, windowSize: number, frameRate: number, windowSpacing: number] }>();
+const emit = defineEmits<{ submit: [file: File, settings: JobSettings] }>();
 
 const file = ref<File | null>(null);
 const windowSize = ref<number>(DEFAULT_WINDOW_SIZE);
 const frameRateText = ref("30");
+const brightnessText = ref(String(DEFAULT_BRIGHTNESS));
+const smoothing = ref<number>(DEFAULT_SMOOTHING);
 const fileSampleRate = ref(DEFAULT_SAMPLE_RATE); // the chosen file's rate; 44.1 kHz until a file is chosen
 const spacingText = ref(defaultSpacingText(DEFAULT_SAMPLE_RATE, frameRateText.value, windowSize.value) ?? "");
 
@@ -45,8 +55,16 @@ const fileError = computed(() => validateFile(file.value));
 const windowError = computed(() => validateWindowSize(windowSize.value));
 const frameRateError = computed(() => validateFrameRate(frameRateText.value));
 const spacingError = computed(() => validateSpacing(spacingText.value));
+const brightnessError = computed(() => validateBrightness(brightnessText.value));
+const smoothingError = computed(() => validateSmoothing(smoothing.value));
 const canSubmit = computed(
-  () => !fileError.value && !windowError.value && !frameRateError.value && !spacingError.value,
+  () =>
+    !fileError.value &&
+    !windowError.value &&
+    !frameRateError.value &&
+    !spacingError.value &&
+    !brightnessError.value &&
+    !smoothingError.value,
 );
 
 const belowMinimum = computed(
@@ -79,7 +97,13 @@ async function onFile(event: Event) {
 
 function onSubmit() {
   if (!canSubmit.value || !file.value) return;
-  emit("submit", file.value, windowSize.value, Number(frameRateText.value), Number(spacingText.value));
+  emit("submit", file.value, {
+    windowSize: windowSize.value,
+    frameRate: Number(frameRateText.value),
+    windowSpacing: Number(spacingText.value),
+    brightness: Number(brightnessText.value),
+    smoothing: Math.round(smoothing.value * 100) / 100,
+  });
 }
 </script>
 
@@ -119,6 +143,43 @@ function onSubmit() {
       <small v-else>{{ stepHint }}</small>
     </label>
 
+    <label class="field">
+      <span>Brightness</span>
+      <input
+        v-model="brightnessText"
+        type="number"
+        step="1"
+        :min="BRIGHTNESS_RANGE.min"
+        :max="BRIGHTNESS_RANGE.max"
+        inputmode="numeric"
+        :disabled="busy"
+      />
+      <small :class="{ error: brightnessError }">
+        {{
+          brightnessError ??
+          `Whole number, ${BRIGHTNESS_RANGE.min} to ${BRIGHTNESS_RANGE.max}. Higher values lift quiet notes more but show less contrast.`
+        }}
+      </small>
+    </label>
+
+    <label class="field">
+      <span>Smoothing</span>
+      <span class="slider-row">
+        <input
+          v-model.number="smoothing"
+          type="range"
+          :min="SMOOTHING_RANGE.min"
+          :max="SMOOTHING_RANGE.max"
+          :step="SMOOTHING_RANGE.step"
+          :disabled="busy"
+        />
+        <output class="slider-value">{{ formatSmoothing(smoothing) }}</output>
+      </span>
+      <small :class="{ error: smoothingError }">
+        {{ smoothingError ?? "0 is no smoothing; higher values fade notes more slowly." }}
+      </small>
+    </label>
+
     <button type="submit" :disabled="!canSubmit || busy">{{ busy ? "Working…" : "Create frames" }}</button>
   </form>
 </template>
@@ -138,6 +199,19 @@ function onSubmit() {
 }
 small {
   color: #555;
+}
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.slider-row input {
+  flex: 1;
+}
+.slider-value {
+  min-width: 3rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 small.error {
   color: #b00020;

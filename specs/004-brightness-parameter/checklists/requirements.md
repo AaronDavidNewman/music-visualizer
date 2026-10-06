@@ -1,7 +1,7 @@
-# Specification Quality Checklist: Audio Upload and Frame Visualization UI
+# Specification Quality Checklist: Brightness Parameter
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-10-04
+**Created**: 2026-10-05
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -32,6 +32,7 @@
 ## Notes
 
 - Validated in 1 iteration, no failing items.
-- Interpretations made as assumptions, not clarification markers: brightness is linear and relative to the file's loudest value; the 88 squares formed an 11 by 8 grid (replaced by the 12 × 7 octave grid in feature 005); "animation" means in-UI playback; sample rate comes from the file; the upload limit is raised from the current 20 MB to 200 MB.
-- The spec names the existing note analysis (feature 001) as a dependency, and "server" and "temporary directory" come from the user's description. No frameworks or libraries are named.
+- The user's formula (the brightness-th root of the level) is stated as a mathematical requirement and not as code. The request names a function (`boost_levels`, `np.pow`), which is left out of the spec as an implementation detail.
+- Interpretations recorded as assumptions, not clarification markers: the default is 2 (the current square-root look); a higher number is brighter; the setting applies at submission time, so a change needs a new submission; the 2 to 100 range is fixed.
+- Example values in the spec (64 → 128 at 2, 180 at 4, 222 at 10, 251 at 100) were computed from the formula with rounding to whole gray levels.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
