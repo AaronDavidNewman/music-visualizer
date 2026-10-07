@@ -6,7 +6,7 @@ import pytest
 from app.services.note_analysis import window_starts
 from app.services.window_spacing import default_spacing, resolve_step
 
-# Shared with frontend/src/lib/spacing.test.ts: (sample_rate, frame_rate, window_size, expected)
+# Shared with frontend/src/utilities/spacing.test.ts: (sample_rate, frame_rate, window_size, expected)
 DEFAULT_TABLE = [
     (44100, 30, 4096, 0.358886),
     (44100, 60, 4096, 0.179443),

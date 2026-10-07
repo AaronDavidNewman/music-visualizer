@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { frameUrl, type JobResult } from "../api";
-import { frameAtElapsed, frameTime, preloadRange } from "../lib/playback";
+import { frameAtElapsed, frameTime, preloadRange } from "../utilities/playback";
 
 const PRELOAD_AHEAD = 30;
 

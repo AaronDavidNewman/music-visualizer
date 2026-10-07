@@ -5,7 +5,6 @@ import {
   DEFAULT_BRIGHTNESS,
   DEFAULT_SMOOTHING,
   DEFAULT_WINDOW_SIZE,
-  FRAME_RATE_RANGE,
   SMOOTHING_RANGE,
   WINDOW_SIZES,
   formatSmoothing,
@@ -14,9 +13,8 @@ import {
   validateFrameRate,
   validateSmoothing,
   validateWindowSize,
-} from "../lib/validation";
+} from "../utilities/validation";
 import {
-  DEFAULT_SAMPLE_RATE,
   defaultSpacing,
   formatSpacing,
   isBelowMinimum,
@@ -24,20 +22,25 @@ import {
   stepMilliseconds,
   stepSamples,
   validateSpacing,
-} from "../lib/spacing";
-import { readSampleRate } from "../lib/wavHeader";
+} from "../utilities/spacing";
+import {
+  brightnessHelp,
+  frameRateHelp,
+  smoothingHelp,
+  spacingHelp,
+  windowSizeHelp,
+} from "../utilities/help";
+import InfoPopover from "./InfoPopover.vue";
 import type { JobSettings } from "../api";
 
-defineProps<{ busy: boolean }>();
+const props = defineProps<{ busy: boolean; file: File | null; sampleRate: number }>();
 const emit = defineEmits<{ submit: [file: File, settings: JobSettings] }>();
 
-const file = ref<File | null>(null);
 const windowSize = ref<number>(DEFAULT_WINDOW_SIZE);
 const frameRateText = ref("30");
 const brightnessText = ref(String(DEFAULT_BRIGHTNESS));
 const smoothing = ref<number>(DEFAULT_SMOOTHING);
-const fileSampleRate = ref(DEFAULT_SAMPLE_RATE); // the chosen file's rate; 44.1 kHz until a file is chosen
-const spacingText = ref(defaultSpacingText(DEFAULT_SAMPLE_RATE, frameRateText.value, windowSize.value) ?? "");
+const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
 function defaultSpacingText(sampleRate: number, frameRate: string, size: number): string | null {
   const spacing = defaultSpacing(sampleRate, frameRate, size);
@@ -46,12 +49,12 @@ function defaultSpacingText(sampleRate: number, frameRate: string, size: number)
 
 // The default spacing follows the window size, frame rate and file: any change replaces what is in the field.
 // If the frame rate is not usable yet (empty, partly typed), the field is left alone.
-watch([windowSize, frameRateText, fileSampleRate, file], () => {
-  const text = defaultSpacingText(fileSampleRate.value, frameRateText.value, windowSize.value);
+watch([windowSize, frameRateText, () => props.sampleRate, () => props.file], () => {
+  const text = defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value);
   if (text !== null) spacingText.value = text;
 });
 
-const fileError = computed(() => validateFile(file.value));
+const fileError = computed(() => validateFile(props.file));
 const windowError = computed(() => validateWindowSize(windowSize.value));
 const frameRateError = computed(() => validateFrameRate(frameRateText.value));
 const spacingError = computed(() => validateSpacing(spacingText.value));
@@ -75,29 +78,13 @@ const stepHint = computed(() => {
   if (spacingError.value) return "";
   const spacing = Number(spacingText.value);
   const samples = stepSamples(spacing, windowSize.value);
-  const ms = stepMilliseconds(spacing, windowSize.value, fileSampleRate.value);
+  const ms = stepMilliseconds(spacing, windowSize.value, props.sampleRate);
   return `Step between windows: ${Number(samples.toFixed(2))} samples (${ms.toFixed(1)} ms).`;
 });
 
-function formatSize(bytes: number): string {
-  return bytes >= 1024 * 1024
-    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
-    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
-let latestFile = 0;
-
-async function onFile(event: Event) {
-  const chosen = (event.target as HTMLInputElement).files?.[0] ?? null;
-  file.value = chosen;
-  const ticket = ++latestFile;
-  const rate = chosen ? await readSampleRate(chosen) : null;
-  if (ticket === latestFile) fileSampleRate.value = rate ?? DEFAULT_SAMPLE_RATE; // ignore a stale answer
-}
-
 function onSubmit() {
-  if (!canSubmit.value || !file.value) return;
-  emit("submit", file.value, {
+  if (!canSubmit.value || !props.file) return;
+  emit("submit", props.file, {
     windowSize: windowSize.value,
     frameRate: Number(frameRateText.value),
     windowSpacing: Number(spacingText.value),
@@ -108,44 +95,53 @@ function onSubmit() {
 </script>
 
 <template>
-  <form class="upload" @submit.prevent="onSubmit">
-    <label class="field">
-      <span>Audio file</span>
-      <input type="file" accept=".wav,audio/wav,audio/x-wav" :disabled="busy" @change="onFile" />
-      <small v-if="file">{{ file.name }} ({{ formatSize(file.size) }})</small>
-      <small v-else>Choose a .wav file.</small>
-      <small v-if="file && fileError" class="error">{{ fileError }}</small>
-    </label>
+  <form class="settings" @submit.prevent="onSubmit">
+    <div class="field-row">
+      <div class="field">
+        <div class="field-head">
+          <label for="window-size">Window size (samples)</label>
+          <InfoPopover label="window size" :text="windowSizeHelp" />
+        </div>
+        <select id="window-size" v-model.number="windowSize" :disabled="busy">
+          <option v-for="size in WINDOW_SIZES" :key="size" :value="size">{{ size }}</option>
+        </select>
+        <small v-if="windowError" class="error">{{ windowError }}</small>
+      </div>
 
-    <label class="field">
-      <span>Window size (samples)</span>
-      <select v-model.number="windowSize" :disabled="busy">
-        <option v-for="size in WINDOW_SIZES" :key="size" :value="size">{{ size }}</option>
-      </select>
-      <small :class="{ error: windowError }">
-        {{ windowError ?? "Larger windows separate low notes better but blur changes over time." }}
-      </small>
-    </label>
+      <div class="field">
+        <div class="field-head">
+          <label for="frame-rate">Frame rate (frames per second)</label>
+          <InfoPopover label="frame rate" :text="frameRateHelp" />
+        </div>
+        <input id="frame-rate" v-model="frameRateText" type="number" step="any" inputmode="decimal" :disabled="busy" />
+        <small v-if="frameRateError" class="error">{{ frameRateError }}</small>
+      </div>
 
-    <label class="field">
-      <span>Frame rate (frames per second)</span>
-      <input v-model="frameRateText" type="number" step="any" inputmode="decimal" :disabled="busy" />
-      <small :class="{ error: frameRateError }">
-        {{ frameRateError ?? `${FRAME_RATE_RANGE.min} to ${FRAME_RATE_RANGE.max}.` }}
-      </small>
-    </label>
+      <div class="field">
+        <div class="field-head">
+          <label for="window-spacing">Window spacing (× window size)</label>
+          <InfoPopover label="window spacing" :text="spacingHelp(stepHint)" />
+        </div>
+        <input
+          id="window-spacing"
+          v-model="spacingText"
+          type="number"
+          step="any"
+          inputmode="decimal"
+          :disabled="busy"
+        />
+        <small v-if="spacingError" class="error">{{ spacingError }}</small>
+        <small v-else-if="belowMinimum" class="notice">{{ minimumMessage(windowSize) }}</small>
+      </div>
+    </div>
 
-    <label class="field">
-      <span>Window spacing (× window size)</span>
-      <input v-model="spacingText" type="number" step="any" inputmode="decimal" :disabled="busy" />
-      <small v-if="spacingError" class="error">{{ spacingError }}</small>
-      <small v-else-if="belowMinimum" class="notice">{{ minimumMessage(windowSize) }}</small>
-      <small v-else>{{ stepHint }}</small>
-    </label>
-
-    <label class="field">
-      <span>Brightness</span>
+    <div class="field">
+      <div class="field-head">
+        <label for="brightness">Brightness</label>
+        <InfoPopover label="brightness" :text="brightnessHelp" />
+      </div>
       <input
+        id="brightness"
         v-model="brightnessText"
         type="number"
         step="1"
@@ -154,18 +150,17 @@ function onSubmit() {
         inputmode="numeric"
         :disabled="busy"
       />
-      <small :class="{ error: brightnessError }">
-        {{
-          brightnessError ??
-          `Whole number, ${BRIGHTNESS_RANGE.min} to ${BRIGHTNESS_RANGE.max}. Higher values lift quiet notes more but show less contrast.`
-        }}
-      </small>
-    </label>
+      <small v-if="brightnessError" class="error">{{ brightnessError }}</small>
+    </div>
 
-    <label class="field">
-      <span>Smoothing</span>
+    <div class="field">
+      <div class="field-head">
+        <label for="smoothing">Smoothing</label>
+        <InfoPopover label="smoothing" :text="smoothingHelp" />
+      </div>
       <span class="slider-row">
         <input
+          id="smoothing"
           v-model.number="smoothing"
           type="range"
           :min="SMOOTHING_RANGE.min"
@@ -173,29 +168,43 @@ function onSubmit() {
           :step="SMOOTHING_RANGE.step"
           :disabled="busy"
         />
-        <output class="slider-value">{{ formatSmoothing(smoothing) }}</output>
+        <output class="slider-value" for="smoothing">{{ formatSmoothing(smoothing) }}</output>
       </span>
-      <small :class="{ error: smoothingError }">
-        {{ smoothingError ?? "0 is no smoothing; higher values fade notes more slowly." }}
-      </small>
-    </label>
+      <small v-if="smoothingError" class="error">{{ smoothingError }}</small>
+    </div>
 
     <button type="submit" :disabled="!canSubmit || busy">{{ busy ? "Working…" : "Create frames" }}</button>
   </form>
 </template>
 
 <style scoped>
-.upload {
+.settings {
   display: grid;
   gap: 1rem;
-  max-width: 28rem;
+}
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.75rem;
 }
 .field {
   display: grid;
   gap: 0.25rem;
+  align-content: start;
+  min-width: 0;
 }
-.field span {
+.field-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+.field-head label {
   font-weight: 600;
+}
+.field input:not([type="range"]),
+.field select {
+  width: 100%;
+  box-sizing: border-box;
 }
 small {
   color: #555;

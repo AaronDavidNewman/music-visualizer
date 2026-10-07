@@ -1,6 +1,6 @@
 """Window spacing: how far apart analysis windows start, as a multiple of the window size.
 
-Both functions are mirrored in ``frontend/src/lib/spacing.ts``; the two test suites share a table of
+Both functions are mirrored in ``frontend/src/utilities/spacing.ts``; the two test suites share a table of
 expected values so the formulas stay in agreement.
 """
 
