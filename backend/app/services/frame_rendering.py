@@ -4,8 +4,10 @@ Frame ``f`` covers ``[f / frame_rate, (f + 1) / frame_rate)`` seconds. It is the
 the windows that start inside that period, or, if none does, the most recent window that
 started before the period (which is the window covering its start when windows are consecutive).
 Each frame becomes a 12 x 7 grid of coloured tiles (one row per octave, one column per note name,
-252 x 168 pixels, 3:2). A tile's brightness (its HSV value) is its gray level after the brightness
-root; its hue starts at 180 degrees and is moved by the (added-up) brightness of related notes.
+252 x 168 pixels, 3:2). Each tile is an HSV colour. The frame's brightness (the HSV value, the same for every
+tile) comes from the overall energy of the audio in the frame, so louder sounds brighten the whole picture. A
+tile's saturation is local to it: its gray level after the brightness root (shown to the user as Saturation).
+Its hue starts at 180 degrees and is moved by the (added-up) levels of related notes.
 """
 
 import colorsys
@@ -29,22 +31,31 @@ TILE_HEIGHT = 24
 IMAGE_WIDTH = GRID_COLUMNS * TILE_WIDTH
 IMAGE_HEIGHT = GRID_ROWS * TILE_HEIGHT
 
-# The brightness is the root applied to each gray level (2 = square root). Fixed range; 2 is the default.
+# The brightness setting of the API is the root applied to each gray level (2 = square root). Since feature 010 a
+# tile's boosted gray level is its saturation, so the page labels this setting Saturation. Fixed range; 2 is the default.
 MIN_BRIGHTNESS = 2
 MAX_BRIGHTNESS = 100
 DEFAULT_BRIGHTNESS = 2
+
+# The energy setting of the API is the root that lifts quiet frames' brightness (the page labels it Brightness): the
+# brightness of a frame is (its energy / the largest energy) ** (1 / root). A whole number from 1 to 8; 1 (a straight
+# proportion) is the default.
+MIN_ENERGY = 1
+MAX_ENERGY = 8
+DEFAULT_ENERGY = 1
 
 # Smoothing is a running average of each note over the frames (0 = none). Fixed range; 0 is the default.
 MIN_SMOOTHING = 0.0
 MAX_SMOOTHING = 0.8
 DEFAULT_SMOOTHING = 0.0
 
-# Colour: each tile is HSV with a fixed saturation, the tile's own gray level as the value, and a hue that
-# starts at 180 degrees (0.5 of the wheel) and is moved by related notes. Notes in RELATED_DOWN pull the hue
-# down (toward green, yellow, red) and notes in RELATED_UP push it up (toward blue, violet, red). The
-# offsets are note numbers relative to the tile's own note. Their brightness is added up (not averaged), and
-# the hue is clipped to 0..360 degrees. The lists may have different lengths.
-SATURATION = 0.5
+# Colour: each tile is HSV with the frame's value (its brightness, from the frame's energy; see ``value_sequence``), the
+# tile's own gray level as the saturation, and a hue that starts at 180 degrees (0.5 of the wheel) and is moved by
+# related notes. Notes in RELATED_DOWN pull the hue down (toward green, yellow, red) and notes in RELATED_UP push it up
+# (toward blue, violet, red). The offsets are note numbers relative to the tile's own note. Their levels are added up
+# (not averaged), and the hue is clipped to 0..360 degrees. The lists may have different lengths.
+# Used only by helpers called without a frame brightness (full); the job path always passes the energy-derived one.
+DEFAULT_VALUE = 1.0
 DEFAULT_HUE = 0.5
 RELATED_DOWN = (4, 5, 7)
 RELATED_UP = (3, 6, 8, 11)
@@ -195,14 +206,66 @@ def hue_sequence(
     return smooth_frames(hues, smoothing)
 
 
-def tile_colors(levels: np.ndarray, brightness: int = DEFAULT_BRIGHTNESS, hues: np.ndarray | None = None) -> np.ndarray:
+def _check_energy_root(root) -> int:
+    if (
+        isinstance(root, bool)
+        or not isinstance(root, numbers.Real)
+        or not math.isfinite(root)
+        or root != int(root)
+        or not MIN_ENERGY <= root <= MAX_ENERGY
+    ):
+        raise ValueError(f"The energy must be a whole number from {MIN_ENERGY} to {MAX_ENERGY}.")
+    return int(root)
+
+
+def value_sequence(
+    energies: np.ndarray, energy_root: int = DEFAULT_ENERGY, smoothing: float = DEFAULT_SMOOTHING
+) -> np.ndarray:
+    """The brightness (HSV value) of every frame, from 0 to 1, one per energy (shared by all 84 tiles of the frame).
+
+    ``(energy / the largest energy) ** (1 / energy_root)``: the loudest frame is exactly 1 (100%) and a frame
+    with no energy is 0 (black). If no frame has any energy every brightness is 0. ``energy_root`` is a whole number
+    from 1 to 8. The values are then smoothed over the frames with the same running average as the notes and
+    the hues (``smooth_frames``); with smoothing 0 they are exactly the values above.
+    """
+    root = _check_energy_root(energy_root)
+    energies = np.asarray(energies, dtype=np.float64)
+    if energies.ndim != 1:
+        raise ValueError("The energies must be a 1-D array with one value per frame.")
+    if energies.size and not (np.isfinite(energies).all() and (energies >= 0).all()):
+        raise ValueError("The energies must be numbers of 0 or more.")
+    peak = float(energies.max()) if energies.size else 0.0
+    mapped = np.zeros(energies.shape) if peak <= 0 else (energies / peak) ** (1.0 / root)
+    return smooth_frames(mapped.reshape(-1, 1), smoothing).reshape(-1)
+
+
+def _check_value(value: float) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, numbers.Real)
+        or not math.isfinite(value)
+        or not 0.0 <= value <= 1.0
+    ):
+        raise ValueError("The brightness must be a number from 0 to 1.")
+    return float(value)
+
+
+def tile_colors(
+    levels: np.ndarray,
+    brightness: int = DEFAULT_BRIGHTNESS,
+    hues: np.ndarray | None = None,
+    value: float = DEFAULT_VALUE,
+) -> np.ndarray:
     """The RGB colour (``uint8``, shape ``(84, 3)``) of each drawn tile.
 
     HSV with the hue from ``tile_hues`` (or the ``hues`` given, 84 values from 0 to 1, such as a row of
-    ``hue_sequence``), a saturation of 50% and the tile's own displayed gray level divided by 255 as the
-    value, converted with ``colorsys``; each channel is rounded to 0..255 (halves go to the even number).
-    A tile with value 0 is black, and the largest channel equals its gray level.
+    ``hue_sequence``), the ``value`` given (the frame's brightness, one number from 0 to 1 for every tile; full
+    when none is given) and the tile's own displayed gray level divided by 255 as its saturation, converted with
+    ``colorsys``; each channel is rounded to 0..255 (halves go to the even number). Every tile's largest channel is
+    the frame's brightness (``value`` times 255) and its smallest is that times one minus the saturation, so a tile
+    with no level is a plain gray or white at the frame's brightness, and a frame with value 0 is black.
     """
+    value = _check_value(value)
     levels = _require_drawable(levels)
     if hues is None:
         hues = tile_hues(levels, brightness)
@@ -210,13 +273,16 @@ def tile_colors(levels: np.ndarray, brightness: int = DEFAULT_BRIGHTNESS, hues: 
     if hues.shape != (SHOWN_NOTES,):
         raise ValueError(f"Exactly {SHOWN_NOTES} hues are needed (got shape {hues.shape}).")
     hues = hues.tolist()
-    values = (boost_levels(levels[:SHOWN_NOTES], brightness).astype(np.float64) / 255.0).tolist()
-    rgb = [colorsys.hsv_to_rgb(h, SATURATION, v) for h, v in zip(hues, values)]
+    saturations = (boost_levels(levels[:SHOWN_NOTES], brightness).astype(np.float64) / 255.0).tolist()
+    rgb = [colorsys.hsv_to_rgb(h, s, value) for h, s in zip(hues, saturations)]
     return np.rint(np.array(rgb) * 255.0).astype(np.uint8)
 
 
-def render_frame(levels: np.ndarray, brightness: int = DEFAULT_BRIGHTNESS) -> Image.Image:
-    """Draw gray levels (0..255, boosted by the brightness-th root) as 12 x 7 coloured tiles of 21 x 24 pixels.
+def render_frame(
+    levels: np.ndarray, brightness: int = DEFAULT_BRIGHTNESS, value: float = DEFAULT_VALUE
+) -> Image.Image:
+    """Draw gray levels (0..255, boosted by the brightness-th root, as each tile's saturation) as 12 x 7 coloured
+    tiles of 21 x 24 pixels, all at the frame brightness ``value`` (0 to 1, full by default).
 
     Tile (row r, column c) is note 12 * r + c, so each row is an octave and each column one note name:
     the tile below a note is the same note one octave higher (double the frequency). Note 0 is the
@@ -224,7 +290,7 @@ def render_frame(levels: np.ndarray, brightness: int = DEFAULT_BRIGHTNESS) -> Im
     though they still colour the tiles they are related to. Each tile is one flat colour (see ``tile_colors``)
     and the image is 8-bit RGB.
     """
-    colours = tile_colors(levels, brightness).reshape(GRID_ROWS, GRID_COLUMNS, 3)
+    colours = tile_colors(levels, brightness, value=value).reshape(GRID_ROWS, GRID_COLUMNS, 3)
     pixels = np.repeat(np.repeat(colours, TILE_HEIGHT, axis=0), TILE_WIDTH, axis=1)
     return Image.fromarray(pixels, mode="RGB")
 
@@ -250,19 +316,39 @@ def _palette_frame(colours: np.ndarray) -> Image.Image:
 
 
 def write_frames(
-    frames: np.ndarray, directory: Path, brightness: int = DEFAULT_BRIGHTNESS, smoothing: float = DEFAULT_SMOOTHING
+    frames: np.ndarray,
+    directory: Path,
+    brightness: int = DEFAULT_BRIGHTNESS,
+    smoothing: float = DEFAULT_SMOOTHING,
+    energies: np.ndarray | None = None,
+    energy_root: int = DEFAULT_ENERGY,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
-    ``smoothing`` (0.0 to 0.8, default none) smooths both the note values over the frames (before they are
-    scaled to gray levels) and each tile's hue over the frames (``hue_sequence``), with the same running average.
+    ``smoothing`` (0.0 to 0.8, default none) smooths the note values over the frames (before they are
+    scaled to gray levels), each tile's hue and each frame's brightness, all with the same running average.
+
+    ``energies`` is one energy per frame (see ``energy.frame_energies``). Each frame's brightness, shared by all
+    its tiles, comes from it by ``value_sequence`` with ``energy_root`` (a whole number from 1 to 8), so louder
+    frames are brighter. Each tile's saturation is its own level (after the ``brightness`` root). Without
+    ``energies`` every frame is at full brightness (``DEFAULT_VALUE``).
 
     The files are indexed-colour PNGs (lossless: each frame has at most 84 flat colours), which decode to
     exactly the pixels ``render_frame`` returns but cost about a third of the time to encode as 24-bit RGB.
     """
+    values = None
+    if energies is not None:
+        energies = np.asarray(energies, dtype=np.float64)
+        if energies.shape != (frames.shape[0],):
+            raise ValueError(
+                f"There must be one energy per frame (got {energies.size} energies for {frames.shape[0]} frames)."
+            )
+        values = value_sequence(energies, energy_root, smoothing)
     directory.mkdir(parents=True, exist_ok=True)
     levels = to_gray_levels(smooth_frames(frames, smoothing))
     hues = hue_sequence(levels, brightness, smoothing)
     for i, row in enumerate(levels):
+        value = DEFAULT_VALUE if values is None else float(values[i])
+        colours = tile_colors(row, brightness, hues[i], value)
         # Level 6 makes these files about a third of the size of level 1 for roughly 0.2 s more per 10,000 frames.
-        _palette_frame(tile_colors(row, brightness, hues[i])).save(directory / f"frame_{i:06d}.png", compress_level=6)
+        _palette_frame(colours).save(directory / f"frame_{i:06d}.png", compress_level=6)

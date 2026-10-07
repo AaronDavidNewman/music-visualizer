@@ -12,7 +12,7 @@ from app.services.frame_rendering import (
     IMAGE_WIDTH,
     RELATED_DOWN,
     RELATED_UP,
-    SATURATION,
+    DEFAULT_VALUE,
     SHOWN_NOTES,
     TILE_HEIGHT,
     TILE_WIDTH,
@@ -87,11 +87,14 @@ def test_all_zero_input_is_black():
 
 
 def gray(image):
-    """Each pixel's brightness: the largest colour channel. Works for a gray or a colour image.
+    """Each pixel's level: the largest colour channel minus the smallest.
 
-    A tile's HSV value is the largest channel, and that value is the tile's gray level.
+    A tile's HSV saturation is its gray level (after the brightness root), and an image drawn at the default full
+    brightness has 255 as its largest channel everywhere, so largest minus smallest is 255 times the saturation:
+    the displayed gray level of the tile.
     """
-    return np.asarray(image.convert("RGB")).max(axis=2)
+    rgb = np.asarray(image.convert("RGB")).astype(int)
+    return rgb.max(axis=2) - rgb.min(axis=2)
 
 
 def tile(arr, n):
@@ -162,7 +165,7 @@ def test_lowest_note_is_top_left_and_last_drawn_note_is_bottom_right():
 def test_the_four_highest_notes_are_not_drawn():
     only_omitted = np.zeros(88, dtype=np.uint8)
     only_omitted[84:] = 255
-    assert not gray(render_frame(only_omitted)).any()  # nothing appears anywhere (brightness only)
+    assert not gray(render_frame(only_omitted)).any()  # nothing appears anywhere (no tile gets any saturation)
     base = (np.arange(88) % 256).astype(np.uint8)
     changed = base.copy()
     changed[84:] = 255 - base[84:]
@@ -186,7 +189,7 @@ def test_each_tile_has_the_same_gray_as_the_previous_layout(brightness):
         assert (tile(arr, n) == expected[n]).all(), n
 
 
-def test_silent_frame_is_black():
+def test_a_frame_with_no_levels_has_no_saturation_anywhere():
     assert not gray(render_frame(np.zeros(88, dtype=np.uint8))).any()
 
 
@@ -492,7 +495,7 @@ def ref_hues(levels, brightness=2):
 
 
 def test_the_colour_constants_describe_two_separate_groups_of_partners():
-    assert SATURATION == 0.5
+    assert DEFAULT_VALUE == 1.0
     assert DEFAULT_HUE == 0.5  # 180 of 360
     for group in (RELATED_DOWN, RELATED_UP):
         assert len(group) > 0 and all(isinstance(o, int) for o in group)
@@ -531,16 +534,20 @@ def test_a_dimmer_partner_moves_the_hue_in_proportion():
 
 def test_the_worked_colours_from_the_spec():
     down, up = 40 + RELATED_DOWN[0], 40 + RELATED_UP[0]
-    assert tile_colors(lit(40))[40].tolist() == [128, 255, 255]  # full brightness, nothing related lit: hue 180
-    assert tile_colors(lit(40, down))[40].tolist() == [255, 128, 128]  # one "down" partner at full: hue 0, red
-    assert tile_colors(lit(40, up))[40].tolist() == [255, 128, 128]  # one "up" partner at full: hue 360, the same red
-    assert tile_colors(lit(40, down, up))[40].tolist() == [128, 255, 255]  # equal pull both ways: they cancel
-    assert tile_colors(lit(40, at=64))[40].tolist() == [64, 128, 128]  # gray level 128, nothing related lit
+    # the tile's level is its saturation; the frame's brightness (value) is 1 here, as it is by default
+    assert tile_colors(lit(40))[40].tolist() == [0, 255, 255]  # full level, nothing related lit: hue 180, saturation 100%
+    assert tile_colors(lit(40, down))[40].tolist() == [255, 0, 0]  # one "down" partner at full: hue 0, red
+    assert tile_colors(lit(40, up))[40].tolist() == [255, 0, 0]  # one "up" partner at full: hue 360, the same red
+    assert tile_colors(lit(40, down, up))[40].tolist() == [0, 255, 255]  # equal pull both ways: they cancel
+    assert tile_colors(lit(40, at=64))[40].tolist() == [127, 255, 255]  # gray level 128: saturation 50%, nothing related lit
     # a "down" partner at gray level 128 moves the hue to 0.5 - 0.5 * 128 / 255 (about 89.6 degrees)
     levels = lit(40)
     levels[down] = 64
-    expected = [round(c * 255) for c in colorsys.hsv_to_rgb(0.5 - 0.5 * 128 / 255, 0.5, 1.0)]
+    expected = [round(c * 255) for c in colorsys.hsv_to_rgb(0.5 - 0.5 * 128 / 255, 1.0, 1.0)]
     assert tile_colors(levels)[40].tolist() == expected
+    # the frame's brightness is the value: half of it halves every channel, whatever the saturation
+    assert tile_colors(lit(40), value=0.5)[40].tolist() == [0, 128, 128]
+    assert tile_colors(lit(40, at=64), value=0.5)[40].tolist() == [64, 128, 128]
 
 
 def test_partners_are_added_not_averaged_and_the_hue_is_clipped():
@@ -598,12 +605,12 @@ def test_all_four_notes_of_either_group_reach_red():
     for group in (RELATED_DOWN, RELATED_UP):
         levels = lit(*[40 + o for o in group])
         assert tile_hues(levels)[40] in (0.0, 1.0)  # 0 and 360 degrees are the same red
-        assert tile_colors(levels)[40].tolist() == [0, 0, 0]  # tile 40 itself is dark here
+        assert tile_colors(levels)[40].tolist() == [255, 255, 255]  # tile 40 itself has no level: no saturation, plain white
     both = lit(40, *[40 + o for o in RELATED_DOWN])
     assert tile_hues(both)[40] == 0.0
 
 
-def test_dark_tiles_are_black_and_lit_tiles_keep_their_brightness():
+def test_unlit_tiles_are_plain_white_and_lit_tiles_are_saturated_by_their_level():
     rng = np.random.default_rng(5)
     for _ in range(300):
         levels = (rng.integers(0, 256, 88) * (rng.random(88) < 0.6)).astype(np.uint8)
@@ -611,11 +618,11 @@ def test_dark_tiles_are_black_and_lit_tiles_keep_their_brightness():
         colours = tile_colors(levels)
         assert colours.shape == (84, 3) and colours.dtype == np.uint8
         for n in range(84):
+            assert int(colours[n].max()) == 255  # the frame is at full brightness: every tile's brightest channel
             if shown[n] == 0:
-                assert colours[n].tolist() == [0, 0, 0]
+                assert colours[n].tolist() == [255, 255, 255]  # no level, no saturation
             else:
-                assert int(colours[n].max()) == shown[n]  # the brightest channel is the old gray level
-                assert abs(int(colours[n].min()) - shown[n] / 2) <= 1  # saturation 50%
+                assert abs(int(colours[n].max()) - int(colours[n].min()) - shown[n]) <= 1  # saturation = the gray level
 
 
 def test_the_hue_can_be_read_back_from_the_pixels():
@@ -643,9 +650,12 @@ def test_render_frame_is_an_rgb_image_of_flat_coloured_tiles():
         assert (tile(arr, n) == colours[n]).all(), n  # one flat colour per tile, the colour from tile_colors
 
 
-def test_a_silent_frame_is_black_in_every_channel():
-    arr = np.asarray(render_frame(np.zeros(88, dtype=np.uint8)))
+def test_a_frame_with_no_brightness_is_black_in_every_channel():
+    levels = (np.random.default_rng(4).integers(0, 256, 88)).astype(np.uint8)
+    arr = np.asarray(render_frame(levels, value=0.0))
     assert arr.shape == (168, 252, 3) and not arr.any()
+    # and at full brightness a frame with no levels is plain white: brightness is the frame's, not the tile's
+    assert (np.asarray(render_frame(np.zeros(88, dtype=np.uint8))) == 255).all()
 
 
 def test_the_same_levels_give_the_same_image():
@@ -653,12 +663,12 @@ def test_the_same_levels_give_the_same_image():
     assert np.array_equal(np.asarray(render_frame(levels)), np.asarray(render_frame(levels.copy())))
 
 
-def test_the_four_undrawn_notes_change_colours_but_never_brightness():
+def test_the_four_undrawn_notes_change_colours_but_never_saturation():
     base = (np.arange(88) * 2 % 256).astype(np.uint8)
     changed = base.copy()
     changed[84:] = 255 - base[84:]
     a, b = render_frame(base), render_frame(changed)
-    assert np.array_equal(gray(a), gray(b))  # same brightness everywhere
+    assert np.array_equal(gray(a), gray(b))  # same saturation everywhere
     assert not np.array_equal(np.asarray(a), np.asarray(b))  # but colours near the top differ: they are partners
     assert np.array_equal(tile_hues(base)[:60], tile_hues(changed)[:60])  # far from the top nothing changes
 
@@ -764,8 +774,8 @@ def test_tile_colors_can_take_the_hues_to_use():
     shifted = np.full(84, 0.25)
     colours = tile_colors(levels, 2, shifted)
     for n in range(84):
-        v = displayed_levels(levels)[n] / 255
-        expected = [round(c * 255) for c in colorsys.hsv_to_rgb(0.25, 0.5, v)]
+        s = displayed_levels(levels)[n] / 255
+        expected = [round(c * 255) for c in colorsys.hsv_to_rgb(0.25, s, 1.0)]
         assert np.abs(colours[n].astype(int) - expected).max() <= 1, n
     with pytest.raises(ValueError, match="84 hues"):
         tile_colors(levels, 2, np.zeros(83))
@@ -788,8 +798,8 @@ def test_written_frames_have_smoothed_values_and_smoothed_hues(tmp_path):
     for i in range(4):
         img = np.asarray(Image.open(tmp_path / f"frame_{i:06d}.png").convert("RGB"))
         pixel = img[(40 // 12) * 24 + 12, (40 % 12) * 21 + 10]
-        v = displayed_levels(levels[i])[40] / 255
-        expected = [round(c * 255) for c in colorsys.hsv_to_rgb(hue_rows[i][40], 0.5, v)]
+        s = displayed_levels(levels[i])[40] / 255
+        expected = [round(c * 255) for c in colorsys.hsv_to_rgb(hue_rows[i][40], s, 1.0)]
         assert np.abs(pixel.astype(int) - expected).max() <= 1, (i, pixel, expected)
     # the hue really is being smoothed: frame 1's smoothed hue is between the old hue (0.5) and the new raw hue
     raw_hue_frame_1 = ref_hues(levels[1])[40]

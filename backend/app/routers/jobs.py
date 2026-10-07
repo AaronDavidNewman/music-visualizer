@@ -11,15 +11,19 @@ from fastapi.responses import FileResponse
 from ..config import settings
 from ..services.frame_rendering import (
     DEFAULT_BRIGHTNESS,
+    DEFAULT_ENERGY,
     DEFAULT_SMOOTHING,
     MAX_BRIGHTNESS,
+    MAX_ENERGY,
     MAX_SMOOTHING,
     MIN_BRIGHTNESS,
+    MIN_ENERGY,
     MIN_SMOOTHING,
     average_frames,
     frame_count,
     write_frames,
 )
+from ..services.energy import frame_energies
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
 from ..services.window_spacing import default_spacing, resolve_step
 
@@ -101,6 +105,21 @@ def _parse_brightness(text: str | None, sent: bool) -> int:
     return int(value)
 
 
+def _parse_energy(text: str | None, sent: bool) -> int:
+    """The requested energy root. Not sent means the default; anything sent must be a whole number 1..8."""
+    if text is None and not sent:
+        return DEFAULT_ENERGY
+    text = text or ""
+    message = f"The energy must be a whole number from {MIN_ENERGY} to {MAX_ENERGY}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not value.is_integer() or not MIN_ENERGY <= value <= MAX_ENERGY:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
 def _parse_smoothing(text: str | None, sent: bool) -> float:
     """The requested smoothing. Not sent means the default; anything sent must be a number 0.0..0.8."""
     if text is None and not sent:
@@ -147,6 +166,7 @@ def create_job(
     window_spacing: str | None = Form(None),
     brightness: str | None = Form(None),
     smoothing: str | None = Form(None),
+    energy: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -154,6 +174,7 @@ def create_job(
     requested_spacing = _parse_window_spacing(window_spacing)
     brightness_root = _parse_brightness(brightness, "brightness" in sent)
     smoothing_value = _parse_smoothing(smoothing, "smoothing" in sent)
+    energy_root = _parse_energy(energy, "energy" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -192,9 +213,16 @@ def create_job(
                 ),
             )
         result = analyze_channels(left, right, file_rate, window, step=step)
-        # write_frames smooths the note values and then each tile's hue, both with the same smoothing
+        energies = frame_energies(left, right, file_rate, fps, frames)
+        # write_frames smooths the note values, each tile's hue and each frame's brightness (from its energy),
+        # all with the same smoothing
         write_frames(
-            average_frames(result, fps, frames), frames_dir, brightness=brightness_root, smoothing=smoothing_value
+            average_frames(result, fps, frames),
+            frames_dir,
+            brightness=brightness_root,
+            smoothing=smoothing_value,
+            energies=energies,
+            energy_root=energy_root,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -217,6 +245,7 @@ def create_job(
         "frame_count": frames,
         "brightness": brightness_root,
         "smoothing": smoothing_value,
+        "energy": energy_root,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

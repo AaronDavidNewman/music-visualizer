@@ -48,7 +48,8 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li>Window size: {{ result.window_size }}</li>
             <li>Frame rate: {{ result.frame_rate }} fps</li>
             <li>Frames: {{ result.frame_count }}</li>
-            <li>Brightness: {{ result.brightness }}</li>
+            <li>Brightness: {{ result.energy }}</li>
+            <li>Saturation: {{ result.brightness }}</li>
             <li>Smoothing: {{ result.smoothing.toFixed(2) }}</li>
             <li>Window spacing: {{ formatSpacing(result.window_spacing) }}</li>
             <li>Step: {{ Number(result.step_samples.toFixed(2)) }} samples</li>

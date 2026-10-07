@@ -3,11 +3,14 @@ import {
   BRIGHTNESS_RANGE,
   SMOOTHING_RANGE,
   DEFAULT_BRIGHTNESS,
+  DEFAULT_ENERGY,
   DEFAULT_SMOOTHING,
   DEFAULT_WINDOW_SIZE,
+  ENERGY_RANGE,
   WINDOW_SIZES,
   formatSmoothing,
   validateBrightness,
+  validateEnergy,
   validateFile,
   validateFrameRate,
   validateSmoothing,
@@ -66,7 +69,7 @@ describe("validateFile", () => {
   });
 });
 
-describe("brightness", () => {
+describe("saturation (the API's brightness setting)", () => {
   it("is a whole number from 2 to 100, defaulting to 2", () => {
     expect(BRIGHTNESS_RANGE).toEqual({ min: 2, max: 100 });
     expect(DEFAULT_BRIGHTNESS).toBe(2);
@@ -77,8 +80,26 @@ describe("brightness", () => {
   });
 
   it.each(["1", "101", "0", "-3", "2.5", "", "  ", "abc", "NaN", "Infinity", "1e9", "99.9"])("rejects %j", (v) => {
-    expect(validateBrightness(v)).toBe("The brightness must be a whole number from 2 to 100.");
+    expect(validateBrightness(v)).toBe("The saturation must be a whole number from 2 to 100.");
   });
+});
+
+describe("brightness (the API's energy setting)", () => {
+  it("is a whole number from 1 to 8, defaulting to 1", () => {
+    expect(ENERGY_RANGE).toEqual({ min: 1, max: 8 });
+    expect(DEFAULT_ENERGY).toBe(1);
+  });
+
+  it.each(["1", "2", "8", "5", 4, "3.0", " 6 "])("accepts %s", (v) => {
+    expect(validateEnergy(v)).toBeNull();
+  });
+
+  it.each(["0", "9", "-1", "2.5", "", "  ", "abc", "NaN", "Infinity", "-Infinity", "1e9", 0, 9, NaN, Infinity])(
+    "rejects %j",
+    (v) => {
+      expect(validateEnergy(v)).toBe("The brightness must be a whole number from 1 to 8.");
+    },
+  );
 });
 
 describe("smoothing", () => {

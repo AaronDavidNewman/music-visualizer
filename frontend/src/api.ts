@@ -8,6 +8,7 @@ export interface JobResult {
   frame_count: number;
   brightness: number;
   smoothing: number;
+  energy: number;
   window_spacing: number;
   step_samples: number;
   window_count: number;
@@ -22,6 +23,7 @@ export interface JobSettings {
   windowSpacing: number;
   brightness: number;
   smoothing: number;
+  energy: number;
 }
 
 /** Uploads the file and waits for the frames to be created. Rejects with a message fit to show the user. */
@@ -33,6 +35,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("window_spacing", String(settings.windowSpacing));
   body.append("brightness", String(settings.brightness));
   body.append("smoothing", String(settings.smoothing));
+  body.append("energy", String(settings.energy));
 
   let res: Response;
   try {

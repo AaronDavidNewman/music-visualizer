@@ -3,12 +3,15 @@ import { computed, ref, watch } from "vue";
 import {
   BRIGHTNESS_RANGE,
   DEFAULT_BRIGHTNESS,
+  DEFAULT_ENERGY,
   DEFAULT_SMOOTHING,
   DEFAULT_WINDOW_SIZE,
+  ENERGY_RANGE,
   SMOOTHING_RANGE,
   WINDOW_SIZES,
   formatSmoothing,
   validateBrightness,
+  validateEnergy,
   validateFile,
   validateFrameRate,
   validateSmoothing,
@@ -25,6 +28,7 @@ import {
 } from "../utilities/spacing";
 import {
   brightnessHelp,
+  energyHelp,
   frameRateHelp,
   smoothingHelp,
   spacingHelp,
@@ -39,6 +43,7 @@ const emit = defineEmits<{ submit: [file: File, settings: JobSettings] }>();
 const windowSize = ref<number>(DEFAULT_WINDOW_SIZE);
 const frameRateText = ref("30");
 const brightnessText = ref(String(DEFAULT_BRIGHTNESS));
+const energyText = ref(String(DEFAULT_ENERGY));
 const smoothing = ref<number>(DEFAULT_SMOOTHING);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
@@ -59,6 +64,7 @@ const windowError = computed(() => validateWindowSize(windowSize.value));
 const frameRateError = computed(() => validateFrameRate(frameRateText.value));
 const spacingError = computed(() => validateSpacing(spacingText.value));
 const brightnessError = computed(() => validateBrightness(brightnessText.value));
+const energyError = computed(() => validateEnergy(energyText.value));
 const smoothingError = computed(() => validateSmoothing(smoothing.value));
 const canSubmit = computed(
   () =>
@@ -67,6 +73,7 @@ const canSubmit = computed(
     !frameRateError.value &&
     !spacingError.value &&
     !brightnessError.value &&
+    !energyError.value &&
     !smoothingError.value,
 );
 
@@ -89,6 +96,7 @@ function onSubmit() {
     frameRate: Number(frameRateText.value),
     windowSpacing: Number(spacingText.value),
     brightness: Number(brightnessText.value),
+    energy: Number(energyText.value),
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -135,22 +143,45 @@ function onSubmit() {
       </div>
     </div>
 
-    <div class="field">
-      <div class="field-head">
-        <label for="brightness">Brightness</label>
-        <InfoPopover label="brightness" :text="brightnessHelp" />
+    <!-- What the user sees is Brightness then Saturation. The values keep the API names: Brightness is the
+         `energy` setting (a root, 1 to 8, on the frame's loudness) and Saturation is the `brightness` setting
+         (a root, 2 to 100, on each tile's note level). -->
+    <div class="field-row">
+      <div class="field">
+        <div class="field-head">
+          <label for="brightness">Brightness</label>
+          <InfoPopover label="brightness" :text="energyHelp" />
+        </div>
+        <input
+          id="brightness"
+          v-model="energyText"
+          type="number"
+          step="1"
+          :min="ENERGY_RANGE.min"
+          :max="ENERGY_RANGE.max"
+          inputmode="numeric"
+          :disabled="busy"
+        />
+        <small v-if="energyError" class="error">{{ energyError }}</small>
       </div>
-      <input
-        id="brightness"
-        v-model="brightnessText"
-        type="number"
-        step="1"
-        :min="BRIGHTNESS_RANGE.min"
-        :max="BRIGHTNESS_RANGE.max"
-        inputmode="numeric"
-        :disabled="busy"
-      />
-      <small v-if="brightnessError" class="error">{{ brightnessError }}</small>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="saturation">Saturation</label>
+          <InfoPopover label="saturation" :text="brightnessHelp" />
+        </div>
+        <input
+          id="saturation"
+          v-model="brightnessText"
+          type="number"
+          step="1"
+          :min="BRIGHTNESS_RANGE.min"
+          :max="BRIGHTNESS_RANGE.max"
+          inputmode="numeric"
+          :disabled="busy"
+        />
+        <small v-if="brightnessError" class="error">{{ brightnessError }}</small>
+      </div>
     </div>
 
     <div class="field">
