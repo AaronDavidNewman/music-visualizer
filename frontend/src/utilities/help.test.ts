@@ -8,6 +8,7 @@ import {
   saturationStepHelp,
   smoothingHelp,
   spacingHelp,
+  thresholdHelp,
   windowSizeHelp,
 } from "./help";
 import { BRIGHTNESS_RANGE, ENERGY_RANGE, FRAME_RATE_RANGE, HUE_STEPS, UNIT_STEPS } from "./validation";
@@ -53,5 +54,14 @@ describe("setting explanations", () => {
     }
     expect(hueStepHelp).toContain("Both ends of the wheel are red");
     expect(brightnessStepHelp).toContain("loudest frame stays at full brightness");
+  });
+
+  it("explains the threshold: black below it, a share of the loudest note in the file, left end off, right end 10%", () => {
+    expect(thresholdHelp).toContain("drawn black");
+    expect(thresholdHelp).toContain("loudest note in the whole file");
+    expect(thresholdHelp).toContain("left end");
+    expect(thresholdHelp).toContain("off");
+    expect(thresholdHelp).toContain("right end");
+    expect(thresholdHelp).toContain("10% of the loudest note");
   });
 });

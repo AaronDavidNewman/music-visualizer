@@ -6,14 +6,18 @@ import {
   DEFAULT_ENERGY,
   DEFAULT_SMOOTHING,
   DEFAULT_STEP,
+  DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
   ENERGY_RANGE,
   HUE_SCALE,
   HUE_STEPS,
+  THRESHOLD_RANGE,
   UNIT_SCALE,
   UNIT_STEPS,
   WINDOW_SIZES,
   formatSmoothing,
+  formatThreshold,
+  formatThresholdSummary,
   levelCount,
   levelLabel,
   stepToNumber,
@@ -23,6 +27,7 @@ import {
   validateFrameRate,
   validateSmoothing,
   validateStep,
+  validateThreshold,
   validateWindowSize,
 } from "./validation";
 
@@ -185,5 +190,34 @@ describe("color level steps", () => {
     expect(stepToNumber("n/a")).toBeNull();
     expect(stepToNumber("20")).toBe(20);
     expect(stepToNumber("180")).toBe(180);
+  });
+});
+
+describe("threshold", () => {
+  it("ranges from 0 (off) to 10 in steps of 1 and starts at 0", () => {
+    expect(THRESHOLD_RANGE).toEqual({ min: 0, max: 10, step: 1 });
+    expect(DEFAULT_THRESHOLD).toBe(0);
+  });
+
+  it.each([0, 1, 5, 10, "7", "2.5", "0", 2.5])("accepts %j", (v) => {
+    expect(validateThreshold(v)).toBeNull();
+  });
+
+  it.each([-1, -0.01, 10.01, 11, 100, "", "  ", "abc", "NaN", "Infinity", "-Infinity", "1e9", "20%"])("rejects %j", (v) => {
+    expect(validateThreshold(v)).toBe("The threshold must be a number from 0 to 10.");
+  });
+
+  it("shows Off at the left end and the percentage of the loudest note otherwise", () => {
+    expect(formatThreshold(0)).toBe("Off");
+    expect(formatThreshold(1)).toBe("1% of the loudest note");
+    expect(formatThreshold(10)).toBe("10% of the loudest note");
+    expect(formatThreshold(2.5)).toBe("2.5% of the loudest note");
+    expect(formatThreshold(0.1 + 0.2)).toBe("0.3% of the loudest note");
+  });
+
+  it("shows Off or the percentage in the result summary", () => {
+    expect(formatThresholdSummary(0)).toBe("Off");
+    expect(formatThresholdSummary(7)).toBe("7%");
+    expect(formatThresholdSummary(2.5)).toBe("2.5%");
   });
 });

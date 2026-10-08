@@ -6,16 +6,19 @@ import {
   DEFAULT_ENERGY,
   DEFAULT_SMOOTHING,
   DEFAULT_STEP,
+  DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
   ENERGY_RANGE,
   HUE_SCALE,
   HUE_STEPS,
   NA_STEP,
   SMOOTHING_RANGE,
+  THRESHOLD_RANGE,
   UNIT_SCALE,
   UNIT_STEPS,
   WINDOW_SIZES,
   formatSmoothing,
+  formatThreshold,
   levelLabel,
   stepToNumber,
   validateBrightness,
@@ -24,6 +27,7 @@ import {
   validateFrameRate,
   validateSmoothing,
   validateStep,
+  validateThreshold,
   validateWindowSize,
 } from "../utilities/validation";
 import {
@@ -44,6 +48,7 @@ import {
   saturationStepHelp,
   smoothingHelp,
   spacingHelp,
+  thresholdHelp,
   windowSizeHelp,
 } from "../utilities/help";
 import InfoPopover from "./InfoPopover.vue";
@@ -61,6 +66,7 @@ const hueStepText = ref(DEFAULT_STEP);
 const saturationStepText = ref(DEFAULT_STEP);
 const brightnessStepText = ref(DEFAULT_STEP);
 const smoothing = ref<number>(DEFAULT_SMOOTHING);
+const threshold = ref<number>(DEFAULT_THRESHOLD);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
 function defaultSpacingText(sampleRate: number, frameRate: string, size: number): string | null {
@@ -82,6 +88,7 @@ const spacingError = computed(() => validateSpacing(spacingText.value));
 const brightnessError = computed(() => validateBrightness(brightnessText.value));
 const energyError = computed(() => validateEnergy(energyText.value));
 const smoothingError = computed(() => validateSmoothing(smoothing.value));
+const thresholdError = computed(() => validateThreshold(threshold.value));
 const hueStepError = computed(() => validateStep(hueStepText.value, HUE_STEPS, "hue"));
 const saturationStepError = computed(() => validateStep(saturationStepText.value, UNIT_STEPS, "saturation"));
 const brightnessStepError = computed(() => validateStep(brightnessStepText.value, UNIT_STEPS, "brightness"));
@@ -94,6 +101,7 @@ const canSubmit = computed(
     !brightnessError.value &&
     !energyError.value &&
     !smoothingError.value &&
+    !thresholdError.value &&
     !hueStepError.value &&
     !saturationStepError.value &&
     !brightnessStepError.value,
@@ -122,6 +130,7 @@ function onSubmit() {
     hueStep: stepToNumber(hueStepText.value),
     saturationStep: stepToNumber(saturationStepText.value),
     brightnessStep: stepToNumber(brightnessStepText.value),
+    threshold: threshold.value,
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -272,6 +281,26 @@ function onSubmit() {
       <small v-if="smoothingError" class="error">{{ smoothingError }}</small>
     </div>
 
+    <div class="field">
+      <div class="field-head">
+        <label for="threshold">Threshold</label>
+        <InfoPopover label="threshold" :text="thresholdHelp" />
+      </div>
+      <span class="slider-row">
+        <input
+          id="threshold"
+          v-model.number="threshold"
+          type="range"
+          :min="THRESHOLD_RANGE.min"
+          :max="THRESHOLD_RANGE.max"
+          :step="THRESHOLD_RANGE.step"
+          :disabled="busy"
+        />
+        <output class="slider-value slider-value-wide" for="threshold">{{ formatThreshold(threshold) }}</output>
+      </span>
+      <small v-if="thresholdError" class="error">{{ thresholdError }}</small>
+    </div>
+
     <button type="submit" :disabled="!canSubmit || busy">{{ busy ? "Working…" : "Create frames" }}</button>
   </form>
 </template>
@@ -320,6 +349,9 @@ small {
   min-width: 3rem;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+}
+.slider-value-wide {
+  min-width: 9rem;
 }
 .level-count {
   color: #555;

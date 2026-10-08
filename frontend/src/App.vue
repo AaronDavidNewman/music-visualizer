@@ -5,6 +5,7 @@ import FilePicker from "./components/FilePicker.vue";
 import SettingsForm from "./components/SettingsForm.vue";
 import { submitJob, type JobResult, type JobSettings } from "./api";
 import { DEFAULT_SAMPLE_RATE, formatSpacing } from "./utilities/spacing";
+import { formatThresholdSummary } from "./utilities/validation";
 
 type Status = "idle" | "busy" | "done" | "error";
 
@@ -51,6 +52,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li>Brightness: {{ result.energy }}</li>
             <li>Saturation: {{ result.brightness }}</li>
             <li>Smoothing: {{ result.smoothing.toFixed(2) }}</li>
+            <li>Threshold: {{ formatThresholdSummary(result.threshold) }}</li>
             <li>Hue steps: {{ result.hue_step ?? 'N/A' }}</li>
             <li>Saturation steps: {{ result.saturation_step ?? 'N/A' }}</li>
             <li>Brightness steps: {{ result.brightness_step ?? 'N/A' }}</li>

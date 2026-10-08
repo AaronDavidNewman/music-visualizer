@@ -109,3 +109,26 @@ export function validateStep(value: string | number, allowed: readonly number[],
 export function stepToNumber(value: string): number | null {
   return isNa(value) ? null : Number(value);
 }
+
+/** The threshold hides faint notes: a note below this percentage of the file's loudest note value is drawn black. 0 is off. The slider moves in steps of 1. */
+export const THRESHOLD_RANGE = { min: 0, max: 10, step: 1 } as const;
+export const DEFAULT_THRESHOLD = THRESHOLD_RANGE.min;
+
+const thresholdMessage = `The threshold must be a number from ${THRESHOLD_RANGE.min} to ${THRESHOLD_RANGE.max}.`;
+
+/** Returns an error message, or null when the threshold is a finite number from 0 to 50. */
+export function validateThreshold(value: string | number): string | null {
+  const n = parseNumber(value);
+  const ok = Number.isFinite(n) && n >= THRESHOLD_RANGE.min && n <= THRESHOLD_RANGE.max;
+  return ok ? null : thresholdMessage;
+}
+
+/** The readout beside the slider: "Off" at 0, otherwise the percentage of the loudest note. */
+export function formatThreshold(value: number): string {
+  return value === 0 ? "Off" : `${Number(value.toFixed(2))}% of the loudest note`;
+}
+
+/** The result summary item: "Off" or the percentage such as "30%". */
+export function formatThresholdSummary(value: number): string {
+  return value === 0 ? "Off" : `${Number(value.toFixed(2))}%`;
+}

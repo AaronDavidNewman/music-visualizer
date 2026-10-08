@@ -1,4 +1,4 @@
-import { BRIGHTNESS_RANGE, ENERGY_RANGE, FRAME_RATE_RANGE, HUE_STEPS, UNIT_STEPS } from "./validation";
+import { BRIGHTNESS_RANGE, ENERGY_RANGE, FRAME_RATE_RANGE, HUE_STEPS, THRESHOLD_RANGE, UNIT_STEPS } from "./validation";
 
 /** The explanation behind each setting's info button. Problems the user must act on are not here: they stay inline. */
 export const windowSizeHelp = "Larger windows separate low notes better but blur changes over time.";
@@ -32,6 +32,8 @@ export const brightnessStepHelp = stepHelp(
   UNIT_STEPS,
   "The levels are every step from 0 to 100, so 50 gives 3 levels (black, half, full); the loudest frame stays at full brightness.",
 );
+
+export const thresholdHelp = `A note whose volume is below the threshold is drawn black. The threshold is a share of the loudest note in the whole file: ${THRESHOLD_RANGE.min} (the left end) is off, and ${THRESHOLD_RANGE.max} (the right end) is ${THRESHOLD_RANGE.max}% of the loudest note. Louder notes are never changed.`;
 
 export const smoothingHelp = "0 is no smoothing; higher values fade notes more slowly.";
 

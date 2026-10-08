@@ -9,6 +9,7 @@ tile) comes from the overall energy of the audio in the frame, so louder sounds 
 tile's saturation is local to it: its gray level after the brightness root (shown to the user as Saturation).
 Its hue starts at 180 degrees and is moved by the (added-up) levels of related notes. Each of hue, saturation and
 brightness can finally be rounded to a few evenly spaced levels (see ``color_levels``); by default they are smooth.
+A threshold can hide faint notes: a note below it has a black tile (see ``hidden_notes``).
 """
 
 import colorsys
@@ -50,6 +51,12 @@ DEFAULT_ENERGY = 1
 MIN_SMOOTHING = 0.0
 MAX_SMOOTHING = 0.8
 DEFAULT_SMOOTHING = 0.0
+
+# The threshold hides faint notes: a drawn note whose smoothed value in a frame is below this percentage of the largest
+# note value in the whole file gets a black tile. 0 is off (the default); the page's slider ends at 10.
+MIN_THRESHOLD = 0
+MAX_THRESHOLD = 10
+DEFAULT_THRESHOLD = 0
 
 # Colour: each tile is HSV with the frame's value (its brightness, from the frame's energy; see ``value_sequence``), the
 # tile's own gray level as the saturation, and a hue that starts at 180 degrees (0.5 of the wheel) and is moved by
@@ -132,6 +139,35 @@ def to_gray_levels(frames: np.ndarray) -> np.ndarray:
     if peak <= 0:
         return np.zeros(frames.shape, dtype=np.uint8)
     return np.rint(255.0 * frames / peak).astype(np.uint8)
+
+
+def _check_threshold(threshold) -> float:
+    if (
+        isinstance(threshold, bool)
+        or not isinstance(threshold, numbers.Real)
+        or not math.isfinite(threshold)
+        or not MIN_THRESHOLD <= threshold <= MAX_THRESHOLD
+    ):
+        raise ValueError(f"The threshold must be a number from {MIN_THRESHOLD} to {MAX_THRESHOLD}.")
+    return float(threshold)
+
+
+def hidden_notes(smoothed: np.ndarray, threshold: float = DEFAULT_THRESHOLD) -> np.ndarray:
+    """Which drawn notes are too faint to show: a boolean array of shape ``(frames, 84)``.
+
+    ``smoothed`` has one row per frame and one column per note (88), after smoothing. The reference is the largest
+    value anywhere in it, the same value ``to_gray_levels`` scales against (so the four undrawn notes count too). A
+    note is hidden when its value is *strictly* below ``threshold`` percent of that reference; one exactly at the
+    threshold is shown. With threshold 0 nothing is hidden (values are never negative), the note with the largest value
+    is never hidden, and when no note has any value nothing is hidden. The comparison uses the unrounded value, before
+    any root, so no other setting changes which notes are hidden.
+    """
+    threshold = _check_threshold(threshold)
+    smoothed = np.asarray(smoothed, dtype=np.float64)
+    if smoothed.ndim != 2 or smoothed.shape[1] < SHOWN_NOTES:
+        raise ValueError(f"At least {SHOWN_NOTES} note values per frame are needed (got shape {smoothed.shape}).")
+    peak = float(smoothed.max()) if smoothed.size else 0.0
+    return smoothed[:, :SHOWN_NOTES] < threshold / 100.0 * peak
 
 
 @functools.lru_cache(maxsize=None)
@@ -258,6 +294,7 @@ def tile_colors(
     hues: np.ndarray | None = None,
     value: float = DEFAULT_VALUE,
     saturation_step: int | None = None,
+    hidden: np.ndarray | None = None,
 ) -> np.ndarray:
     """The RGB colour (``uint8``, shape ``(84, 3)``) of each drawn tile.
 
@@ -270,8 +307,16 @@ def tile_colors(
 
     ``saturation_step`` (``None`` = N/A, or 5, 10, 20, 50) rounds each tile's saturation to the nearest of the levels
     0, step, 2 * step ... 100 percent (halves go up) before the conversion; hue and value are not touched.
+
+    ``hidden`` (``None`` = none, or a boolean array of 84 values, see ``hidden_notes``) makes those tiles black,
+    RGB (0, 0, 0). It is applied last and changes only those tiles: hues are still worked out from every level,
+    so a hidden note still counts as a related note for the tiles around it.
     """
     saturation_step = check_step(saturation_step, UNIT_STEPS, "saturation")
+    if hidden is not None:
+        hidden = np.asarray(hidden)
+        if hidden.dtype != bool or hidden.shape != (SHOWN_NOTES,):
+            raise ValueError(f"The hidden tiles must be {SHOWN_NOTES} true/false values (got {hidden.dtype} {hidden.shape}).")
     value = _check_value(value)
     levels = _require_drawable(levels)
     if hues is None:
@@ -283,7 +328,10 @@ def tile_colors(
     saturations = boost_levels(levels[:SHOWN_NOTES], brightness).astype(np.float64) / 255.0
     saturations = snap(saturations, saturation_step, UNIT_SCALE).tolist()
     rgb = [colorsys.hsv_to_rgb(h, s, value) for h, s in zip(hues, saturations)]
-    return np.rint(np.array(rgb) * 255.0).astype(np.uint8)
+    colours = np.rint(np.array(rgb) * 255.0).astype(np.uint8)
+    if hidden is not None:
+        colours[hidden] = 0
+    return colours
 
 
 def render_frame(
@@ -333,6 +381,7 @@ def write_frames(
     hue_step: int | None = None,
     saturation_step: int | None = None,
     value_step: int | None = None,
+    threshold: float = DEFAULT_THRESHOLD,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -342,6 +391,10 @@ def write_frames(
     ``hue_step`` (12, 36, 90, 180), ``saturation_step`` and ``value_step`` (the frame brightness; 5, 10, 20, 50) round
     that property to evenly spaced levels (``color_levels``) as the very last step, after smoothing and the roots;
     ``None`` (N/A, the default) leaves it smooth. A frame is rounded from its own values only.
+
+    ``threshold`` (0 to 50, default 0 = off) is a percentage of the largest note value in the file (after smoothing):
+    a note below it gets a black tile in that frame (``hidden_notes``). It is compared before any root, and only the
+    hidden note's own tile changes.
 
     ``energies`` is one energy per frame (see ``energy.frame_energies``). Each frame's brightness, shared by all
     its tiles, comes from it by ``value_sequence`` with ``energy_root`` (a whole number from 1 to 8), so louder
@@ -354,6 +407,7 @@ def write_frames(
     hue_step = check_step(hue_step, HUE_STEPS, "hue")
     saturation_step = check_step(saturation_step, UNIT_STEPS, "saturation")
     value_step = check_step(value_step, UNIT_STEPS, "brightness")
+    _check_threshold(threshold)
     values = None
     if energies is not None:
         energies = np.asarray(energies, dtype=np.float64)
@@ -363,10 +417,12 @@ def write_frames(
             )
         values = snap(value_sequence(energies, energy_root, smoothing), value_step, UNIT_SCALE)
     directory.mkdir(parents=True, exist_ok=True)
-    levels = to_gray_levels(smooth_frames(frames, smoothing))
+    smoothed = smooth_frames(frames, smoothing)
+    levels = to_gray_levels(smoothed)
+    hidden = hidden_notes(smoothed, threshold)
     hues = snap(hue_sequence(levels, brightness, smoothing), hue_step, HUE_SCALE)
     for i, row in enumerate(levels):
         value = DEFAULT_VALUE if values is None else float(values[i])
-        colours = tile_colors(row, brightness, hues[i], value, saturation_step)
+        colours = tile_colors(row, brightness, hues[i], value, saturation_step, hidden[i])
         # Level 6 makes these files about a third of the size of level 1 for roughly 0.2 s more per 10,000 frames.
         _palette_frame(colours).save(directory / f"frame_{i:06d}.png", compress_level=6)

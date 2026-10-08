@@ -19,6 +19,7 @@ from app.services.frame_rendering import (
     average_frames,
     boost_levels,
     frame_count,
+    hidden_notes,
     hue_sequence,
     render_frame,
     smooth_frames,
@@ -1036,3 +1037,318 @@ def test_the_largest_steps_together_leave_a_handful_of_flat_colours(tmp_path):
         assert (np.minimum(np.abs(degrees - 180), np.minimum(degrees, 360 - degrees)) < 3).all()  # red or cyan
         seen_hues |= set(np.round(degrees / 180).astype(int) % 2)
     assert seen_hues  # coloured tiles really were found
+
+
+# --- the note threshold (feature 011) --------------------------------------------------------------------------------
+
+
+def note_matrix(*frames):
+    """(frames, 88) note values; each frame is a dict {note: value}, every other note is 0."""
+    out = np.zeros((len(frames), NOTE_COUNT))
+    for i, values in enumerate(frames):
+        for note, value in values.items():
+            out[i, note] = value
+    return out
+
+
+def hidden_set(mask, frame=0):
+    return set(np.flatnonzero(mask[frame]).tolist())
+
+
+@pytest.mark.parametrize("threshold, expected", [(6, {2}), (8, {2}), (10, {1, 2}), (0, set()), (2, set())])
+def test_notes_strictly_below_the_threshold_are_hidden_and_equal_ones_are_shown(threshold, expected):
+    values = note_matrix({0: 100.0, 1: 8.0, 2: 4.0})
+    # (notes 3 to 83 have no value at all; see the next test)
+    assert hidden_set(hidden_notes(values, threshold)) & {0, 1, 2} == expected
+
+
+def test_notes_with_no_value_at_all_are_below_any_positive_threshold():
+    values = note_matrix({0: 100.0})
+    assert hidden_set(hidden_notes(values, 1)) == set(range(1, SHOWN_NOTES))
+    assert hidden_set(hidden_notes(values, 0)) == set()
+
+
+@pytest.mark.parametrize("threshold", range(0, 11))
+def test_the_note_with_the_largest_value_is_never_hidden(threshold):
+    values = note_matrix({5: 80.0, 6: 3.0}, {7: 100.0, 8: 99.0}, {9: 50.0})
+    mask = hidden_notes(values, threshold)
+    assert not mask[1, 7]
+
+
+@pytest.mark.parametrize("threshold", range(0, 11))
+def test_a_value_exactly_at_the_threshold_is_shown(threshold):
+    peak = 0.7311
+    values = note_matrix({0: peak, 1: threshold / 100 * peak})
+    assert not hidden_notes(values, threshold)[0, 1]
+
+
+def test_threshold_zero_hides_nothing_even_for_zero_values():
+    values = note_matrix({0: 1.0}, {})
+    assert not hidden_notes(values, 0).any()
+    assert not hidden_notes(values).any()  # off is the default
+
+
+def test_the_reference_is_the_largest_value_of_the_whole_file_not_of_each_frame():
+    values = note_matrix({0: 100.0}, {0: 5.0, 1: 2.0})
+    mask = hidden_notes(values, 8)
+    assert hidden_set(mask, 0) & {0} == set()
+    assert hidden_set(mask, 1) & {0, 1} == {0, 1}  # the quiet frame's notes are hidden
+
+
+def test_the_four_undrawn_notes_count_towards_the_reference():
+    quiet = note_matrix({0: 5.0})
+    assert not hidden_notes(quiet, 8)[0, 0]
+    louder_undrawn = note_matrix({0: 5.0, 85: 100.0})
+    assert hidden_notes(louder_undrawn, 8)[0, 0]
+
+
+def test_silence_hides_nothing_and_does_not_fail():
+    assert not hidden_notes(np.zeros((4, NOTE_COUNT)), 10).any()
+
+
+def test_no_frames_gives_an_empty_result():
+    out = hidden_notes(np.zeros((0, NOTE_COUNT)), 5)
+    assert out.shape == (0, SHOWN_NOTES) and out.dtype == bool
+
+
+def test_hidden_notes_shape_dtype_and_inputs_are_left_alone():
+    values = note_matrix({0: 100.0}, {1: 5.0})
+    before = values.copy()
+    mask = hidden_notes(values, 3)
+    assert mask.shape == (2, SHOWN_NOTES) and mask.dtype == bool
+    assert (values == before).all()
+    mask[:] = True
+    assert hidden_notes(values, 3).sum() < mask.sum()  # a fresh array every time
+
+
+@pytest.mark.parametrize("bad", [-1, 11, float("nan"), float("inf"), True, "20", None, [20]])
+def test_hidden_notes_refuses_a_threshold_outside_zero_to_fifty(bad):
+    with pytest.raises(ValueError, match="The threshold must be a number from 0 to 10."):
+        hidden_notes(np.ones((1, NOTE_COUNT)), bad)
+
+
+def test_hidden_notes_needs_at_least_84_values_per_frame():
+    with pytest.raises(ValueError):
+        hidden_notes(np.ones((2, 83)), 10)
+    with pytest.raises(ValueError):
+        hidden_notes(np.ones(88), 10)
+    assert hidden_notes(np.ones((2, 84)), 10).shape == (2, 84)
+
+
+# --- hiding notes when drawing (feature 011) -------------------------------------------------------------------------
+
+
+def tile_rgb(path):
+    """(84, 3) colour of every tile of a written frame, from its centre pixel."""
+    rgb = np.asarray(Image.open(path).convert("RGB"))
+    return np.array(
+        [
+            rgb[(n // GRID_COLUMNS) * TILE_HEIGHT + TILE_HEIGHT // 2, (n % GRID_COLUMNS) * TILE_WIDTH + TILE_WIDTH // 2]
+            for n in range(SHOWN_NOTES)
+        ]
+    )
+
+
+def written_tiles(directory, frames, **kwargs):
+    write_frames(frames, directory, **kwargs)
+    return [tile_rgb(directory / f"frame_{i:06d}.png") for i in range(frames.shape[0])]
+
+
+def test_tile_colors_hidden_tiles_are_black_and_the_rest_unchanged():
+    levels = np.arange(84) * 3 % 256
+    hidden = np.zeros(84, dtype=bool)
+    hidden[[3, 10, 50]] = True
+    plain = tile_colors(levels, 2, value=0.9)
+    masked = tile_colors(levels, 2, value=0.9, hidden=hidden)
+    assert plain[hidden].any(axis=1).all()  # they were visible
+    assert not masked[hidden].any()  # RGB (0, 0, 0) is HSV (0, 0, 0)
+    assert (masked[~hidden] == plain[~hidden]).all()
+
+
+def test_tile_colors_without_a_mask_or_with_an_empty_one_is_unchanged_and_a_full_one_is_black():
+    levels = np.arange(84) * 3 % 256
+    plain = tile_colors(levels, 2)
+    assert (tile_colors(levels, 2, hidden=None) == plain).all()
+    assert (tile_colors(levels, 2, hidden=np.zeros(84, dtype=bool)) == plain).all()
+    assert not tile_colors(levels, 2, hidden=np.ones(84, dtype=bool)).any()
+
+
+@pytest.mark.parametrize("bad", [np.zeros(83, dtype=bool), np.zeros((84, 1), dtype=bool), np.zeros(84, dtype=int)])
+def test_tile_colors_refuses_a_mask_of_the_wrong_shape_or_type(bad):
+    with pytest.raises(ValueError):
+        tile_colors(np.arange(84), 2, hidden=bad)
+
+
+def test_a_hidden_note_still_shifts_the_hue_of_the_tiles_it_is_related_to():
+    levels = np.zeros(88, dtype=np.int64)
+    levels[24] = 255
+    levels[24 + RELATED_DOWN[0]] = 255  # a partner that pulls tile 24's hue down to red
+    hidden = np.zeros(84, dtype=bool)
+    hidden[24 + RELATED_DOWN[0]] = True
+    masked = tile_colors(levels, 2, hidden=hidden)
+    without_partner = levels.copy()
+    without_partner[24 + RELATED_DOWN[0]] = 0
+    assert not masked[24 + RELATED_DOWN[0]].any()
+    assert masked[24].tolist() == tile_colors(levels, 2)[24].tolist()
+    assert masked[24].tolist() != tile_colors(without_partner, 2)[24].tolist()
+
+
+def test_write_frames_with_threshold_zero_is_byte_identical_to_no_threshold(tmp_path):
+    common = dict(energies=LEVEL_ENERGIES, smoothing=0.3, hue_step=36, saturation_step=10, value_step=20)
+    write_frames(LEVEL_FRAMES, tmp_path / "a", **common)
+    write_frames(LEVEL_FRAMES, tmp_path / "b", threshold=0, **common)
+    write_frames(LEVEL_FRAMES, tmp_path / "c", threshold=0.0, **common)
+    assert frame_files(tmp_path / "a") == frame_files(tmp_path / "b") == frame_files(tmp_path / "c")
+
+
+LOUD, FAINT = 24, 40
+LOUD_AND_FAINT = np.zeros((4, 88))
+LOUD_AND_FAINT[:, LOUD] = 1.0
+LOUD_AND_FAINT[:, FAINT] = [0.05, 0.05, 0.07, 0.09]  # share of the largest note value (1.0) in each frame
+
+
+def test_a_faint_note_is_black_while_it_is_below_the_threshold_and_a_loud_one_is_unchanged(tmp_path):
+    off = written_tiles(tmp_path / "off", LOUD_AND_FAINT)
+    at_6 = written_tiles(tmp_path / "t6", LOUD_AND_FAINT, threshold=6)
+    for f in range(4):
+        assert off[f][LOUD].any() and off[f][FAINT].any()  # both are visible with the threshold off
+        assert at_6[f][LOUD].tolist() == off[f][LOUD].tolist()
+    assert not at_6[0][FAINT].any() and not at_6[1][FAINT].any()  # 0.05 is below 0.06
+    assert at_6[2][FAINT].tolist() == off[2][FAINT].tolist()  # 0.07 and 0.09 are not
+    assert at_6[3][FAINT].tolist() == off[3][FAINT].tolist()
+
+
+def test_a_threshold_below_every_value_changes_neither_note(tmp_path):
+    off = written_tiles(tmp_path / "off", LOUD_AND_FAINT)
+    at_4 = written_tiles(tmp_path / "t4", LOUD_AND_FAINT, threshold=4)
+    for f in range(4):
+        assert at_4[f][[LOUD, FAINT]].tolist() == off[f][[LOUD, FAINT]].tolist()
+
+
+def test_the_threshold_is_the_same_level_for_every_frame_of_the_file(tmp_path):
+    # in a quiet frame the loud note of the file is only 5% of the file's largest value: it is hidden there
+    values = np.zeros((2, 88))
+    values[0, LOUD] = 1.0
+    values[1, LOUD] = 0.05
+    tiles = written_tiles(tmp_path, values, threshold=8)
+    assert tiles[0][LOUD].any() and not tiles[1][LOUD].any()
+
+
+@pytest.fixture(scope="module")
+def planted_peak_frames():
+    values = LEVEL_FRAMES.copy()
+    values[2, 40] = 2.0  # the largest value of the file, on a drawn note
+    return values
+
+
+def test_every_tile_is_black_or_exactly_the_tile_without_a_threshold_at_every_threshold(tmp_path, planted_peak_frames):
+    off = written_tiles(tmp_path / "off", planted_peak_frames, energies=LEVEL_ENERGIES)
+    for t in range(1, 11):
+        got = written_tiles(tmp_path / f"t{t}", planted_peak_frames, energies=LEVEL_ENERGIES, threshold=t)
+        for f in range(len(off)):
+            black = ~got[f].any(axis=1)
+            assert (got[f][~black] == off[f][~black]).all(), (t, f)
+        assert got[2][40].any(), t  # the note with the largest value is shown at every threshold
+
+
+def test_a_silent_file_is_entirely_black_at_any_threshold(tmp_path):
+    tiles = written_tiles(tmp_path, np.zeros((3, 88)), energies=np.zeros(3), threshold=10)
+    assert not any(t.any() for t in tiles)
+    for path in tmp_path.glob("*.png"):
+        assert not np.asarray(Image.open(path).convert("RGB")).any()
+
+
+@pytest.mark.parametrize("bad", [-1, 11, float("nan"), float("inf"), True, "20"])
+def test_write_frames_refuses_a_bad_threshold_before_writing_anything(tmp_path, bad):
+    with pytest.raises(ValueError, match="The threshold must be a number from 0 to 10."):
+        write_frames(LEVEL_FRAMES, tmp_path / "out", energies=LEVEL_ENERGIES, threshold=bad)
+    assert not (tmp_path / "out").exists() or not list((tmp_path / "out").glob("*.png"))
+
+
+# --- the threshold with smoothing, the roots, the steps and the length of the file (feature 011, User Story 3) --------
+
+
+def black_tiles(path):
+    return {n for n, colour in enumerate(tile_rgb(path)) if not colour.any()}
+
+
+def black_sets(directory, count):
+    return [black_tiles(directory / f"frame_{i:06d}.png") for i in range(count)]
+
+
+def test_a_fading_note_turns_black_in_the_first_frame_whose_smoothed_value_is_below_the_threshold(tmp_path):
+    values = np.zeros((14, 88))
+    values[:2, LOUD] = 1.0  # the note stops after two frames; smoothing 0.8 makes it fade slowly
+    smoothed = smooth_frames(values, 0.8)[:, LOUD]
+    first_hidden = int(np.argmax(smoothed < 0.1))  # the first frame whose smoothed value is below 10% of the peak (1.0)
+    assert 5 < first_hidden < 13  # the setup really fades over several frames
+    write_frames(values, tmp_path, smoothing=0.8, threshold=10)
+    for i in range(14):
+        assert (LOUD in black_tiles(tmp_path / f"frame_{i:06d}.png")) == (i >= first_hidden), i
+
+
+def test_the_hidden_set_does_not_depend_on_the_roots_or_the_steps(tmp_path):
+    count = LEVEL_FRAMES.shape[0]
+    write_frames(LEVEL_FRAMES, tmp_path / "base", threshold=10)
+    base = black_sets(tmp_path / "base", count)
+    assert any(base) and all(len(s) < SHOWN_NOTES for s in base)  # some notes hidden, some shown
+    variations = [
+        {"brightness": 100},
+        {"saturation_step": 5},
+        {"saturation_step": 50},
+        {"hue_step": 12},
+        {"hue_step": 180},
+        {"hue_step": 90, "saturation_step": 20},
+    ]
+    for n, extra in enumerate(variations):
+        write_frames(LEVEL_FRAMES, tmp_path / f"v{n}", threshold=10, **extra)
+        assert black_sets(tmp_path / f"v{n}", count) == base, extra
+
+
+@pytest.mark.parametrize("root", range(1, 9))
+def test_the_hidden_set_does_not_depend_on_the_brightness_root(tmp_path, root):
+    energies = np.array([1.0, 0.7, 0.4, 0.2, 0.05, 0.05])  # every frame has some brightness, so only the mask is black
+    write_frames(LEVEL_FRAMES, tmp_path / "base", threshold=10, energies=energies)
+    write_frames(LEVEL_FRAMES, tmp_path / "root", threshold=10, energies=energies, energy_root=root)
+    assert black_sets(tmp_path / "root", 6) == black_sets(tmp_path / "base", 6)
+    write_frames(LEVEL_FRAMES, tmp_path / "plain", threshold=10)  # and the same notes are hidden without energies
+    assert black_sets(tmp_path / "plain", 6) == black_sets(tmp_path / "base", 6)
+
+
+@pytest.mark.parametrize(
+    "steps",
+    [
+        {"hue_step": 12, "saturation_step": 5, "value_step": 5},
+        {"hue_step": 180, "saturation_step": 50, "value_step": 50},
+        {"hue_step": 36, "saturation_step": 10},
+    ],
+)
+def test_hidden_tiles_are_black_with_any_steps_and_the_others_are_the_tiles_without_a_threshold(tmp_path, steps):
+    off = written_tiles(tmp_path / "off", LEVEL_FRAMES, **steps)
+    got = written_tiles(tmp_path / "on", LEVEL_FRAMES, threshold=10, **steps)
+    mask = hidden_notes(LEVEL_FRAMES, 10)
+    for f in range(len(off)):
+        assert not got[f][mask[f]].any()
+        shown = ~mask[f]
+        assert (got[f][shown] == off[f][shown]).all()
+
+
+def test_a_frame_whose_notes_are_all_hidden_is_entirely_black_and_its_neighbours_are_not(tmp_path):
+    values = np.zeros((3, 88))
+    values[0, LOUD] = values[2, LOUD] = 1.0
+    values[1, :] = 0.05
+    values[1, LOUD] = 0.05
+    tiles = written_tiles(tmp_path, values, threshold=10)
+    assert not tiles[1].any()
+    assert tiles[0][LOUD].any() and tiles[2][LOUD].any()
+
+
+def test_adding_silence_at_the_end_changes_no_earlier_frame_with_a_threshold(tmp_path):
+    longer = np.vstack([LEVEL_FRAMES, np.zeros((3, 88))])
+    longer_energies = np.concatenate([LEVEL_ENERGIES, np.zeros(3)])
+    kwargs = dict(smoothing=0.3, threshold=10, hue_step=36, saturation_step=10, value_step=20)
+    write_frames(LEVEL_FRAMES, tmp_path / "short", energies=LEVEL_ENERGIES, **kwargs)
+    write_frames(longer, tmp_path / "long", energies=longer_energies, **kwargs)
+    short, long = frame_files(tmp_path / "short"), frame_files(tmp_path / "long")
+    assert len(short) == 6 and len(long) == 9
+    assert all(long[name] == data for name, data in short.items())

@@ -49,3 +49,31 @@ describe("the step dropdowns", () => {
     expect(await render(false)).not.toMatch(/<select id="hue-step"[^>]*disabled/);
   });
 });
+
+describe("the threshold slider", () => {
+  const input = (html: string) => html.match(/<input id="threshold"[^>]*>/)?.[0] ?? "";
+
+  it("is a range from 0 to 10 in steps of 1, starting at 0 with the readout Off", async () => {
+    const html = await render();
+    const tag = input(html);
+    expect(tag).toContain('type="range"');
+    expect(tag).toContain('min="0"');
+    expect(tag).toContain('max="10"');
+    expect(tag).toContain('step="1"');
+    expect(tag).toContain('value="0"');
+    expect(html).toMatch(/<output[^>]*for="threshold"[^>]*>Off<\/output>/);
+  });
+
+  it("has a label and an info button", async () => {
+    const html = await render();
+    expect(html).toContain(">Threshold</label>");
+    expect(html).toContain('aria-label="About threshold"');
+  });
+
+  it("comes after Smoothing and is disabled while a job is running", async () => {
+    const html = await render();
+    expect(html.indexOf('for="threshold"')).toBeGreaterThan(html.indexOf('for="smoothing"'));
+    expect(input(html)).not.toContain("disabled");
+    expect(input(await render(true))).toContain("disabled");
+  });
+});
