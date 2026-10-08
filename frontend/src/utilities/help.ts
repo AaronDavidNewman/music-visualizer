@@ -1,4 +1,4 @@
-import { BRIGHTNESS_RANGE, ENERGY_RANGE, FRAME_RATE_RANGE } from "./validation";
+import { BRIGHTNESS_RANGE, ENERGY_RANGE, FRAME_RATE_RANGE, HUE_STEPS, UNIT_STEPS } from "./validation";
 
 /** The explanation behind each setting's info button. Problems the user must act on are not here: they stay inline. */
 export const windowSizeHelp = "Larger windows separate low notes better but blur changes over time.";
@@ -10,6 +10,28 @@ export const brightnessHelp = `Whole number, ${BRIGHTNESS_RANGE.min} to ${BRIGHT
 
 // Shown as the Brightness setting (the API's energy): a root on how loud each frame is.
 export const energyHelp = `Whole number, ${ENERGY_RANGE.min} to ${ENERGY_RANGE.max}. How bright the whole picture is follows how loud the sound is, compared with the loudest moment. Higher values make quiet passages brighter; 1 is a straight proportion.`;
+
+// The three step settings round a finished value to evenly spaced levels (the multiples of the step up to the top of the scale).
+const stepHelp = (what: string, steps: readonly number[], extra: string) =>
+  `Rounds ${what} to a few evenly spaced levels. N/A leaves it smooth. Choose ${steps.join(", ")}: a larger step gives fewer, bolder levels. ${extra}`;
+
+export const hueStepHelp = stepHelp(
+  "each tile's hue",
+  HUE_STEPS,
+  "The levels are every step in degrees from 0 to 360, so 180 gives 3 levels (0°, 180°, 360°). Both ends of the wheel are red, so 180 gives only red and cyan.",
+);
+
+export const saturationStepHelp = stepHelp(
+  "each tile's saturation",
+  UNIT_STEPS,
+  "The levels are every step from 0 to 100, so 50 gives 3 levels (0, 50, 100).",
+);
+
+export const brightnessStepHelp = stepHelp(
+  "each frame's brightness",
+  UNIT_STEPS,
+  "The levels are every step from 0 to 100, so 50 gives 3 levels (black, half, full); the loudest frame stays at full brightness.",
+);
 
 export const smoothingHelp = "0 is no smoothing; higher values fade notes more slowly.";
 

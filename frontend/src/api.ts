@@ -9,6 +9,10 @@ export interface JobResult {
   brightness: number;
   smoothing: number;
   energy: number;
+  /** The steps used for hue, saturation and brightness: null is N/A (smooth). */
+  hue_step: number | null;
+  saturation_step: number | null;
+  brightness_step: number | null;
   window_spacing: number;
   step_samples: number;
   window_count: number;
@@ -24,6 +28,10 @@ export interface JobSettings {
   brightness: number;
   smoothing: number;
   energy: number;
+  /** null is N/A (smooth); otherwise one of the allowed steps. */
+  hueStep: number | null;
+  saturationStep: number | null;
+  brightnessStep: number | null;
 }
 
 /** Uploads the file and waits for the frames to be created. Rejects with a message fit to show the user. */
@@ -36,6 +44,9 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("brightness", String(settings.brightness));
   body.append("smoothing", String(settings.smoothing));
   body.append("energy", String(settings.energy));
+  body.append("hue_step", settings.hueStep === null ? "N/A" : String(settings.hueStep));
+  body.append("saturation_step", settings.saturationStep === null ? "N/A" : String(settings.saturationStep));
+  body.append("brightness_step", settings.brightnessStep === null ? "N/A" : String(settings.brightnessStep));
 
   let res: Response;
   try {

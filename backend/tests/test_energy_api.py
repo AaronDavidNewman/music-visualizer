@@ -145,7 +145,7 @@ def test_the_other_response_fields_are_unchanged(client):
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
         "brightness", "smoothing", "energy", "window_spacing", "step_samples", "window_count", "spacing_raised",
-        "frame_url_template",
+        "frame_url_template", "hue_step", "saturation_step", "brightness_step",
     }  # fmt: skip
 
 

@@ -69,3 +69,43 @@ export function validateSmoothing(value: string | number): string | null {
 export function formatSmoothing(value: number): string {
   return value.toFixed(2);
 }
+
+/** Hue is a scale of 0 to 360 degrees; saturation and brightness are scales of 0 to 100. */
+export const HUE_SCALE = 360;
+export const UNIT_SCALE = 100;
+/** The step choices besides N/A: the distance between two neighboring levels of the property. */
+export const HUE_STEPS = [12, 36, 90, 180] as const;
+export const UNIT_STEPS = [5, 10, 20, 50] as const;
+/** N/A leaves a property smooth (no levels). It is the starting choice for each. */
+export const NA_STEP = "N/A";
+export const DEFAULT_STEP = NA_STEP;
+
+function isNa(value: string | number): boolean {
+  return String(value).trim().toLowerCase() === "n/a";
+}
+
+/** The number of levels a step gives on a scale: round((scale + step) / step), both ends of the scale included. */
+export function levelCount(step: number, scale: number): number {
+  return Math.floor((scale + step) / step + 0.5);
+}
+
+/** What is shown beside a step choice: "N/A (smooth)", or the step with its level count such as "20 (6 levels)". */
+export function levelLabel(value: string | number, scale: number): string {
+  if (isNa(value)) return `${NA_STEP} (smooth)`;
+  const step = parseNumber(value);
+  return Number.isInteger(step) && step > 0 ? `${step} (${levelCount(step, scale)} levels)` : "";
+}
+
+/** Returns an error message, or null when the value is N/A or one of the allowed steps. `label` is hue, saturation or brightness. */
+export function validateStep(value: string | number, allowed: readonly number[], label: string): string | null {
+  if (isNa(value)) return null;
+  const n = parseNumber(value);
+  return Number.isInteger(n) && allowed.includes(n)
+    ? null
+    : `The ${label} step must be N/A or one of ${allowed.join(", ")}.`;
+}
+
+/** The step as sent to the API client: null for N/A, otherwise the number. */
+export function stepToNumber(value: string): number | null {
+  return isNa(value) ? null : Number(value);
+}

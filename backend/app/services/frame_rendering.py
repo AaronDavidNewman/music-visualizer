@@ -7,7 +7,8 @@ Each frame becomes a 12 x 7 grid of coloured tiles (one row per octave, one colu
 252 x 168 pixels, 3:2). Each tile is an HSV colour. The frame's brightness (the HSV value, the same for every
 tile) comes from the overall energy of the audio in the frame, so louder sounds brighten the whole picture. A
 tile's saturation is local to it: its gray level after the brightness root (shown to the user as Saturation).
-Its hue starts at 180 degrees and is moved by the (added-up) levels of related notes.
+Its hue starts at 180 degrees and is moved by the (added-up) levels of related notes. Each of hue, saturation and
+brightness can finally be rounded to a few evenly spaced levels (see ``color_levels``); by default they are smooth.
 """
 
 import colorsys
@@ -19,6 +20,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from .color_levels import HUE_SCALE, HUE_STEPS, UNIT_SCALE, UNIT_STEPS, check_step, snap
 from .note_analysis import NOTE_COUNT, AnalysisResult
 
 # 12 columns (the notes of an octave) by 7 rows (octaves) of tiles 21 wide by 24 tall: tile width is
@@ -255,6 +257,7 @@ def tile_colors(
     brightness: int = DEFAULT_BRIGHTNESS,
     hues: np.ndarray | None = None,
     value: float = DEFAULT_VALUE,
+    saturation_step: int | None = None,
 ) -> np.ndarray:
     """The RGB colour (``uint8``, shape ``(84, 3)``) of each drawn tile.
 
@@ -264,7 +267,11 @@ def tile_colors(
     ``colorsys``; each channel is rounded to 0..255 (halves go to the even number). Every tile's largest channel is
     the frame's brightness (``value`` times 255) and its smallest is that times one minus the saturation, so a tile
     with no level is a plain gray or white at the frame's brightness, and a frame with value 0 is black.
+
+    ``saturation_step`` (``None`` = N/A, or 5, 10, 20, 50) rounds each tile's saturation to the nearest of the levels
+    0, step, 2 * step ... 100 percent (halves go up) before the conversion; hue and value are not touched.
     """
+    saturation_step = check_step(saturation_step, UNIT_STEPS, "saturation")
     value = _check_value(value)
     levels = _require_drawable(levels)
     if hues is None:
@@ -273,7 +280,8 @@ def tile_colors(
     if hues.shape != (SHOWN_NOTES,):
         raise ValueError(f"Exactly {SHOWN_NOTES} hues are needed (got shape {hues.shape}).")
     hues = hues.tolist()
-    saturations = (boost_levels(levels[:SHOWN_NOTES], brightness).astype(np.float64) / 255.0).tolist()
+    saturations = boost_levels(levels[:SHOWN_NOTES], brightness).astype(np.float64) / 255.0
+    saturations = snap(saturations, saturation_step, UNIT_SCALE).tolist()
     rgb = [colorsys.hsv_to_rgb(h, s, value) for h, s in zip(hues, saturations)]
     return np.rint(np.array(rgb) * 255.0).astype(np.uint8)
 
@@ -322,11 +330,18 @@ def write_frames(
     smoothing: float = DEFAULT_SMOOTHING,
     energies: np.ndarray | None = None,
     energy_root: int = DEFAULT_ENERGY,
+    hue_step: int | None = None,
+    saturation_step: int | None = None,
+    value_step: int | None = None,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
     ``smoothing`` (0.0 to 0.8, default none) smooths the note values over the frames (before they are
     scaled to gray levels), each tile's hue and each frame's brightness, all with the same running average.
+
+    ``hue_step`` (12, 36, 90, 180), ``saturation_step`` and ``value_step`` (the frame brightness; 5, 10, 20, 50) round
+    that property to evenly spaced levels (``color_levels``) as the very last step, after smoothing and the roots;
+    ``None`` (N/A, the default) leaves it smooth. A frame is rounded from its own values only.
 
     ``energies`` is one energy per frame (see ``energy.frame_energies``). Each frame's brightness, shared by all
     its tiles, comes from it by ``value_sequence`` with ``energy_root`` (a whole number from 1 to 8), so louder
@@ -336,6 +351,9 @@ def write_frames(
     The files are indexed-colour PNGs (lossless: each frame has at most 84 flat colours), which decode to
     exactly the pixels ``render_frame`` returns but cost about a third of the time to encode as 24-bit RGB.
     """
+    hue_step = check_step(hue_step, HUE_STEPS, "hue")
+    saturation_step = check_step(saturation_step, UNIT_STEPS, "saturation")
+    value_step = check_step(value_step, UNIT_STEPS, "brightness")
     values = None
     if energies is not None:
         energies = np.asarray(energies, dtype=np.float64)
@@ -343,12 +361,12 @@ def write_frames(
             raise ValueError(
                 f"There must be one energy per frame (got {energies.size} energies for {frames.shape[0]} frames)."
             )
-        values = value_sequence(energies, energy_root, smoothing)
+        values = snap(value_sequence(energies, energy_root, smoothing), value_step, UNIT_SCALE)
     directory.mkdir(parents=True, exist_ok=True)
     levels = to_gray_levels(smooth_frames(frames, smoothing))
-    hues = hue_sequence(levels, brightness, smoothing)
+    hues = snap(hue_sequence(levels, brightness, smoothing), hue_step, HUE_SCALE)
     for i, row in enumerate(levels):
         value = DEFAULT_VALUE if values is None else float(values[i])
-        colours = tile_colors(row, brightness, hues[i], value)
+        colours = tile_colors(row, brightness, hues[i], value, saturation_step)
         # Level 6 makes these files about a third of the size of level 1 for roughly 0.2 s more per 10,000 frames.
         _palette_frame(colours).save(directory / f"frame_{i:06d}.png", compress_level=6)

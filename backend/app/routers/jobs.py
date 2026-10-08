@@ -23,6 +23,7 @@ from ..services.frame_rendering import (
     frame_count,
     write_frames,
 )
+from ..services.color_levels import HUE_STEPS, UNIT_STEPS
 from ..services.energy import frame_energies
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
 from ..services.window_spacing import default_spacing, resolve_step
@@ -120,6 +121,23 @@ def _parse_energy(text: str | None, sent: bool) -> int:
     return int(value)
 
 
+def _parse_step(text: str | None, sent: bool, allowed: tuple[int, ...], label: str) -> int | None:
+    """The requested colour step. Not sent or ``N/A`` (any case) means no rounding (None); otherwise one of ``allowed``."""
+    if text is None and not sent:
+        return None
+    text = (text or "").strip()
+    if text.lower() == "n/a":
+        return None
+    message = f"The {label} step must be N/A or one of {', '.join(map(str, allowed))}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not value.is_integer() or int(value) not in allowed:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
 def _parse_smoothing(text: str | None, sent: bool) -> float:
     """The requested smoothing. Not sent means the default; anything sent must be a number 0.0..0.8."""
     if text is None and not sent:
@@ -167,6 +185,9 @@ def create_job(
     brightness: str | None = Form(None),
     smoothing: str | None = Form(None),
     energy: str | None = Form(None),
+    hue_step: str | None = Form(None),
+    saturation_step: str | None = Form(None),
+    brightness_step: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -175,6 +196,9 @@ def create_job(
     brightness_root = _parse_brightness(brightness, "brightness" in sent)
     smoothing_value = _parse_smoothing(smoothing, "smoothing" in sent)
     energy_root = _parse_energy(energy, "energy" in sent)
+    hue_levels = _parse_step(hue_step, "hue_step" in sent, HUE_STEPS, "hue")
+    saturation_levels = _parse_step(saturation_step, "saturation_step" in sent, UNIT_STEPS, "saturation")
+    brightness_levels = _parse_step(brightness_step, "brightness_step" in sent, UNIT_STEPS, "brightness")
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -215,7 +239,7 @@ def create_job(
         result = analyze_channels(left, right, file_rate, window, step=step)
         energies = frame_energies(left, right, file_rate, fps, frames)
         # write_frames smooths the note values, each tile's hue and each frame's brightness (from its energy),
-        # all with the same smoothing
+        # all with the same smoothing, and only then rounds hue, saturation and brightness to the chosen levels
         write_frames(
             average_frames(result, fps, frames),
             frames_dir,
@@ -223,6 +247,9 @@ def create_job(
             smoothing=smoothing_value,
             energies=energies,
             energy_root=energy_root,
+            hue_step=hue_levels,
+            saturation_step=saturation_levels,
+            value_step=brightness_levels,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -246,6 +273,9 @@ def create_job(
         "brightness": brightness_root,
         "smoothing": smoothing_value,
         "energy": energy_root,
+        "hue_step": hue_levels,
+        "saturation_step": saturation_levels,
+        "brightness_step": brightness_levels,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

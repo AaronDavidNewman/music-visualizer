@@ -816,3 +816,223 @@ def test_write_frames_without_smoothing_does_not_change_the_hues(tmp_path):
         pa = a / f"frame_{i:06d}.png"
         assert pa.read_bytes() == (b / pa.name).read_bytes()
         assert np.array_equal(np.asarray(Image.open(pa).convert("RGB")), np.asarray(render_frame(levels[i])))
+
+
+# --- discrete colour levels (feature 010) ----------------------------------------------------------------------------
+
+LEVEL_FRAMES = np.random.default_rng(3).uniform(0.0, 1.0, (6, 88)) ** 3
+LEVEL_ENERGIES = np.array([1.0, 0.7, 0.4, 0.2, 0.05, 0.0])
+# an RGB tile read back as 8-bit colour: saturation and hue are only reliable for bright, colourful tiles
+HSV_TOLERANCE = 0.03
+
+
+def read_tiles_hsv(path):
+    """(84, 3) array of hue (0..1), saturation, value of every tile of a written frame, from its centre pixel."""
+    rgb = np.asarray(Image.open(path).convert("RGB"))
+    rows = [(n // GRID_COLUMNS) * TILE_HEIGHT + TILE_HEIGHT // 2 for n in range(SHOWN_NOTES)]
+    cols = [(n % GRID_COLUMNS) * TILE_WIDTH + TILE_WIDTH // 2 for n in range(SHOWN_NOTES)]
+    return np.array([colorsys.rgb_to_hsv(*(rgb[r, c] / 255.0)) for r, c in zip(rows, cols)])
+
+
+def write_level_frames(directory, frames=LEVEL_FRAMES, energies=LEVEL_ENERGIES, **kwargs):
+    write_frames(frames, directory, energies=energies, **kwargs)
+    return [read_tiles_hsv(directory / f"frame_{i:06d}.png") for i in range(frames.shape[0])]
+
+
+def frame_files(directory):
+    return {p.name: p.read_bytes() for p in sorted(directory.glob("*.png"))}
+
+
+def distance_to_levels(values, step, scale):
+    levels = np.arange(0, scale + 1, step) / scale
+    return np.abs(np.asarray(values)[:, None] - levels[None, :]).min(axis=1)
+
+
+def test_tile_colors_saturation_step_gives_only_the_levels_and_leaves_hue_and_value_alone():
+    levels = np.arange(84) * 3 % 256
+    plain = tile_colors(levels, 2, value=0.9)
+    stepped = tile_colors(levels, 2, value=0.9, saturation_step=20)
+    plain_hsv = np.array([colorsys.rgb_to_hsv(*(c / 255.0)) for c in plain])
+    hsv = np.array([colorsys.rgb_to_hsv(*(c / 255.0)) for c in stepped])
+    assert (distance_to_levels(hsv[:, 1], 20, 100) < HSV_TOLERANCE).all()
+    assert len(set(np.round(hsv[:, 1], 1))) > 2  # several different levels really occur
+    assert stepped.max(axis=1).tolist() == plain.max(axis=1).tolist()  # value
+    colored = (hsv[:, 1] > 0.3) & (plain_hsv[:, 1] > 0.3)
+    assert np.abs(hsv[colored, 0] - plain_hsv[colored, 0]).max() < 0.02  # hue
+
+
+def test_tile_colors_without_a_step_or_with_na_is_unchanged():
+    levels = np.arange(84) * 3 % 256
+    assert (tile_colors(levels, 2, saturation_step=None) == tile_colors(levels, 2)).all()
+
+
+@pytest.mark.parametrize("step", [0, 7, 51, 2.5, True, "20", float("nan")])
+def test_tile_colors_refuses_a_step_that_is_not_allowed(step):
+    with pytest.raises(ValueError, match="The saturation step must be N/A or one of 5, 10, 20, 50."):
+        tile_colors(np.arange(84), 2, saturation_step=step)
+
+
+def test_a_black_tile_stays_black_with_any_saturation_step():
+    assert not tile_colors(np.arange(84) * 3, 2, value=0.0, saturation_step=50).any()
+
+
+def test_write_frames_with_na_steps_is_byte_identical_to_no_steps(tmp_path):
+    write_frames(LEVEL_FRAMES, tmp_path / "a", energies=LEVEL_ENERGIES, smoothing=0.3)
+    write_frames(
+        LEVEL_FRAMES,
+        tmp_path / "b",
+        energies=LEVEL_ENERGIES,
+        smoothing=0.3,
+        hue_step=None,
+        saturation_step=None,
+        value_step=None,
+    )
+    assert frame_files(tmp_path / "a") == frame_files(tmp_path / "b")
+
+
+def test_hue_step_rounds_every_hue_and_changes_nothing_else(tmp_path):
+    plain = write_level_frames(tmp_path / "a")
+    stepped = write_level_frames(tmp_path / "b", hue_step=90)
+    seen = 0
+    for p, s in zip(plain, stepped):
+        assert np.abs(p[:, 1:] - s[:, 1:]).max() < HSV_TOLERANCE  # saturation and value unchanged
+        good = (s[:, 1] > 0.3) & (s[:, 2] > 0.4)
+        degrees = s[good, 0] * 360
+        assert (np.abs(((degrees + 45) % 90) - 45) < 3).all()  # a multiple of 90 (360 is the same red as 0)
+        seen += int(good.sum())
+    assert seen > 20
+
+
+def test_saturation_step_rounds_every_saturation_and_changes_nothing_else(tmp_path):
+    plain = write_level_frames(tmp_path / "a")
+    stepped = write_level_frames(tmp_path / "b", saturation_step=20)
+    seen = 0
+    for p, s in zip(plain, stepped):
+        bright = s[:, 2] > 0.4
+        assert (distance_to_levels(s[bright, 1], 20, 100) < HSV_TOLERANCE).all()
+        assert np.abs(p[:, 2] - s[:, 2]).max() < HSV_TOLERANCE  # value unchanged
+        seen += int(bright.sum())
+    assert seen > 100
+
+
+def test_value_step_rounds_every_frames_brightness_and_changes_nothing_else(tmp_path):
+    plain = write_level_frames(tmp_path / "a")
+    stepped = write_level_frames(tmp_path / "b", value_step=50)
+    for i, (p, s) in enumerate(zip(plain, stepped)):
+        brightest = float(s[:, 2].max())
+        assert round(brightest * 255) in (0, 128, 255)
+        assert abs(np.median(s[:, 2]) - brightest) < HSV_TOLERANCE or brightest == 0  # one value per frame
+    values = [round(float(s[:, 2].max()) * 255) for s in stepped]
+    assert values[0] == 255  # the loudest frame stays fully bright
+    assert values[-1] == 0  # no energy stays black
+    for p, s in zip(plain, stepped):
+        lit = (p[:, 2] > 0.4) & (s[:, 2] > 0.4)
+        if lit.any():
+            assert np.abs(p[lit, 1] - s[lit, 1]).max() < 0.05  # saturation unchanged where it can be read
+
+
+def test_na_for_two_properties_leaves_them_exactly_as_with_the_third_alone(tmp_path):
+    write_frames(LEVEL_FRAMES, tmp_path / "a", energies=LEVEL_ENERGIES, value_step=50)
+    write_frames(LEVEL_FRAMES, tmp_path / "b", energies=LEVEL_ENERGIES, hue_step=None, saturation_step=None, value_step=50)
+    assert frame_files(tmp_path / "a") == frame_files(tmp_path / "b")
+
+
+def test_value_step_without_energies_keeps_full_brightness(tmp_path):
+    write_frames(LEVEL_FRAMES, tmp_path, value_step=50)
+    assert all(read_tiles_hsv(p)[:, 2].max() > 0.99 for p in sorted(tmp_path.glob("*.png")))
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"hue_step": 5}, "The hue step must be N/A or one of 12, 36, 90, 180."),
+        ({"saturation_step": 90}, "The saturation step must be N/A or one of 5, 10, 20, 50."),
+        ({"value_step": 0}, "The brightness step must be N/A or one of 5, 10, 20, 50."),
+    ],
+)
+def test_write_frames_refuses_a_bad_step_before_writing_anything(tmp_path, kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        write_frames(LEVEL_FRAMES, tmp_path / "out", energies=LEVEL_ENERGIES, **kwargs)
+    assert not (tmp_path / "out").exists() or not list((tmp_path / "out").glob("*.png"))
+
+
+# --- interactions with smoothing, the roots and the length of the file (feature 010, User Story 3) -------------------
+
+
+def brightest_channel(path):
+    return int(np.asarray(Image.open(path).convert("RGB")).max())
+
+
+def test_rounding_is_applied_after_smoothing(tmp_path):
+    # energies 1, 0, 0 smooth (0.5) to brightness 1, 0.5, 0.25; 0.25 rounds to 0.5 with step 50.
+    # Rounding first and smoothing after would leave 0.25 (64) in the last frame.
+    write_frames(np.ones((3, 88)), tmp_path, energies=np.array([1.0, 0.0, 0.0]), smoothing=0.5, value_step=50)
+    assert [brightest_channel(tmp_path / f"frame_{i:06d}.png") for i in range(3)] == [255, 128, 128]
+
+
+def test_smoothed_saturations_are_rounded_to_the_levels(tmp_path):
+    frames = write_level_frames(tmp_path, smoothing=0.8, saturation_step=50)
+    seen = set()
+    for hsv in frames:
+        bright = hsv[:, 2] > 0.4
+        assert (distance_to_levels(hsv[bright, 1], 50, 100) < HSV_TOLERANCE).all()
+        seen |= set(np.round(hsv[bright, 1] * 2).astype(int))
+    assert len(seen) >= 2
+
+
+@pytest.mark.parametrize("root", range(1, 9))
+def test_the_loudest_frame_stays_fully_bright_and_silence_black_at_every_root(tmp_path, root):
+    write_frames(LEVEL_FRAMES, tmp_path, energies=LEVEL_ENERGIES, energy_root=root, value_step=50)
+    tops = [brightest_channel(tmp_path / f"frame_{i:06d}.png") for i in range(LEVEL_FRAMES.shape[0])]
+    assert tops[0] == 255 and tops[-1] == 0
+    assert set(tops) <= {0, 128, 255}
+
+
+@pytest.mark.parametrize("root", [2, 100])
+def test_the_saturation_root_is_applied_before_the_levels(tmp_path, root):
+    frames = write_level_frames(tmp_path, brightness=root, saturation_step=20)
+    for hsv in frames:
+        bright = hsv[:, 2] > 0.4
+        assert (distance_to_levels(hsv[bright, 1], 20, 100) < HSV_TOLERANCE).all()
+    levels = np.zeros(84, dtype=np.int64)  # a tile with no level stays unsaturated at every root and step
+    rgb = tile_colors(levels, root, value=1.0, saturation_step=20)
+    assert (rgb[:, 0] == rgb[:, 1]).all() and (rgb[:, 1] == rgb[:, 2]).all()
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"hue_step": 36}, {"saturation_step": 10}, {"value_step": 20}, {"hue_step": 90, "saturation_step": 20, "value_step": 50}],
+)
+def test_adding_silence_at_the_end_changes_no_earlier_frame(tmp_path, kwargs):
+    # The colors are scaled against the loudest value of the file, so only quiet or silent frames can be appended.
+    silent = np.zeros((3, 88))
+    longer = np.vstack([LEVEL_FRAMES, silent])
+    longer_energies = np.concatenate([LEVEL_ENERGIES, np.zeros(3)])
+    write_frames(LEVEL_FRAMES, tmp_path / "short", energies=LEVEL_ENERGIES, smoothing=0.3, **kwargs)
+    write_frames(longer, tmp_path / "long", energies=longer_energies, smoothing=0.3, **kwargs)
+    short, long = frame_files(tmp_path / "short"), frame_files(tmp_path / "long")
+    assert len(short) == 6 and len(long) == 9
+    assert all(long[name] == data for name, data in short.items())
+
+
+def test_silent_frames_stay_black_with_every_step(tmp_path):
+    frames = write_level_frames(
+        tmp_path, hue_step=12, saturation_step=5, value_step=5, energies=np.array([1.0, 0.5, 0.2, 0.1, 0.0, 0.0])
+    )
+    assert not frames[-1][:, 2].any() and not frames[-2][:, 2].any()
+    assert not any(np.asarray(Image.open(p).convert("RGB")).any() for p in sorted(tmp_path.glob("*.png"))[-2:])
+
+
+def test_the_largest_steps_together_leave_a_handful_of_flat_colours(tmp_path):
+    frames = write_level_frames(tmp_path, hue_step=180, saturation_step=50, value_step=50)
+    seen_hues = set()
+    for hsv in frames:
+        top = float(hsv[:, 2].max())
+        assert round(top * 255) in (0, 128, 255)
+        bright = hsv[:, 2] > 0.4
+        assert (distance_to_levels(hsv[bright, 1], 50, 100) < HSV_TOLERANCE).all()
+        good = bright & (hsv[:, 1] > 0.3)
+        degrees = hsv[good, 0] * 360
+        assert (np.minimum(np.abs(degrees - 180), np.minimum(degrees, 360 - degrees)) < 3).all()  # red or cyan
+        seen_hues |= set(np.round(degrees / 180).astype(int) % 2)
+    assert seen_hues  # coloured tiles really were found

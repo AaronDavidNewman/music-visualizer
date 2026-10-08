@@ -5,15 +5,24 @@ import {
   DEFAULT_BRIGHTNESS,
   DEFAULT_ENERGY,
   DEFAULT_SMOOTHING,
+  DEFAULT_STEP,
   DEFAULT_WINDOW_SIZE,
   ENERGY_RANGE,
+  HUE_SCALE,
+  HUE_STEPS,
+  UNIT_SCALE,
+  UNIT_STEPS,
   WINDOW_SIZES,
   formatSmoothing,
+  levelCount,
+  levelLabel,
+  stepToNumber,
   validateBrightness,
   validateEnergy,
   validateFile,
   validateFrameRate,
   validateSmoothing,
+  validateStep,
   validateWindowSize,
 } from "./validation";
 
@@ -129,5 +138,52 @@ describe("smoothing", () => {
     expect(formatSmoothing(0.30000000000000004)).toBe("0.30");
     expect(formatSmoothing(0.8)).toBe("0.80");
     expect(formatSmoothing(0.35)).toBe("0.35");
+  });
+});
+
+describe("color level steps", () => {
+  it("are the allowed choices, on scales of 360 and 100, starting at N/A", () => {
+    expect([...HUE_STEPS]).toEqual([12, 36, 90, 180]);
+    expect([...UNIT_STEPS]).toEqual([5, 10, 20, 50]);
+    expect([HUE_SCALE, UNIT_SCALE]).toEqual([360, 100]);
+    expect(DEFAULT_STEP).toBe("N/A");
+  });
+
+  it("give round((scale + step) / step) levels, never fewer than 3", () => {
+    expect(HUE_STEPS.map((s) => levelCount(s, HUE_SCALE))).toEqual([31, 11, 5, 3]);
+    expect(UNIT_STEPS.map((s) => levelCount(s, UNIT_SCALE))).toEqual([21, 11, 6, 3]);
+  });
+
+  it("label the choice with its level count", () => {
+    expect(levelLabel("N/A", UNIT_SCALE)).toBe("N/A (smooth)");
+    expect(levelLabel("n/a", UNIT_SCALE)).toBe("N/A (smooth)");
+    expect(levelLabel("20", UNIT_SCALE)).toBe("20 (6 levels)");
+    expect(levelLabel(10, UNIT_SCALE)).toBe("10 (11 levels)");
+    expect(levelLabel("90", HUE_SCALE)).toBe("90 (5 levels)");
+    expect(levelLabel("12", HUE_SCALE)).toBe("12 (31 levels)");
+    expect(levelLabel("", HUE_SCALE)).toBe("");
+  });
+
+  it.each(["N/A", "n/a", " N/A ", "12", "36", "90", "180", 90])("accepts %j for hue", (v) => {
+    expect(validateStep(v, HUE_STEPS, "hue")).toBeNull();
+  });
+
+  it.each(["N/A", "5", "10", "20", "50", 50])("accepts %j for saturation", (v) => {
+    expect(validateStep(v, UNIT_STEPS, "saturation")).toBeNull();
+  });
+
+  it.each(["", "0", "7", "51", "abc", "2.5", "-5", "5", "NaN", "Infinity"])("rejects %j for hue", (v) => {
+    expect(validateStep(v, HUE_STEPS, "hue")).toBe("The hue step must be N/A or one of 12, 36, 90, 180.");
+  });
+
+  it.each(["", "0", "7", "51", "abc", "2.5", "90", "180"])("rejects %j for brightness", (v) => {
+    expect(validateStep(v, UNIT_STEPS, "brightness")).toBe("The brightness step must be N/A or one of 5, 10, 20, 50.");
+  });
+
+  it("turns the choice into the value that is sent", () => {
+    expect(stepToNumber("N/A")).toBeNull();
+    expect(stepToNumber("n/a")).toBeNull();
+    expect(stepToNumber("20")).toBe(20);
+    expect(stepToNumber("180")).toBe(180);
   });
 });

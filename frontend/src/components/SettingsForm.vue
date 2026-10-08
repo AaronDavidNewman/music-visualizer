@@ -5,16 +5,25 @@ import {
   DEFAULT_BRIGHTNESS,
   DEFAULT_ENERGY,
   DEFAULT_SMOOTHING,
+  DEFAULT_STEP,
   DEFAULT_WINDOW_SIZE,
   ENERGY_RANGE,
+  HUE_SCALE,
+  HUE_STEPS,
+  NA_STEP,
   SMOOTHING_RANGE,
+  UNIT_SCALE,
+  UNIT_STEPS,
   WINDOW_SIZES,
   formatSmoothing,
+  levelLabel,
+  stepToNumber,
   validateBrightness,
   validateEnergy,
   validateFile,
   validateFrameRate,
   validateSmoothing,
+  validateStep,
   validateWindowSize,
 } from "../utilities/validation";
 import {
@@ -28,8 +37,11 @@ import {
 } from "../utilities/spacing";
 import {
   brightnessHelp,
+  brightnessStepHelp,
   energyHelp,
   frameRateHelp,
+  hueStepHelp,
+  saturationStepHelp,
   smoothingHelp,
   spacingHelp,
   windowSizeHelp,
@@ -44,6 +56,10 @@ const windowSize = ref<number>(DEFAULT_WINDOW_SIZE);
 const frameRateText = ref("30");
 const brightnessText = ref(String(DEFAULT_BRIGHTNESS));
 const energyText = ref(String(DEFAULT_ENERGY));
+// The step choices are kept as the text of the selected option: "N/A" or a number.
+const hueStepText = ref(DEFAULT_STEP);
+const saturationStepText = ref(DEFAULT_STEP);
+const brightnessStepText = ref(DEFAULT_STEP);
 const smoothing = ref<number>(DEFAULT_SMOOTHING);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
@@ -66,6 +82,9 @@ const spacingError = computed(() => validateSpacing(spacingText.value));
 const brightnessError = computed(() => validateBrightness(brightnessText.value));
 const energyError = computed(() => validateEnergy(energyText.value));
 const smoothingError = computed(() => validateSmoothing(smoothing.value));
+const hueStepError = computed(() => validateStep(hueStepText.value, HUE_STEPS, "hue"));
+const saturationStepError = computed(() => validateStep(saturationStepText.value, UNIT_STEPS, "saturation"));
+const brightnessStepError = computed(() => validateStep(brightnessStepText.value, UNIT_STEPS, "brightness"));
 const canSubmit = computed(
   () =>
     !fileError.value &&
@@ -74,7 +93,10 @@ const canSubmit = computed(
     !spacingError.value &&
     !brightnessError.value &&
     !energyError.value &&
-    !smoothingError.value,
+    !smoothingError.value &&
+    !hueStepError.value &&
+    !saturationStepError.value &&
+    !brightnessStepError.value,
 );
 
 const belowMinimum = computed(
@@ -97,6 +119,9 @@ function onSubmit() {
     windowSpacing: Number(spacingText.value),
     brightness: Number(brightnessText.value),
     energy: Number(energyText.value),
+    hueStep: stepToNumber(hueStepText.value),
+    saturationStep: stepToNumber(saturationStepText.value),
+    brightnessStep: stepToNumber(brightnessStepText.value),
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -184,6 +209,49 @@ function onSubmit() {
       </div>
     </div>
 
+    <!-- Steps round a finished value to evenly spaced levels; N/A leaves it smooth. The API fields are
+         `hue_step`, `saturation_step` and `brightness_step`. -->
+    <div class="field-row">
+      <div class="field">
+        <div class="field-head">
+          <label for="hue-step">Hue steps</label>
+          <InfoPopover label="hue steps" :text="hueStepHelp" />
+        </div>
+        <select id="hue-step" v-model="hueStepText" :disabled="busy">
+          <option :value="NA_STEP">{{ NA_STEP }}</option>
+          <option v-for="step in HUE_STEPS" :key="step" :value="String(step)">{{ step }}</option>
+        </select>
+        <output class="level-count" for="hue-step">{{ levelLabel(hueStepText, HUE_SCALE) }}</output>
+        <small v-if="hueStepError" class="error">{{ hueStepError }}</small>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="saturation-step">Saturation steps</label>
+          <InfoPopover label="saturation steps" :text="saturationStepHelp" />
+        </div>
+        <select id="saturation-step" v-model="saturationStepText" :disabled="busy">
+          <option :value="NA_STEP">{{ NA_STEP }}</option>
+          <option v-for="step in UNIT_STEPS" :key="step" :value="String(step)">{{ step }}</option>
+        </select>
+        <output class="level-count" for="saturation-step">{{ levelLabel(saturationStepText, UNIT_SCALE) }}</output>
+        <small v-if="saturationStepError" class="error">{{ saturationStepError }}</small>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="brightness-step">Brightness steps</label>
+          <InfoPopover label="brightness steps" :text="brightnessStepHelp" />
+        </div>
+        <select id="brightness-step" v-model="brightnessStepText" :disabled="busy">
+          <option :value="NA_STEP">{{ NA_STEP }}</option>
+          <option v-for="step in UNIT_STEPS" :key="step" :value="String(step)">{{ step }}</option>
+        </select>
+        <output class="level-count" for="brightness-step">{{ levelLabel(brightnessStepText, UNIT_SCALE) }}</output>
+        <small v-if="brightnessStepError" class="error">{{ brightnessStepError }}</small>
+      </div>
+    </div>
+
     <div class="field">
       <div class="field-head">
         <label for="smoothing">Smoothing</label>
@@ -252,6 +320,10 @@ small {
   min-width: 3rem;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+}
+.level-count {
+  color: #555;
+  font-size: 0.85em;
 }
 small.error {
   color: #b00020;

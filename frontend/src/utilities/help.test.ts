@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { brightnessHelp, energyHelp, frameRateHelp, smoothingHelp, spacingHelp, windowSizeHelp } from "./help";
-import { BRIGHTNESS_RANGE, ENERGY_RANGE, FRAME_RATE_RANGE } from "./validation";
+import {
+  brightnessHelp,
+  brightnessStepHelp,
+  energyHelp,
+  frameRateHelp,
+  hueStepHelp,
+  saturationStepHelp,
+  smoothingHelp,
+  spacingHelp,
+  windowSizeHelp,
+} from "./help";
+import { BRIGHTNESS_RANGE, ENERGY_RANGE, FRAME_RATE_RANGE, HUE_STEPS, UNIT_STEPS } from "./validation";
 
 describe("setting explanations", () => {
   it("explains the Brightness setting (energy): its range, what it does, and what 1 means", () => {
@@ -31,5 +41,17 @@ describe("setting explanations", () => {
     expect(spacingHelp("Step between windows: 1024 samples (23.2 ms).")).toBe(
       `${base} Step between windows: 1024 samples (23.2 ms).`,
     );
+  });
+
+  it("explains the step settings: what N/A means, that a larger step gives fewer levels, and the choices", () => {
+    expect(hueStepHelp).toContain(HUE_STEPS.join(", "));
+    expect(saturationStepHelp).toContain(UNIT_STEPS.join(", "));
+    expect(brightnessStepHelp).toContain(UNIT_STEPS.join(", "));
+    for (const text of [hueStepHelp, saturationStepHelp, brightnessStepHelp]) {
+      expect(text).toContain("N/A leaves it smooth");
+      expect(text).toContain("larger step gives fewer, bolder levels");
+    }
+    expect(hueStepHelp).toContain("Both ends of the wheel are red");
+    expect(brightnessStepHelp).toContain("loudest frame stays at full brightness");
   });
 });
