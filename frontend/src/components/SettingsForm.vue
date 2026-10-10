@@ -5,6 +5,7 @@ import {
   DEFAULT_BRIGHTNESS,
   DEFAULT_ENERGY,
   DEFAULT_SMOOTHING,
+  DEFAULT_SMOOTHING_WINDOW,
   DEFAULT_STEP,
   DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
@@ -13,6 +14,7 @@ import {
   HUE_STEPS,
   NA_STEP,
   SMOOTHING_RANGE,
+  SMOOTHING_WINDOW_RANGE,
   THRESHOLD_RANGE,
   UNIT_SCALE,
   UNIT_STEPS,
@@ -26,6 +28,7 @@ import {
   validateFile,
   validateFrameRate,
   validateSmoothing,
+  validateSmoothingWindow,
   validateStep,
   validateThreshold,
   validateWindowSize,
@@ -47,6 +50,7 @@ import {
   hueStepHelp,
   saturationStepHelp,
   smoothingHelp,
+  smoothingWindowHelp,
   spacingHelp,
   thresholdHelp,
   windowSizeHelp,
@@ -66,6 +70,7 @@ const hueStepText = ref(DEFAULT_STEP);
 const saturationStepText = ref(DEFAULT_STEP);
 const brightnessStepText = ref(DEFAULT_STEP);
 const smoothing = ref<number>(DEFAULT_SMOOTHING);
+const smoothingWindowText = ref(String(DEFAULT_SMOOTHING_WINDOW));
 const threshold = ref<number>(DEFAULT_THRESHOLD);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
@@ -88,6 +93,7 @@ const spacingError = computed(() => validateSpacing(spacingText.value));
 const brightnessError = computed(() => validateBrightness(brightnessText.value));
 const energyError = computed(() => validateEnergy(energyText.value));
 const smoothingError = computed(() => validateSmoothing(smoothing.value));
+const smoothingWindowError = computed(() => validateSmoothingWindow(smoothingWindowText.value));
 const thresholdError = computed(() => validateThreshold(threshold.value));
 const hueStepError = computed(() => validateStep(hueStepText.value, HUE_STEPS, "hue"));
 const saturationStepError = computed(() => validateStep(saturationStepText.value, UNIT_STEPS, "saturation"));
@@ -101,6 +107,7 @@ const canSubmit = computed(
     !brightnessError.value &&
     !energyError.value &&
     !smoothingError.value &&
+    !smoothingWindowError.value &&
     !thresholdError.value &&
     !hueStepError.value &&
     !saturationStepError.value &&
@@ -131,6 +138,7 @@ function onSubmit() {
     saturationStep: stepToNumber(saturationStepText.value),
     brightnessStep: stepToNumber(brightnessStepText.value),
     threshold: threshold.value,
+    smoothingWindow: Number(smoothingWindowText.value),
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -259,6 +267,24 @@ function onSubmit() {
         <output class="level-count" for="brightness-step">{{ levelLabel(brightnessStepText, UNIT_SCALE) }}</output>
         <small v-if="brightnessStepError" class="error">{{ brightnessStepError }}</small>
       </div>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label for="smoothing-window">Smoothing window (frames)</label>
+        <InfoPopover label="smoothing window" :text="smoothingWindowHelp" />
+      </div>
+      <input
+        id="smoothing-window"
+        v-model="smoothingWindowText"
+        type="number"
+        step="1"
+        :min="SMOOTHING_WINDOW_RANGE.min"
+        :max="SMOOTHING_WINDOW_RANGE.max"
+        inputmode="numeric"
+        :disabled="busy"
+      />
+      <small v-if="smoothingWindowError" class="error">{{ smoothingWindowError }}</small>
     </div>
 
     <div class="field">

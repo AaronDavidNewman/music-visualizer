@@ -1,4 +1,12 @@
-import { BRIGHTNESS_RANGE, ENERGY_RANGE, FRAME_RATE_RANGE, HUE_STEPS, THRESHOLD_RANGE, UNIT_STEPS } from "./validation";
+import {
+  BRIGHTNESS_RANGE,
+  ENERGY_RANGE,
+  FRAME_RATE_RANGE,
+  HUE_STEPS,
+  SMOOTHING_WINDOW_RANGE,
+  THRESHOLD_RANGE,
+  UNIT_STEPS,
+} from "./validation";
 
 /** The explanation behind each setting's info button. Problems the user must act on are not here: they stay inline. */
 export const windowSizeHelp = "Larger windows separate low notes better but blur changes over time.";
@@ -35,7 +43,10 @@ export const brightnessStepHelp = stepHelp(
 
 export const thresholdHelp = `A note whose volume is below the threshold is drawn black. The threshold is a share of the loudest note in the whole file: ${THRESHOLD_RANGE.min} (the left end) is off, and ${THRESHOLD_RANGE.max} (the right end) is ${THRESHOLD_RANGE.max}% of the loudest note. Louder notes are never changed.`;
 
-export const smoothingHelp = "0 is no smoothing; higher values fade notes more slowly.";
+export const smoothingHelp =
+  "0 is no smoothing. Otherwise each frame is averaged with the frames before it in the smoothing window; each of those counts this fraction as much as the current frame, so higher values blend more and fade notes more slowly.";
+
+export const smoothingWindowHelp = `Whole number, ${SMOOTHING_WINDOW_RANGE.min} to ${SMOOTHING_WINDOW_RANGE.max}. How many earlier frames are mixed into each frame: with 1 each frame is blended with the one before it, with ${SMOOTHING_WINDOW_RANGE.max} with the ${SMOOTHING_WINDOW_RANGE.max} before it. A note that stops is gone that many frames later. It has no effect while Smoothing is 0.`;
 
 /** The spacing explanation, followed by the live step between windows when the value is usable (`stepHint` is empty otherwise). */
 export function spacingHelp(stepHint: string): string {

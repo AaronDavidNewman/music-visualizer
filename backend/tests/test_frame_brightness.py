@@ -101,7 +101,10 @@ def test_brightness_is_smoothed_like_the_notes_and_hues():
     assert mapped.tolist() == pytest.approx([1.0, 0.0, 0.0, 0.5**0.5])
     smoothed = value_sequence(energies, 2, 0.5)
     assert smoothed == pytest.approx(smooth_frames(mapped.reshape(-1, 1), 0.5).ravel())
-    assert smoothed[:3].tolist() == pytest.approx([1.0, 0.5, 0.25])
+    assert smoothed[:3].tolist() == pytest.approx([1.0, 0.5 / 1.5, 0.0])  # the default window is 1
+    wider = value_sequence(energies, 2, 0.5, 2)
+    assert wider == pytest.approx(smooth_frames(mapped.reshape(-1, 1), 0.5, 2).ravel())
+    assert wider[:3].tolist() == pytest.approx([1.0, 0.5 / 1.5, 0.5 / 2])
 
 
 @pytest.mark.parametrize("root", [0, 9, 2.5, -1, True, "2", None, float("nan")])
@@ -211,7 +214,11 @@ def test_a_quiet_notes_tile_is_less_saturated_and_a_loud_notes_tile_more(tmp_pat
 
 def test_write_frames_smooths_the_brightness_with_the_same_smoothing(tmp_path):
     write_frames(np.ones((3, 88)), tmp_path, smoothing=0.5, energies=np.array([1.0, 0.0, 0.0]))
-    assert brightness_of(tmp_path, 3) == [255, 128, 64]
+    assert brightness_of(tmp_path, 3) == [255, 85, 0]  # window 1: 1, 1/3, 0
+    write_frames(
+        np.ones((3, 88)), tmp_path / "w2", smoothing=0.5, smoothing_window=2, energies=np.array([1.0, 0.0, 0.0])
+    )
+    assert brightness_of(tmp_path / "w2", 3) == [255, 85, 64]  # window 2: 1, 1/3, 1/4
 
 
 def test_write_frames_without_energies_is_at_full_brightness(tmp_path):

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   BRIGHTNESS_RANGE,
   SMOOTHING_RANGE,
+  SMOOTHING_WINDOW_RANGE,
   DEFAULT_BRIGHTNESS,
   DEFAULT_ENERGY,
   DEFAULT_SMOOTHING,
+  DEFAULT_SMOOTHING_WINDOW,
   DEFAULT_STEP,
   DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
@@ -26,6 +28,7 @@ import {
   validateFile,
   validateFrameRate,
   validateSmoothing,
+  validateSmoothingWindow,
   validateStep,
   validateThreshold,
   validateWindowSize,
@@ -219,5 +222,20 @@ describe("threshold", () => {
     expect(formatThresholdSummary(0)).toBe("Off");
     expect(formatThresholdSummary(7)).toBe("7%");
     expect(formatThresholdSummary(2.5)).toBe("2.5%");
+  });
+});
+
+describe("smoothing window", () => {
+  it("is a whole number from 1 to 20 and starts at 1", () => {
+    expect(SMOOTHING_WINDOW_RANGE).toEqual({ min: 1, max: 20 });
+    expect(DEFAULT_SMOOTHING_WINDOW).toBe(1);
+  });
+
+  it.each([1, 5, 20, "1", "20", "7", " 7 "])("accepts %j", (v) => {
+    expect(validateSmoothingWindow(v)).toBeNull();
+  });
+
+  it.each([0, 21, -1, 2.5, "", "  ", "abc", "NaN", "Infinity", "1e9", "5%"])("rejects %j", (v) => {
+    expect(validateSmoothingWindow(v)).toBe("The smoothing window must be a whole number from 1 to 20.");
   });
 });

@@ -184,5 +184,6 @@ def test_smoothing_and_two_steps_give_only_the_levels_and_silence_at_the_end_cha
 
     plain_short = post_steps(client, wav_bytes(audio), smoothing="0.8").json()
     plain_longer = post_steps(client, wav_bytes(np.concatenate([audio, np.zeros(SR)])), smoothing="0.8").json()
-    assert differing(short, longer) == differing(plain_short, plain_longer)
+    # the steps add no difference of their own (they can only round one away)
+    assert set(differing(short, longer)) <= set(differing(plain_short, plain_longer))
     assert all(i == short["frame_count"] - 1 for i in differing(short, longer))

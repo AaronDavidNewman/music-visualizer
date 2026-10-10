@@ -77,3 +77,30 @@ describe("the threshold slider", () => {
     expect(input(await render(true))).toContain("disabled");
   });
 });
+
+describe("the smoothing window field", () => {
+  const input = (html: string) => html.match(/<input id="smoothing-window"[^>]*>/)?.[0] ?? "";
+
+  it("is a whole-number input from 1 to 20, starting at 1", async () => {
+    const tag = input(await render());
+    expect(tag).toContain('type="number"');
+    expect(tag).toContain('min="1"');
+    expect(tag).toContain('max="20"');
+    expect(tag).toContain('step="1"');
+    expect(tag).toContain('value="1"');
+  });
+
+  it("has a label and an info button", async () => {
+    const html = await render();
+    expect(html).toContain(">Smoothing window (frames)</label>");
+    expect(html).toContain('aria-label="About smoothing window"');
+  });
+
+  it("comes before the Smoothing slider and is disabled while a job is running", async () => {
+    const html = await render();
+    expect(html.indexOf('for="smoothing-window"')).toBeGreaterThan(0);
+    expect(html.indexOf('for="smoothing-window"')).toBeLessThan(html.indexOf('for="smoothing"'));
+    expect(input(html)).not.toContain("disabled");
+    expect(input(await render(true))).toContain("disabled");
+  });
+});

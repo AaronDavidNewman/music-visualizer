@@ -116,7 +116,7 @@ export const DEFAULT_THRESHOLD = THRESHOLD_RANGE.min;
 
 const thresholdMessage = `The threshold must be a number from ${THRESHOLD_RANGE.min} to ${THRESHOLD_RANGE.max}.`;
 
-/** Returns an error message, or null when the threshold is a finite number from 0 to 50. */
+/** Returns an error message, or null when the threshold is a finite number from 0 to 10. */
 export function validateThreshold(value: string | number): string | null {
   const n = parseNumber(value);
   const ok = Number.isFinite(n) && n >= THRESHOLD_RANGE.min && n <= THRESHOLD_RANGE.max;
@@ -131,4 +131,17 @@ export function formatThreshold(value: number): string {
 /** The result summary item: "Off" or the percentage such as "30%". */
 export function formatThresholdSummary(value: number): string {
   return value === 0 ? "Off" : `${Number(value.toFixed(2))}%`;
+}
+
+/** Smoothing window: how many earlier frames are mixed into each frame (a whole number). */
+export const SMOOTHING_WINDOW_RANGE = { min: 1, max: 20 } as const;
+export const DEFAULT_SMOOTHING_WINDOW = SMOOTHING_WINDOW_RANGE.min;
+
+const smoothingWindowMessage = `The smoothing window must be a whole number from ${SMOOTHING_WINDOW_RANGE.min} to ${SMOOTHING_WINDOW_RANGE.max}.`;
+
+/** Returns an error message, or null when the smoothing window is a whole number from 1 to 20. */
+export function validateSmoothingWindow(value: string | number): string | null {
+  const n = parseNumber(value);
+  const ok = Number.isInteger(n) && n >= SMOOTHING_WINDOW_RANGE.min && n <= SMOOTHING_WINDOW_RANGE.max;
+  return ok ? null : smoothingWindowMessage;
 }

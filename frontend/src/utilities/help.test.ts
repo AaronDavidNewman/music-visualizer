@@ -7,6 +7,7 @@ import {
   hueStepHelp,
   saturationStepHelp,
   smoothingHelp,
+  smoothingWindowHelp,
   spacingHelp,
   thresholdHelp,
   windowSizeHelp,
@@ -23,7 +24,6 @@ describe("setting explanations", () => {
 
   it("keeps the wording that used to be printed under the fields", () => {
     expect(windowSizeHelp).toBe("Larger windows separate low notes better but blur changes over time.");
-    expect(smoothingHelp).toBe("0 is no smoothing; higher values fade notes more slowly.");
   });
 
   it("states the frame rate range from the validation constants", () => {
@@ -63,5 +63,18 @@ describe("setting explanations", () => {
     expect(thresholdHelp).toContain("off");
     expect(thresholdHelp).toContain("right end");
     expect(thresholdHelp).toContain("10% of the loudest note");
+  });
+
+  it("explains Smoothing as the weight of the earlier frames in the window", () => {
+    expect(smoothingHelp).toContain("0 is no smoothing");
+    expect(smoothingHelp).toContain("smoothing window");
+    expect(smoothingHelp).toContain("counts this fraction as much as the current frame");
+  });
+
+  it("explains the smoothing window: earlier frames mixed in, a stopped note gone, the range, and no effect at 0", () => {
+    expect(smoothingWindowHelp).toContain("1 to 20");
+    expect(smoothingWindowHelp).toContain("earlier frames are mixed into each frame");
+    expect(smoothingWindowHelp).toContain("gone that many frames later");
+    expect(smoothingWindowHelp).toContain("no effect while Smoothing is 0");
   });
 });

@@ -9,7 +9,8 @@ tile) comes from the overall energy of the audio in the frame, so louder sounds 
 tile's saturation is local to it: its gray level after the brightness root (shown to the user as Saturation).
 Its hue starts at 180 degrees and is moved by the (added-up) levels of related notes. Each of hue, saturation and
 brightness can finally be rounded to a few evenly spaced levels (see ``color_levels``); by default they are smooth.
-A threshold can hide faint notes: a note below it has a black tile (see ``hidden_notes``).
+A threshold can hide faint notes: a note below it has a black tile (see ``hidden_notes``). Smoothing mixes each frame
+with a few earlier ones (see ``smooth_frames``) before any of this is worked out.
 """
 
 import colorsys
@@ -47,10 +48,15 @@ MIN_ENERGY = 1
 MAX_ENERGY = 8
 DEFAULT_ENERGY = 1
 
-# Smoothing is a running average of each note over the frames (0 = none). Fixed range; 0 is the default.
+# Smoothing mixes each frame with the earlier frames of a window (0 = none). The smoothing is the weight of each earlier
+# frame against a weight of 1 for the current one; the window is how many earlier frames are looked at. Fixed ranges;
+# 0 and 1 are the defaults.
 MIN_SMOOTHING = 0.0
 MAX_SMOOTHING = 0.8
 DEFAULT_SMOOTHING = 0.0
+MIN_SMOOTHING_WINDOW = 1
+MAX_SMOOTHING_WINDOW = 20
+DEFAULT_SMOOTHING_WINDOW = 1
 
 # The threshold hides faint notes: a drawn note whose smoothed value in a frame is below this percentage of the largest
 # note value in the whole file gets a black tile. 0 is off (the default); the page's slider ends at 10.
@@ -109,13 +115,30 @@ def average_frames(result: AnalysisResult, frame_rate: float, frames: int) -> np
     return np.maximum(out, 0.0)
 
 
-def smooth_frames(frames: np.ndarray, smoothing: float = DEFAULT_SMOOTHING) -> np.ndarray:
-    """A running average of every note over the frames: ``s * previous + (1 - s) * current``.
+def _check_smoothing_window(window) -> int:
+    if (
+        isinstance(window, bool)
+        or not isinstance(window, numbers.Integral)
+        or not MIN_SMOOTHING_WINDOW <= window <= MAX_SMOOTHING_WINDOW
+    ):
+        raise ValueError(
+            f"The smoothing window must be a whole number from {MIN_SMOOTHING_WINDOW} to {MAX_SMOOTHING_WINDOW}."
+        )
+    return int(window)
 
-    ``frames`` has one row per frame and one column per note. The first frame has nothing before it and
-    is left as it is; every later frame is ``smoothing`` times the previous *smoothed* frame plus
-    ``1 - smoothing`` times its own values. Each note uses only its own history. ``smoothing`` is a number
-    from 0.0 to 0.8; 0 returns the values unchanged. The input is never modified.
+
+def smooth_frames(
+    frames: np.ndarray, smoothing: float = DEFAULT_SMOOTHING, window: int = DEFAULT_SMOOTHING_WINDOW
+) -> np.ndarray:
+    """A weighted average of every note over the current frame and the ``window`` frames before it.
+
+    ``frames`` has one row per frame and one column per note. With ``s`` the smoothing and ``w`` the window, row ``t``
+    becomes ``( A[t] + s*A[t-1] + ... + s*A[t-k] ) / ( 1 + s*k )`` where ``A`` are the *unsmoothed* rows and
+    ``k = min(t, w)`` is the number of earlier rows that exist. The weights are divided by their sum, so a constant
+    value stays constant and the first row is left as it is. Only the row itself and earlier rows are used, never later
+    ones, and never earlier smoothed results, so a value is forgotten exactly ``w`` rows after it last occurred. Each
+    note uses only its own history. ``smoothing`` is a number from 0.0 to 0.8 and ``window`` a whole number from 1 to
+    20; smoothing 0 returns the values unchanged for every window. The input is never modified.
     """
     if (
         isinstance(smoothing, bool)
@@ -124,13 +147,17 @@ def smooth_frames(frames: np.ndarray, smoothing: float = DEFAULT_SMOOTHING) -> n
         or not MIN_SMOOTHING <= smoothing <= MAX_SMOOTHING
     ):
         raise ValueError(f"The smoothing must be a number from {MIN_SMOOTHING} to {MAX_SMOOTHING}.")
+    window = _check_smoothing_window(window)
     out = np.array(frames, dtype=np.float64, copy=True)
     if smoothing == 0 or out.shape[0] < 2:
         return out
     s = float(smoothing)
-    for n in range(1, out.shape[0]):
-        out[n] = s * out[n - 1] + (1.0 - s) * out[n]
-    return out
+    total = out.copy()
+    for j in range(1, min(window, out.shape[0] - 1) + 1):
+        total[j:] += s * out[:-j]
+    earlier = np.minimum(np.arange(out.shape[0]), window)
+    total /= (1.0 + s * earlier).reshape((-1,) + (1,) * (out.ndim - 1))
+    return total
 
 
 def to_gray_levels(frames: np.ndarray) -> np.ndarray:
@@ -228,20 +255,22 @@ def tile_hues(levels: np.ndarray, brightness: int = DEFAULT_BRIGHTNESS) -> np.nd
 
 
 def hue_sequence(
-    levels: np.ndarray, brightness: int = DEFAULT_BRIGHTNESS, smoothing: float = DEFAULT_SMOOTHING
+    levels: np.ndarray,
+    brightness: int = DEFAULT_BRIGHTNESS,
+    smoothing: float = DEFAULT_SMOOTHING,
+    smoothing_window: int = DEFAULT_SMOOTHING_WINDOW,
 ) -> np.ndarray:
     """The hue of every drawn tile in every frame, shape ``(frames, 84)``, smoothed over the frames.
 
     ``levels`` has one row of gray levels per frame. Each frame's hues come from ``tile_hues``. They are then
-    smoothed with the same running average as the note values (``smooth_frames``): each tile's hue is
-    ``smoothing`` times that tile's smoothed hue in the previous frame plus ``1 - smoothing`` times its own
-    hue in this frame, and the first frame is left as it is. Hue is treated as a plain number from 0 to 1
-    (not as a circle), as it is clipped to that range, so smoothing never leaves it. With smoothing 0 the
-    hues are exactly those of ``tile_hues``.
+    smoothed with the same windowed average as the note values (``smooth_frames`` with ``smoothing`` and
+    ``smoothing_window``): each tile's hue is mixed with that same tile's hue in the earlier frames of the window, and
+    the first frame is left as it is. Hue is treated as a plain number from 0 to 1 (not as a circle), as it is
+    clipped to that range, so smoothing never leaves it. With smoothing 0 the hues are exactly those of ``tile_hues``.
     """
     levels = np.asarray(levels)
     hues = np.array([tile_hues(row, brightness) for row in levels]).reshape(-1, SHOWN_NOTES)
-    return smooth_frames(hues, smoothing)
+    return smooth_frames(hues, smoothing, smoothing_window)
 
 
 def _check_energy_root(root) -> int:
@@ -257,14 +286,18 @@ def _check_energy_root(root) -> int:
 
 
 def value_sequence(
-    energies: np.ndarray, energy_root: int = DEFAULT_ENERGY, smoothing: float = DEFAULT_SMOOTHING
+    energies: np.ndarray,
+    energy_root: int = DEFAULT_ENERGY,
+    smoothing: float = DEFAULT_SMOOTHING,
+    smoothing_window: int = DEFAULT_SMOOTHING_WINDOW,
 ) -> np.ndarray:
     """The brightness (HSV value) of every frame, from 0 to 1, one per energy (shared by all 84 tiles of the frame).
 
     ``(energy / the largest energy) ** (1 / energy_root)``: the loudest frame is exactly 1 (100%) and a frame
     with no energy is 0 (black). If no frame has any energy every brightness is 0. ``energy_root`` is a whole number
-    from 1 to 8. The values are then smoothed over the frames with the same running average as the notes and
-    the hues (``smooth_frames``); with smoothing 0 they are exactly the values above.
+    from 1 to 8. The values are then smoothed over the frames with the same windowed average as the notes and
+    the hues (``smooth_frames`` with ``smoothing`` and ``smoothing_window``); with smoothing 0 they are exactly the
+    values above.
     """
     root = _check_energy_root(energy_root)
     energies = np.asarray(energies, dtype=np.float64)
@@ -274,7 +307,7 @@ def value_sequence(
         raise ValueError("The energies must be numbers of 0 or more.")
     peak = float(energies.max()) if energies.size else 0.0
     mapped = np.zeros(energies.shape) if peak <= 0 else (energies / peak) ** (1.0 / root)
-    return smooth_frames(mapped.reshape(-1, 1), smoothing).reshape(-1)
+    return smooth_frames(mapped.reshape(-1, 1), smoothing, smoothing_window).reshape(-1)
 
 
 def _check_value(value: float) -> float:
@@ -382,17 +415,20 @@ def write_frames(
     saturation_step: int | None = None,
     value_step: int | None = None,
     threshold: float = DEFAULT_THRESHOLD,
+    smoothing_window: int = DEFAULT_SMOOTHING_WINDOW,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
-    ``smoothing`` (0.0 to 0.8, default none) smooths the note values over the frames (before they are
-    scaled to gray levels), each tile's hue and each frame's brightness, all with the same running average.
+    ``smoothing`` (0.0 to 0.8, default none) and ``smoothing_window`` (a whole number from 1 to 20, default 1) smooth
+    the note values over the frames (before they are scaled to gray levels), each tile's hue and each frame's
+    brightness, all in the same way: a frame is the weighted average of itself and the ``smoothing_window`` frames
+    before it, each of those with the weight ``smoothing`` (see ``smooth_frames``). Smoothing 0 changes nothing.
 
     ``hue_step`` (12, 36, 90, 180), ``saturation_step`` and ``value_step`` (the frame brightness; 5, 10, 20, 50) round
     that property to evenly spaced levels (``color_levels``) as the very last step, after smoothing and the roots;
     ``None`` (N/A, the default) leaves it smooth. A frame is rounded from its own values only.
 
-    ``threshold`` (0 to 50, default 0 = off) is a percentage of the largest note value in the file (after smoothing):
+    ``threshold`` (0 to 10, default 0 = off) is a percentage of the largest note value in the file (after smoothing):
     a note below it gets a black tile in that frame (``hidden_notes``). It is compared before any root, and only the
     hidden note's own tile changes.
 
@@ -408,6 +444,7 @@ def write_frames(
     saturation_step = check_step(saturation_step, UNIT_STEPS, "saturation")
     value_step = check_step(value_step, UNIT_STEPS, "brightness")
     _check_threshold(threshold)
+    _check_smoothing_window(smoothing_window)
     values = None
     if energies is not None:
         energies = np.asarray(energies, dtype=np.float64)
@@ -415,12 +452,12 @@ def write_frames(
             raise ValueError(
                 f"There must be one energy per frame (got {energies.size} energies for {frames.shape[0]} frames)."
             )
-        values = snap(value_sequence(energies, energy_root, smoothing), value_step, UNIT_SCALE)
+        values = snap(value_sequence(energies, energy_root, smoothing, smoothing_window), value_step, UNIT_SCALE)
     directory.mkdir(parents=True, exist_ok=True)
-    smoothed = smooth_frames(frames, smoothing)
+    smoothed = smooth_frames(frames, smoothing, smoothing_window)
     levels = to_gray_levels(smoothed)
     hidden = hidden_notes(smoothed, threshold)
-    hues = snap(hue_sequence(levels, brightness, smoothing), hue_step, HUE_SCALE)
+    hues = snap(hue_sequence(levels, brightness, smoothing, smoothing_window), hue_step, HUE_SCALE)
     for i, row in enumerate(levels):
         value = DEFAULT_VALUE if values is None else float(values[i])
         colours = tile_colors(row, brightness, hues[i], value, saturation_step, hidden[i])

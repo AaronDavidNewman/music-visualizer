@@ -641,21 +641,27 @@ def frame_values(job):
     return average_frames(result, job["frame_rate"], frame_count(len(left), rate, job["frame_rate"]))
 
 
-def ref_smooth(values, s):
-    """The running average written out by hand (not using smooth_frames)."""
-    out = [list(values[0])]
-    for n in range(1, len(values)):
-        out.append([s * out[n - 1][k] + (1 - s) * values[n][k] for k in range(len(values[n]))])
-    return np.array(out)
+def ref_smooth(values, s, w=1):
+    """The windowed average written out by hand (not using smooth_frames):
+    ( A[t] + s*A[t-1] + ... + s*A[t-k] ) / ( 1 + s*k ), k = min(t, w), from the raw values."""
+    values = np.asarray(values, dtype=float)
+    out = np.zeros_like(values)
+    for t in range(len(values)):
+        k = min(t, w)
+        total = values[t].copy()
+        for j in range(1, k + 1):
+            total = total + s * values[t - j]
+        out[t] = total / (1 + s * k)
+    return out
 
 
-def expected_pixels(job, smoothing, brightness=2):
+def expected_pixels(job, smoothing, brightness=2, window=1):
     """Frame pixels worked out independently: smooth the values, scale them to 0-255, then brighten."""
     from app.services.frame_rendering import to_gray_levels
 
     values = frame_values(job)
     if smoothing:
-        values = ref_smooth(values.tolist(), smoothing)
+        values = ref_smooth(values.tolist(), smoothing, window)
     return displayed(to_gray_levels(values), brightness)[:, :84]
 
 
@@ -686,7 +692,7 @@ def test_zero_smoothing_gives_byte_identical_frames_to_no_field(client, smoothin
         assert a == b
 
 
-def test_half_smoothing_gives_the_running_average_of_each_note(full_client):
+def test_half_smoothing_gives_the_windowed_average_of_each_note(full_client):
     audio = burst_then_silence()
     job = post(full_client, wav_bytes(audio, audio), smoothing="0.5").json()
     assert job["smoothing"] == 0.5
@@ -695,14 +701,21 @@ def test_half_smoothing_gives_the_running_average_of_each_note(full_client):
         assert np.array_equal(frame_levels(full_client, job, index), expected[index]), index
 
 
-def test_a_stopped_note_fades_more_slowly_at_higher_smoothing(full_client):
+def test_a_stopped_note_is_gone_one_frame_after_it_stops_with_the_default_window(full_client):
     audio = burst_then_silence()
     data = wav_bytes(audio, audio)
-    at = {s: post(full_client, data, smoothing=s).json() for s in ("0", "0.5", "0.8")}
-    after_stop = 35  # about 5 frames after the note stops
-    tile = {s: int(frame_levels(full_client, job, after_stop)[36]) for s, job in at.items()}
-    assert tile["0"] == 0  # no smoothing: the tile is already black
-    assert tile["0.8"] > tile["0.5"] > tile["0"]
+    off = post(full_client, data).json()
+    last = int(np.flatnonzero(frame_values(off)[:, 36] > 0)[-1])  # the last frame in which the note has a value
+    assert 25 < last < 40
+    for s in ("0.5", "0.8"):
+        job = post(full_client, data, smoothing=s).json()
+        expected = expected_pixels(job, float(s))
+        assert int(frame_levels(full_client, job, last + 2)[36]) == 0  # exactly gone: no endless trace
+        assert int(expected[last + 2][36]) == 0
+        # the frame right after still shows the note, weakly, as the previous frame is mixed in
+        assert int(expected[last + 1][36]) > 0
+        assert np.array_equal(frame_levels(full_client, job, last + 1), expected[last + 1])
+    assert int(frame_levels(full_client, off, last + 1)[36]) == 0  # without smoothing it is already black
 
 
 def test_smoothing_does_not_change_counts_or_timing(client):
@@ -992,10 +1005,7 @@ def ref_smoothed_hue_rows(job, smoothing):
             ]
         )
     raw = np.array(raw)
-    out = [raw[0].copy()]
-    for n in range(1, len(raw)):
-        out.append(smoothing * out[n - 1] + (1 - smoothing) * raw[n])
-    return raw, np.array(out)
+    return raw, ref_smooth(raw, smoothing)
 
 
 def pixel_hue_fraction(rgb):

@@ -26,6 +26,7 @@ from app.services.frame_rendering import (
     tile_colors,
     tile_hues,
     to_gray_levels,
+    value_sequence,
     write_frames,
 )
 from app.services.note_analysis import NOTE_COUNT, AnalysisResult, note_frequencies
@@ -356,14 +357,21 @@ def test_write_frames_brightness_changes_pixels_not_files(tmp_path):
         assert p.read_bytes() == (c / p.name).read_bytes()
 
 
-# --- note smoothing: a running average over frames (feature 006) -----------------
+# --- note smoothing: a windowed average over frames (features 006 and 012) -----------------
 
 
-def reference_smooth(frames, s):
-    """Plain-Python version of the recurrence, independent of smooth_frames."""
-    out = [list(frames[0])]
-    for n in range(1, len(frames)):
-        out.append([s * out[n - 1][k] + (1 - s) * frames[n][k] for k in range(len(frames[n]))])
+def reference_smooth(frames, s, w=1):
+    """Plain-Python version of the windowed average, independent of smooth_frames:
+    ( A[t] + s*A[t-1] + ... + s*A[t-k] ) / ( 1 + s*k ) with k = min(t, w), from the raw frames."""
+    out = []
+    for t in range(len(frames)):
+        k = min(t, w)
+        out.append(
+            [
+                (frames[t][n] + s * sum(frames[t - j][n] for j in range(1, k + 1))) / (1 + s * k)
+                for n in range(len(frames[t]))
+            ]
+        )
     return out
 
 
@@ -372,8 +380,8 @@ def column(values, notes=88):
 
 
 def test_the_worked_example_from_the_spec():
-    out = smooth_frames(column([0, 10, 0, 0]), 0.5)
-    assert out[:, 0].tolist() == [0, 5, 2.5, 1.25]
+    out = smooth_frames(column([0, 10, 0, 0]), 0.5)  # the default window is 1: the previous frame only
+    assert out[:, 0].tolist() == pytest.approx([0, 10 / 1.5, 5 / 1.5, 0])
     assert (out == out[:, :1]).all()  # every note smoothed the same way
 
 
@@ -383,11 +391,11 @@ def test_the_first_frame_is_never_changed(smoothing):
     assert np.array_equal(smooth_frames(frames, smoothing)[0], frames[0])
 
 
-@pytest.mark.parametrize("smoothing", [0.0, 0.1, 0.3, 0.5, 0.8])
-def test_matches_the_formula_for_random_data(smoothing):
+@pytest.mark.parametrize("smoothing, window", [(0.0, 1), (0.1, 1), (0.3, 2), (0.5, 5), (0.8, 1), (0.8, 20)])
+def test_matches_the_formula_for_random_data(smoothing, window):
     frames = np.random.default_rng(11).random((40, 88)) * 50
-    expected = np.array(reference_smooth(frames.tolist(), smoothing))
-    assert np.allclose(smooth_frames(frames, smoothing), expected, rtol=1e-6, atol=1e-9)
+    expected = np.array(reference_smooth(frames.tolist(), smoothing, window))
+    assert np.allclose(smooth_frames(frames, smoothing, window), expected, rtol=1e-6, atol=1e-9)
 
 
 def test_smoothing_zero_returns_equal_values_in_a_new_array():
@@ -416,23 +424,24 @@ def test_each_note_uses_only_its_own_history():
     assert np.array_equal(a[:, others], b[:, others])
 
 
-def frames_until(values, smoothing, reached):
-    """Frames after the change at which the smoothed first note first satisfies `reached`."""
-    out = smooth_frames(column(values, 1), smoothing)[:, 0]
+def frames_until(values, smoothing, window, reached):
+    """Frames after the change at which the smoothed first note first satisfies `reached` (1 = the change frame)."""
+    out = smooth_frames(column(values, 1), smoothing, window)[:, 0]
     change = next(i for i in range(1, len(values)) if values[i] != values[i - 1])
     return next(i - change + 1 for i in range(change, len(values)) if reached(out[i]))
 
 
-@pytest.mark.parametrize("smoothing, frames", [(0.0, 1), (0.5, 4), (0.8, 11)])
-def test_a_note_that_stops_fades_over_more_frames_at_higher_smoothing(smoothing, frames):
-    values = [100.0] * 5 + [0.0] * 30
-    assert frames_until(values, smoothing, lambda v: v < 10) == frames  # below 10% of its starting value
+@pytest.mark.parametrize("smoothing, window, frames", [(0.0, 5, 1), (0.5, 1, 2), (0.5, 3, 4), (0.8, 10, 11)])
+def test_a_note_that_stops_is_exactly_gone_after_the_window(smoothing, window, frames):
+    values = [100.0] * 30 + [0.0] * 40  # a long note, so the window is full when it stops
+    # the first frame whose smoothed value is exactly 0: with smoothing 0 the frame it stops, otherwise window + 1 frames on
+    assert frames_until(values, smoothing, window, lambda v: v == 0.0) == frames
 
 
-@pytest.mark.parametrize("smoothing, frames", [(0.0, 1), (0.5, 4), (0.8, 11)])
-def test_a_note_that_starts_rises_over_more_frames_at_higher_smoothing(smoothing, frames):
-    values = [0.0] * 5 + [100.0] * 30
-    assert frames_until(values, smoothing, lambda v: v >= 90) == frames
+@pytest.mark.parametrize("smoothing, window, frames", [(0.0, 5, 1), (0.5, 1, 2), (0.5, 3, 4), (0.8, 10, 11)])
+def test_a_note_that_starts_reaches_its_full_value_after_the_window(smoothing, window, frames):
+    values = [0.0] * 30 + [100.0] * 40
+    assert frames_until(values, smoothing, window, lambda v: v >= 100.0 - 1e-9) == frames
 
 
 def test_short_inputs_come_back_unchanged():
@@ -452,6 +461,7 @@ def test_output_stays_between_zero_and_the_input_maximum():
 @pytest.mark.parametrize("smoothing", [0.0, 0.8, 0.4])
 def test_the_limits_are_accepted(smoothing):
     smooth_frames(column([1, 2, 3]), smoothing)
+    smooth_frames(column([1, 2, 3]), smoothing, 20)
 
 
 @pytest.mark.parametrize("smoothing", [-0.01, 0.81, 1, 5, float("nan"), float("inf"), -float("inf"), True, "0.5", None])
@@ -703,13 +713,10 @@ def test_written_png_files_decode_to_exactly_the_rendered_colours(tmp_path, brig
 # --- smoothing also applies to the hues (feature 006 and 007) ---------------------------
 
 
-def ref_hue_sequence(level_rows, smoothing, brightness=2):
-    """Per-frame hues from the independent hue reference, then the running average written out by hand."""
+def ref_hue_sequence(level_rows, smoothing, brightness=2, window=1):
+    """Per-frame hues from the independent hue reference, then the windowed average written out by hand."""
     raw = [ref_hues(row, brightness) for row in level_rows]
-    out = [raw[0].copy()]
-    for n in range(1, len(raw)):
-        out.append(smoothing * out[n - 1] + (1 - smoothing) * raw[n])
-    return np.array(out)
+    return np.array(reference_smooth([list(r) for r in raw], smoothing, window))
 
 
 def test_hue_sequence_without_smoothing_is_exactly_the_hues_of_each_frame():
@@ -727,21 +734,24 @@ def test_the_first_frames_hues_are_never_smoothed(smoothing):
     assert np.array_equal(hue_sequence(rows, smoothing=smoothing)[0], tile_hues(rows[0]))
 
 
-def test_the_hue_of_a_tile_is_a_running_average_of_its_own_hue():
-    """Tile 40 sees a "down" partner appear at full brightness: its raw hue goes 0.5, 0, 0 and the smoothed hue 0.5, 0.25, 0.125."""
+def test_the_hue_of_a_tile_is_a_windowed_average_of_its_own_hue():
+    """Tile 40 sees a "down" partner appear at full brightness: its raw hue goes 0.5, 0, 0. With smoothing 0.5 and
+    window 1 the smoothed hue is 0.5, 0.5*0.5/1.5, 0; with window 2 the last frame still reaches back two frames."""
     partner = 40 + RELATED_DOWN[0]
     rows = np.array([lit(40), lit(40, partner), lit(40, partner)])
     assert [tile_hues(r)[40] for r in rows] == [0.5, 0.0, 0.0]
-    seq = hue_sequence(rows, smoothing=0.5)
-    assert seq[:, 40].tolist() == [0.5, 0.25, 0.125]
+    assert hue_sequence(rows, smoothing=0.5)[:, 40].tolist() == pytest.approx([0.5, 0.25 / 1.5, 0.0])
+    assert hue_sequence(rows, smoothing=0.5, smoothing_window=2)[:, 40].tolist() == pytest.approx(
+        [0.5, 0.25 / 1.5, 0.25 / 2]
+    )
 
 
-@pytest.mark.parametrize("smoothing", [0.1, 0.3, 0.5, 0.8])
-def test_hue_smoothing_matches_the_reference_for_random_frames(smoothing):
-    rng = np.random.default_rng(int(smoothing * 100))
+@pytest.mark.parametrize("smoothing, window", [(0.1, 1), (0.3, 2), (0.5, 5), (0.8, 1), (0.8, 20)])
+def test_hue_smoothing_matches_the_reference_for_random_frames(smoothing, window):
+    rng = np.random.default_rng(int(smoothing * 100) + window)
     rows = (rng.integers(0, 256, (40, 88)) * (rng.random((40, 88)) < 0.4)).astype(np.uint8)
-    seq = hue_sequence(rows, smoothing=smoothing)
-    assert np.allclose(seq, ref_hue_sequence(rows, smoothing), rtol=0, atol=1e-9)
+    seq = hue_sequence(rows, smoothing=smoothing, smoothing_window=window)
+    assert np.allclose(seq, ref_hue_sequence(rows, smoothing, window=window), rtol=0, atol=1e-9)
     assert seq.min() >= 0.0 and seq.max() <= 1.0  # smoothing never leaves the wheel
 
 
@@ -788,14 +798,12 @@ def test_written_frames_have_smoothed_values_and_smoothed_hues(tmp_path):
     values = np.zeros((4, 88))
     values[:, 40] = 1.0
     values[1:, partner] = 1.0  # the partner switches on at frame 1
-    s = 0.5
-    smoothed = [list(values[0])]
-    for n in range(1, 4):
-        smoothed.append([s * smoothed[n - 1][k] + (1 - s) * values[n][k] for k in range(88)])
+    s, w = 0.5, 2
+    smoothed = reference_smooth(values.tolist(), s, w)
     levels = to_gray_levels(np.array(smoothed))
-    hue_rows = ref_hue_sequence(levels, s)
+    hue_rows = ref_hue_sequence(levels, s, window=w)
 
-    write_frames(values, tmp_path, brightness=2, smoothing=s)
+    write_frames(values, tmp_path, brightness=2, smoothing=s, smoothing_window=w)
     for i in range(4):
         img = np.asarray(Image.open(tmp_path / f"frame_{i:06d}.png").convert("RGB"))
         pixel = img[(40 // 12) * 24 + 12, (40 % 12) * 21 + 10]
@@ -965,10 +973,15 @@ def brightest_channel(path):
 
 
 def test_rounding_is_applied_after_smoothing(tmp_path):
-    # energies 1, 0, 0 smooth (0.5) to brightness 1, 0.5, 0.25; 0.25 rounds to 0.5 with step 50.
-    # Rounding first and smoothing after would leave 0.25 (64) in the last frame.
+    # energies 1, 0, 0 smooth (0.5, window 1) to brightness 1, 1/3, 0; 1/3 rounds to 0.5 with step 50 (128).
+    # Rounding first and smoothing after would leave 1/3 (85) in the second frame.
     write_frames(np.ones((3, 88)), tmp_path, energies=np.array([1.0, 0.0, 0.0]), smoothing=0.5, value_step=50)
-    assert [brightest_channel(tmp_path / f"frame_{i:06d}.png") for i in range(3)] == [255, 128, 128]
+    assert [brightest_channel(tmp_path / f"frame_{i:06d}.png") for i in range(3)] == [255, 128, 0]
+    # with a window of 2 the third frame still reaches back to the first: 0.5 / 2 = 0.25, which rounds to 0.5 as well
+    write_frames(
+        np.ones((3, 88)), tmp_path / "w2", energies=np.array([1.0, 0.0, 0.0]), smoothing=0.5, smoothing_window=2, value_step=50
+    )
+    assert [brightest_channel(tmp_path / "w2" / f"frame_{i:06d}.png") for i in range(3)] == [255, 128, 128]
 
 
 def test_smoothed_saturations_are_rounded_to_the_levels(tmp_path):
@@ -1279,10 +1292,10 @@ def black_sets(directory, count):
 def test_a_fading_note_turns_black_in_the_first_frame_whose_smoothed_value_is_below_the_threshold(tmp_path):
     values = np.zeros((14, 88))
     values[:2, LOUD] = 1.0  # the note stops after two frames; smoothing 0.8 makes it fade slowly
-    smoothed = smooth_frames(values, 0.8)[:, LOUD]
+    smoothed = smooth_frames(values, 0.8, 8)[:, LOUD]
     first_hidden = int(np.argmax(smoothed < 0.1))  # the first frame whose smoothed value is below 10% of the peak (1.0)
-    assert 5 < first_hidden < 13  # the setup really fades over several frames
-    write_frames(values, tmp_path, smoothing=0.8, threshold=10)
+    assert 5 < first_hidden < 13  # the setup really fades over several frames (a window of 8 keeps it for 8 frames)
+    write_frames(values, tmp_path, smoothing=0.8, smoothing_window=8, threshold=10)
     for i in range(14):
         assert (LOUD in black_tiles(tmp_path / f"frame_{i:06d}.png")) == (i >= first_hidden), i
 
@@ -1352,3 +1365,90 @@ def test_adding_silence_at_the_end_changes_no_earlier_frame_with_a_threshold(tmp
     short, long = frame_files(tmp_path / "short"), frame_files(tmp_path / "long")
     assert len(short) == 6 and len(long) == 9
     assert all(long[name] == data for name, data in short.items())
+
+
+# --- the smoothing window with everything that is smoothed and everything that follows (feature 012, User Story 3) ----
+
+
+def saturation_of(rgb):
+    """The HSV saturation of an 8-bit colour (0 for black)."""
+    top = int(rgb.max())
+    return 0.0 if top == 0 else (top - int(rgb.min())) / top
+
+
+@pytest.mark.parametrize("window", [1, 4, 20])
+def test_the_note_values_the_hues_and_the_brightness_all_forget_after_the_same_window(window):
+    k = 3
+    length = k + window + 6
+    s = 0.5
+    # the frame brightness: a single loud frame
+    energies = np.zeros(length)
+    energies[k] = 1.0
+    brightness = value_sequence(energies, 1, s, window)
+    assert (brightness[:k] == 0.0).all()
+    assert (brightness[k : k + window + 1] > 0).all()
+    assert (brightness[k + window + 1 :] == 0.0).all()  # exactly gone, not just small
+    # a tile's hue: a "down" partner is lit in one frame only, which moves tile 40's hue away from 0.5
+    partner = 40 + RELATED_DOWN[0]
+    rows = np.array([lit(40, partner) if i == k else lit(40) for i in range(length)])
+    hues = hue_sequence(rows, smoothing=s, smoothing_window=window)[:, 40]
+    assert hues[:k] == pytest.approx(0.5, abs=1e-12)
+    assert (np.abs(hues[k : k + window + 1] - 0.5) > 1e-6).all()
+    assert hues[k + window + 1 :] == pytest.approx(0.5, abs=1e-12)  # back to the unmoved hue once the window has passed
+    # a note's value: smooth_frames with the same window
+    notes = np.zeros((length, 3))
+    notes[k] = 1.0
+    out = smooth_frames(notes, s, window)
+    assert (out[k : k + window + 1] > 0).all() and (out[k + window + 1 :] == 0.0).all()
+
+
+def test_the_levels_are_applied_to_the_smoothed_values(tmp_path):
+    values = np.zeros((5, 88))
+    values[1, 40] = 1.0  # one frame; smoothed (0.5, window 1): 2/3 in that frame, 1/3 in the next, 0 elsewhere
+    write_frames(values, tmp_path, smoothing=0.5, smoothing_window=1, saturation_step=50)
+    saturations = [saturation_of(tile_rgb(tmp_path / f"frame_{i:06d}.png")[40]) for i in range(5)]
+    # the loudest smoothed value (2/3) is fully saturated; 1/3 is half of it, a gray level of 128, which is
+    # displayed at about 0.71 saturation and rounds to the level 0.5; everything else has none
+    assert saturations == pytest.approx([0.0, 1.0, 0.5, 0.0, 0.0], abs=0.01)
+
+
+def test_the_gray_levels_are_scaled_against_the_largest_smoothed_value(tmp_path):
+    values = np.zeros((6, 88))
+    values[3, 40] = 2.0  # raw peak 2.0; the largest smoothed value is 2/1.5 in that frame
+    write_frames(values, tmp_path, smoothing=0.5, smoothing_window=1)
+    assert saturation_of(tile_rgb(tmp_path / "frame_000003.png")[40]) == pytest.approx(1.0, abs=0.01)  # full
+    assert saturation_of(tile_rgb(tmp_path / "frame_000004.png")[40]) < 0.9  # the next, weaker frame is not
+
+
+@pytest.mark.parametrize("window", [1, 20])
+def test_silent_input_stays_black_with_any_window_and_smoothing(tmp_path, window):
+    write_frames(np.zeros((6, 88)), tmp_path, smoothing=0.8, smoothing_window=window, energies=np.zeros(6))
+    for path in tmp_path.glob("*.png"):
+        assert not np.asarray(Image.open(path).convert("RGB")).any()
+
+
+def test_with_smoothing_zero_every_window_writes_the_same_files_as_no_window(tmp_path):
+    kwargs = dict(energies=LEVEL_ENERGIES, hue_step=36, saturation_step=10, value_step=20, threshold=3)
+    write_frames(LEVEL_FRAMES, tmp_path / "none", **kwargs)
+    write_frames(LEVEL_FRAMES, tmp_path / "w1", smoothing=0.0, smoothing_window=1, **kwargs)
+    write_frames(LEVEL_FRAMES, tmp_path / "w20", smoothing=0.0, smoothing_window=20, **kwargs)
+    assert frame_files(tmp_path / "none") == frame_files(tmp_path / "w1") == frame_files(tmp_path / "w20")
+
+
+@pytest.mark.parametrize("window", [1, 5, 20])
+def test_appending_silent_frames_changes_no_earlier_frame(tmp_path, window):
+    longer = np.vstack([LEVEL_FRAMES, np.zeros((4, 88))])
+    longer_energies = np.concatenate([LEVEL_ENERGIES, np.zeros(4)])
+    kwargs = dict(smoothing=0.5, smoothing_window=window, hue_step=36, saturation_step=10, value_step=20, threshold=3)
+    write_frames(LEVEL_FRAMES, tmp_path / "short", energies=LEVEL_ENERGIES, **kwargs)
+    write_frames(longer, tmp_path / "long", energies=longer_energies, **kwargs)
+    short, long = frame_files(tmp_path / "short"), frame_files(tmp_path / "long")
+    assert len(short) == 6 and len(long) == 10
+    assert all(long[name] == data for name, data in short.items())  # smoothing looks only backwards
+
+
+def test_write_frames_refuses_a_bad_window_before_writing_anything(tmp_path):
+    for bad in (0, 21, 2.5, True, "3", None):
+        with pytest.raises(ValueError, match="The smoothing window must be a whole number from 1 to 20."):
+            write_frames(LEVEL_FRAMES, tmp_path / "out", energies=LEVEL_ENERGIES, smoothing=0.5, smoothing_window=bad)
+    assert not (tmp_path / "out").exists() or not list((tmp_path / "out").glob("*.png"))

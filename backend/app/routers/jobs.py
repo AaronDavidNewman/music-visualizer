@@ -13,14 +13,17 @@ from ..services.frame_rendering import (
     DEFAULT_BRIGHTNESS,
     DEFAULT_ENERGY,
     DEFAULT_SMOOTHING,
+    DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_THRESHOLD,
     MAX_BRIGHTNESS,
     MAX_ENERGY,
     MAX_SMOOTHING,
+    MAX_SMOOTHING_WINDOW,
     MAX_THRESHOLD,
     MIN_BRIGHTNESS,
     MIN_ENERGY,
     MIN_SMOOTHING,
+    MIN_SMOOTHING_WINDOW,
     MIN_THRESHOLD,
     average_frames,
     frame_count,
@@ -156,6 +159,25 @@ def _parse_smoothing(text: str | None, sent: bool) -> float:
     return value + 0.0  # turns -0.0 into 0.0
 
 
+def _parse_smoothing_window(text: str | None, sent: bool) -> int:
+    """The requested smoothing window. Not sent means the default; anything sent must be a whole number 1..20."""
+    if text is None and not sent:
+        return DEFAULT_SMOOTHING_WINDOW
+    text = text or ""
+    message = f"The smoothing window must be a whole number from {MIN_SMOOTHING_WINDOW} to {MAX_SMOOTHING_WINDOW}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if (
+        not math.isfinite(value)
+        or not value.is_integer()
+        or not MIN_SMOOTHING_WINDOW <= value <= MAX_SMOOTHING_WINDOW
+    ):
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
 def _parse_threshold(text: str | None, sent: bool) -> int | float:
     """The requested threshold. Not sent means off (0); anything sent must be a number 0..50 (percent)."""
     if text is None and not sent:
@@ -207,6 +229,7 @@ def create_job(
     saturation_step: str | None = Form(None),
     brightness_step: str | None = Form(None),
     threshold: str | None = Form(None),
+    smoothing_window: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -219,6 +242,7 @@ def create_job(
     saturation_levels = _parse_step(saturation_step, "saturation_step" in sent, UNIT_STEPS, "saturation")
     brightness_levels = _parse_step(brightness_step, "brightness_step" in sent, UNIT_STEPS, "brightness")
     threshold_value = _parse_threshold(threshold, "threshold" in sent)
+    window_value = _parse_smoothing_window(smoothing_window, "smoothing_window" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -259,7 +283,7 @@ def create_job(
         result = analyze_channels(left, right, file_rate, window, step=step)
         energies = frame_energies(left, right, file_rate, fps, frames)
         # write_frames smooths the note values, each tile's hue and each frame's brightness (from its energy),
-        # all with the same smoothing, and only then rounds hue, saturation and brightness to the chosen levels and
+        # all with the same smoothing and window (each frame is mixed with the earlier frames of the window), and only then rounds hue, saturation and brightness to the chosen levels and
         # blacks the tiles of notes below the threshold
         write_frames(
             average_frames(result, fps, frames),
@@ -272,6 +296,7 @@ def create_job(
             saturation_step=saturation_levels,
             value_step=brightness_levels,
             threshold=threshold_value,
+            smoothing_window=window_value,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -299,6 +324,7 @@ def create_job(
         "saturation_step": saturation_levels,
         "brightness_step": brightness_levels,
         "threshold": threshold_value,
+        "smoothing_window": window_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,
