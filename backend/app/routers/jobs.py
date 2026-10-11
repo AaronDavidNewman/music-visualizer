@@ -30,6 +30,13 @@ from ..services.frame_rendering import (
     write_frames,
 )
 from ..services.color_levels import HUE_STEPS, UNIT_STEPS
+from ..services.image_types import (
+    DEFAULT_BLEND_WIDTH,
+    DEFAULT_IMAGE_TYPE,
+    IMAGE_TYPES,
+    MAX_BLEND_WIDTH,
+    MIN_BLEND_WIDTH,
+)
 from ..services.energy import frame_energies
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
 from ..services.window_spacing import default_spacing, resolve_step
@@ -159,6 +166,30 @@ def _parse_smoothing(text: str | None, sent: bool) -> float:
     return value + 0.0  # turns -0.0 into 0.0
 
 
+def _parse_image_type(text: str | None, sent: bool) -> str:
+    """The requested image type. Not sent means the default; anything sent must be exactly one of the offered names."""
+    if text is None and not sent:
+        return DEFAULT_IMAGE_TYPE
+    if text not in IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail=f"The image type must be one of {', '.join(IMAGE_TYPES)}.")
+    return text
+
+
+def _parse_blend_width(text: str | None, sent: bool) -> int | float:
+    """The requested blend width. Not sent means the default; anything sent must be a number 10..25 (percent)."""
+    if text is None and not sent:
+        return DEFAULT_BLEND_WIDTH
+    text = text or ""
+    message = f"The blend width must be a number from {MIN_BLEND_WIDTH} to {MAX_BLEND_WIDTH}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not MIN_BLEND_WIDTH <= value <= MAX_BLEND_WIDTH:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value) if value.is_integer() else value
+
+
 def _parse_smoothing_window(text: str | None, sent: bool) -> int:
     """The requested smoothing window. Not sent means the default; anything sent must be a whole number 1..20."""
     if text is None and not sent:
@@ -230,6 +261,8 @@ def create_job(
     brightness_step: str | None = Form(None),
     threshold: str | None = Form(None),
     smoothing_window: str | None = Form(None),
+    image_type: str | None = Form(None),
+    blend_width: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -243,6 +276,8 @@ def create_job(
     brightness_levels = _parse_step(brightness_step, "brightness_step" in sent, UNIT_STEPS, "brightness")
     threshold_value = _parse_threshold(threshold, "threshold" in sent)
     window_value = _parse_smoothing_window(smoothing_window, "smoothing_window" in sent)
+    image_type_value = _parse_image_type(image_type, "image_type" in sent)
+    blend_width_value = _parse_blend_width(blend_width, "blend_width" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -284,7 +319,8 @@ def create_job(
         energies = frame_energies(left, right, file_rate, fps, frames)
         # write_frames smooths the note values, each tile's hue and each frame's brightness (from its energy),
         # all with the same smoothing and window (each frame is mixed with the earlier frames of the window), and only then rounds hue, saturation and brightness to the chosen levels and
-        # blacks the tiles of notes below the threshold
+        # blacks the tiles of notes below the threshold; the image type then decides how the finished tile colors are
+        # written
         write_frames(
             average_frames(result, fps, frames),
             frames_dir,
@@ -297,6 +333,8 @@ def create_job(
             value_step=brightness_levels,
             threshold=threshold_value,
             smoothing_window=window_value,
+            image_type=image_type_value,
+            blend_width=blend_width_value,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -325,6 +363,8 @@ def create_job(
         "brightness_step": brightness_levels,
         "threshold": threshold_value,
         "smoothing_window": window_value,
+        "image_type": image_type_value,
+        "blend_width": blend_width_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

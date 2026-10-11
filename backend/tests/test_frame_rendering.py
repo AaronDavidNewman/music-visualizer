@@ -1452,3 +1452,195 @@ def test_write_frames_refuses_a_bad_window_before_writing_anything(tmp_path):
         with pytest.raises(ValueError, match="The smoothing window must be a whole number from 1 to 20."):
             write_frames(LEVEL_FRAMES, tmp_path / "out", energies=LEVEL_ENERGIES, smoothing=0.5, smoothing_window=bad)
     assert not (tmp_path / "out").exists() or not list((tmp_path / "out").glob("*.png"))
+
+
+# --- image types: tiles and blended tiles (feature 013) ----------------------------------------------------------------
+
+
+def frame_image(directory, index):
+    return Image.open(directory / f"frame_{index:06d}.png")
+
+
+def test_the_tiles_image_type_and_no_argument_write_identical_files(tmp_path):
+    common = dict(energies=LEVEL_ENERGIES, smoothing=0.3, saturation_step=10)
+    write_frames(LEVEL_FRAMES, tmp_path / "none", **common)
+    write_frames(LEVEL_FRAMES, tmp_path / "tiles", image_type="tiles", **common)
+    write_frames(LEVEL_FRAMES, tmp_path / "tiles10", image_type="tiles", blend_width=10, **common)
+    write_frames(LEVEL_FRAMES, tmp_path / "width25", blend_width=25, **common)  # the width alone changes nothing
+    reference = frame_files(tmp_path / "none")
+    assert len(reference) == 6
+    for name in ("tiles", "tiles10", "width25"):
+        assert frame_files(tmp_path / name) == reference
+
+
+def test_blended_frames_have_the_same_names_size_and_count_but_are_true_colour(tmp_path):
+    write_frames(LEVEL_FRAMES, tmp_path / "tiles", energies=LEVEL_ENERGIES, image_type="tiles")
+    write_frames(LEVEL_FRAMES, tmp_path / "blended", energies=LEVEL_ENERGIES, image_type="blended")
+    assert sorted(frame_files(tmp_path / "tiles")) == sorted(frame_files(tmp_path / "blended"))
+    for i in range(6):
+        flat, soft = frame_image(tmp_path / "tiles", i), frame_image(tmp_path / "blended", i)
+        assert flat.mode == "P" and soft.mode == "RGB"
+        assert flat.size == soft.size == (IMAGE_WIDTH, IMAGE_HEIGHT)
+
+
+@pytest.mark.parametrize("blend_width", [10, 17.5, 25])
+def test_the_middle_of_every_tile_of_a_blended_frame_is_the_tiles_colour(tmp_path, blend_width):
+    write_frames(LEVEL_FRAMES, tmp_path / "tiles", energies=LEVEL_ENERGIES, image_type="tiles")
+    write_frames(
+        LEVEL_FRAMES, tmp_path / "blended", energies=LEVEL_ENERGIES, image_type="blended", blend_width=blend_width
+    )
+    for i in range(6):
+        flat = tile_rgb(tmp_path / "tiles" / f"frame_{i:06d}.png")
+        soft = tile_rgb(tmp_path / "blended" / f"frame_{i:06d}.png")
+        assert (flat == soft).all(), i
+
+
+def test_blended_frames_differ_from_tiles_frames_where_colours_meet(tmp_path):
+    write_frames(LEVEL_FRAMES, tmp_path / "tiles", energies=LEVEL_ENERGIES, image_type="tiles")
+    write_frames(LEVEL_FRAMES, tmp_path / "blended", energies=LEVEL_ENERGIES, image_type="blended")
+    flat = np.asarray(frame_image(tmp_path / "tiles", 0).convert("RGB"))
+    soft = np.asarray(frame_image(tmp_path / "blended", 0))
+    assert (flat != soft).any(axis=2).sum() > 1000  # a lit frame has many edges with a fade
+    assert soft.min() >= 0 and soft.max() <= flat.max()  # no colour brighter than any tile
+
+
+def test_a_frame_of_one_colour_and_a_silent_frame_are_the_same_picture_in_both_types(tmp_path):
+    uniform = np.zeros((3, 88))  # no notes: every tile has no saturation, the same hue, and the full frame brightness
+    for name, notes, energies in (("uniform", uniform, None), ("silent", np.ones((3, 88)), np.zeros(3))):
+        write_frames(notes, tmp_path / name / "tiles", energies=energies, image_type="tiles")
+        write_frames(notes, tmp_path / name / "blended", energies=energies, image_type="blended")
+        for i in range(3):
+            flat = np.asarray(frame_image(tmp_path / name / "tiles", i).convert("RGB"))
+            soft = np.asarray(frame_image(tmp_path / name / "blended", i))
+            assert (flat == soft).all(), (name, i)
+    assert np.asarray(frame_image(tmp_path / "uniform" / "tiles", 0).convert("RGB")).min() == 255  # really white
+    assert not np.asarray(frame_image(tmp_path / "silent" / "blended", 0)).any()  # really black
+
+
+def test_blended_frames_repeat_exactly(tmp_path):
+    for name in ("a", "b"):
+        write_frames(LEVEL_FRAMES, tmp_path / name, energies=LEVEL_ENERGIES, image_type="blended", blend_width=15)
+    assert frame_files(tmp_path / "a") == frame_files(tmp_path / "b")
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"image_type": "Tiles"}, "The image type must be one of tiles, blended."),
+        ({"image_type": ""}, "The image type must be one of tiles, blended."),
+        ({"image_type": None}, "The image type must be one of tiles, blended."),
+        ({"image_type": 3}, "The image type must be one of tiles, blended."),
+        ({"image_type": "blended", "blend_width": 9}, "The blend width must be a number from 10 to 25."),
+        ({"image_type": "blended", "blend_width": 26}, "The blend width must be a number from 10 to 25."),
+        ({"blend_width": float("nan")}, "The blend width must be a number from 10 to 25."),
+        ({"blend_width": True}, "The blend width must be a number from 10 to 25."),
+        ({"blend_width": "15"}, "The blend width must be a number from 10 to 25."),
+    ],
+)
+def test_write_frames_refuses_a_bad_image_type_or_width_before_writing_anything(tmp_path, kwargs, message):
+    with pytest.raises(ValueError) as error:
+        write_frames(LEVEL_FRAMES, tmp_path / "out", energies=LEVEL_ENERGIES, **kwargs)
+    assert str(error.value) == message
+    assert not (tmp_path / "out").exists() or not list((tmp_path / "out").glob("*.png"))
+
+
+# --- blended tiles with every other setting (feature 013, User Story 3) -------------------------------------------------
+
+OPTION_SETS = [
+    {"smoothing": 0.5, "smoothing_window": 3},
+    {"brightness": 4, "energy_root": 3},
+    {"hue_step": 36, "saturation_step": 10, "value_step": 20},
+    {"threshold": 5},
+    {"hue_step": 180, "saturation_step": 50, "value_step": 50},
+    {
+        "smoothing": 0.5,
+        "smoothing_window": 3,
+        "brightness": 4,
+        "energy_root": 3,
+        "hue_step": 90,
+        "saturation_step": 20,
+        "value_step": 50,
+        "threshold": 5,
+    },
+]
+
+
+@pytest.mark.parametrize("options", OPTION_SETS, ids=[str(i) for i in range(len(OPTION_SETS))])
+def test_blended_frames_keep_the_tile_middles_and_stay_between_the_tile_colours(tmp_path, options):
+    from scipy import ndimage
+
+    write_frames(LEVEL_FRAMES, tmp_path / "tiles", energies=LEVEL_ENERGIES, image_type="tiles", **options)
+    write_frames(LEVEL_FRAMES, tmp_path / "blended", energies=LEVEL_ENERGIES, image_type="blended", **options)
+    for i in range(6):
+        name = f"frame_{i:06d}.png"
+        assert (tile_rgb(tmp_path / "tiles" / name) == tile_rgb(tmp_path / "blended" / name)).all(), (options, i)
+        flat = np.asarray(Image.open(tmp_path / "tiles" / name).convert("RGB"))
+        soft = np.asarray(Image.open(tmp_path / "blended" / name))
+        # every blended pixel lies between the smallest and largest tile colour within 6 pixels of it (the fade never
+        # reaches farther than 5.25 pixels), channel by channel
+        low = ndimage.minimum_filter(flat, size=(13, 13, 1), mode="nearest")
+        high = ndimage.maximum_filter(flat, size=(13, 13, 1), mode="nearest")
+        assert (soft >= low).all() and (soft <= high).all(), (options, i)
+
+
+def test_a_hidden_tile_next_to_a_coloured_one_fades_toward_black(tmp_path):
+    values = np.zeros((1, 88))
+    values[0, 26] = 1.0  # tile (row 2, column 2); every other tile has no value and the threshold hides them
+    write_frames(values, tmp_path / "tiles", image_type="tiles", threshold=5)
+    write_frames(values, tmp_path / "blended", image_type="blended", threshold=5)
+    flat = tile_rgb(tmp_path / "tiles" / "frame_000000.png")
+    assert flat[26].any() and not flat[25].any() and not flat[27].any()
+    soft = np.asarray(Image.open(tmp_path / "blended" / "frame_000000.png")).astype(int)
+    y = 2 * TILE_HEIGHT + TILE_HEIGHT // 2
+    for edge_x in (2 * TILE_WIDTH, 3 * TILE_WIDTH):  # the left and the right edge of the coloured tile
+        average = (soft[y, edge_x - 1] + soft[y, edge_x]) / 2
+        assert np.abs(average - flat[26] / 2).max() <= 1
+    assert (soft[y, 2 * TILE_WIDTH + 8 : 3 * TILE_WIDTH - 8] == flat[26]).all()  # the middle stays flat
+
+
+def test_the_blend_is_not_rounded_to_the_level_steps(tmp_path):
+    values = np.zeros((1, 88))
+    values[0, 26] = 1.0
+    values[0, 27] = 0.2
+    options = dict(saturation_step=50)
+    write_frames(values, tmp_path / "tiles", image_type="tiles", **options)
+    write_frames(values, tmp_path / "blended", image_type="blended", **options)
+    flat = tile_rgb(tmp_path / "tiles" / "frame_000000.png")
+    levels = [0.0, 0.5, 1.0]
+    for n in (26, 27):
+        assert min(abs(saturation_of(flat[n]) - level) for level in levels) < 0.03  # the tile middles are on the levels
+    soft = np.asarray(Image.open(tmp_path / "blended" / "frame_000000.png"))
+    y, edge_x = 2 * TILE_HEIGHT + TILE_HEIGHT // 2, 3 * TILE_WIDTH
+    band = [saturation_of(soft[y, x]) for x in range(edge_x - 5, edge_x + 5)]
+    assert any(min(abs(s - level) for level in levels) > 0.05 for s in band)  # in-between saturations at the edge
+
+
+def test_threaded_writing_gives_exactly_the_plain_blend_of_each_frames_tile_colours(tmp_path):
+    """Frames are blended and encoded on several threads: each file must equal a single plain call of the blend."""
+    from app.services.image_types import blend_tile_colors
+
+    many = np.vstack([LEVEL_FRAMES] * 6)  # 36 frames, so that several threads really work at once
+    energies = np.tile(LEVEL_ENERGIES, 6)
+    write_frames(many, tmp_path / "tiles", energies=energies, image_type="tiles", saturation_step=10)
+    write_frames(many, tmp_path / "blended", energies=energies, image_type="blended", blend_width=17, saturation_step=10)
+    assert len(list((tmp_path / "blended").glob("*.png"))) == 36
+    for i in range(36):
+        name = f"frame_{i:06d}.png"
+        colours = tile_rgb(tmp_path / "tiles" / name)  # the 84 finished tile colours of this frame
+        expected = blend_tile_colors(colours, 17, GRID_COLUMNS, GRID_ROWS, TILE_WIDTH, TILE_HEIGHT)
+        assert (np.asarray(Image.open(tmp_path / "blended" / name)) == expected).all(), i
+
+
+def test_an_error_in_a_worker_is_raised_and_no_threads_are_left_running(tmp_path, monkeypatch):
+    import threading
+
+    import app.services.frame_rendering as rendering
+
+    def broken(blend, colours, path):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(rendering, "_save_blended", broken)
+    before = threading.active_count()
+    with pytest.raises(RuntimeError, match="disk full"):
+        write_frames(LEVEL_FRAMES, tmp_path, energies=LEVEL_ENERGIES, image_type="blended")
+    assert threading.active_count() == before  # the pool was shut down

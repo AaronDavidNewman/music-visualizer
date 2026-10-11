@@ -1,4 +1,5 @@
 import {
+  BLEND_WIDTH_RANGE,
   BRIGHTNESS_RANGE,
   ENERGY_RANGE,
   FRAME_RATE_RANGE,
@@ -42,6 +43,11 @@ export const brightnessStepHelp = stepHelp(
 );
 
 export const thresholdHelp = `A note whose volume is below the threshold is drawn black. The threshold is a share of the loudest note in the whole file: ${THRESHOLD_RANGE.min} (the left end) is off, and ${THRESHOLD_RANGE.max} (the right end) is ${THRESHOLD_RANGE.max}% of the loudest note. Louder notes are never changed.`;
+
+export const imageTypeHelp =
+  "Tiles: the picture is a grid of flat colored tiles with hard edges. Blended tiles: the same grid and colors, but the colors of neighboring tiles fade into each other across the edges between them.";
+
+export const blendWidthHelp = `Number from ${BLEND_WIDTH_RANGE.min} to ${BLEND_WIDTH_RANGE.max}. How far the fade reaches on each side of an edge between two tiles, as a percentage of a tile's width: larger values give wider, softer fades and smaller ones sharper edges. Only used by Blended tiles.`;
 
 export const smoothingHelp =
   "0 is no smoothing. Otherwise each frame is averaged with the frames before it in the smoothing window; each of those counts this fraction as much as the current frame, so higher values blend more and fade notes more slowly.";

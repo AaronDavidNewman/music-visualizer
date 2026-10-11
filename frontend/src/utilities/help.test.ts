@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  blendWidthHelp,
   brightnessHelp,
   brightnessStepHelp,
   energyHelp,
   frameRateHelp,
   hueStepHelp,
+  imageTypeHelp,
   saturationStepHelp,
   smoothingHelp,
   smoothingWindowHelp,
@@ -76,5 +78,20 @@ describe("setting explanations", () => {
     expect(smoothingWindowHelp).toContain("earlier frames are mixed into each frame");
     expect(smoothingWindowHelp).toContain("gone that many frames later");
     expect(smoothingWindowHelp).toContain("no effect while Smoothing is 0");
+  });
+
+  it("explains the two image types", () => {
+    expect(imageTypeHelp).toContain("Tiles:");
+    expect(imageTypeHelp).toContain("flat");
+    expect(imageTypeHelp).toContain("hard edges");
+    expect(imageTypeHelp).toContain("Blended tiles:");
+    expect(imageTypeHelp).toContain("fade into each other");
+  });
+
+  it("explains the blend width: the reach on each side of an edge, as a share of a tile, the range, and where it applies", () => {
+    expect(blendWidthHelp).toContain("10 to 25");
+    expect(blendWidthHelp).toContain("each side of an edge");
+    expect(blendWidthHelp).toContain("percentage of a tile");
+    expect(blendWidthHelp).toContain("Only used by Blended tiles");
   });
 });

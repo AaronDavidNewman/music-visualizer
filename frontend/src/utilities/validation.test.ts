@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  BLEND_WIDTH_RANGE,
   BRIGHTNESS_RANGE,
+  DEFAULT_BLEND_WIDTH,
+  DEFAULT_IMAGE_TYPE,
+  IMAGE_TYPES,
   SMOOTHING_RANGE,
   SMOOTHING_WINDOW_RANGE,
   DEFAULT_BRIGHTNESS,
@@ -17,7 +21,10 @@ import {
   UNIT_SCALE,
   UNIT_STEPS,
   WINDOW_SIZES,
+  formatBlendWidth,
+  formatBlendWidthSummary,
   formatSmoothing,
+  imageTypeLabel,
   formatThreshold,
   formatThresholdSummary,
   levelCount,
@@ -27,6 +34,8 @@ import {
   validateEnergy,
   validateFile,
   validateFrameRate,
+  validateBlendWidth,
+  validateImageType,
   validateSmoothing,
   validateSmoothingWindow,
   validateStep,
@@ -237,5 +246,48 @@ describe("smoothing window", () => {
 
   it.each([0, 21, -1, 2.5, "", "  ", "abc", "NaN", "Infinity", "1e9", "5%"])("rejects %j", (v) => {
     expect(validateSmoothingWindow(v)).toBe("The smoothing window must be a whole number from 1 to 20.");
+  });
+});
+
+describe("image type", () => {
+  it("offers Tiles then Blended tiles and starts at tiles", () => {
+    expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
+      ["tiles", "Tiles"],
+      ["blended", "Blended tiles"],
+    ]);
+    expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
+    expect(imageTypeLabel("tiles")).toBe("Tiles");
+    expect(imageTypeLabel("blended")).toBe("Blended tiles");
+  });
+
+  it.each(["tiles", "blended"])("accepts %j", (v) => {
+    expect(validateImageType(v)).toBeNull();
+  });
+
+  it.each(["", "Tiles", " blended", "gradient", "tiles,blended"])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended.");
+  });
+});
+
+describe("blend width", () => {
+  it("ranges from 10 to 25 in steps of 1 and starts at 25", () => {
+    expect(BLEND_WIDTH_RANGE).toEqual({ min: 10, max: 25, step: 1 });
+    expect(DEFAULT_BLEND_WIDTH).toBe(25);
+  });
+
+  it.each([10, 25, 17, "12.5", "20", 12.5])("accepts %j", (v) => {
+    expect(validateBlendWidth(v)).toBeNull();
+  });
+
+  it.each([9.99, 26, 0, -10, 100, "", "  ", "abc", "NaN", "Infinity", "15%"])("rejects %j", (v) => {
+    expect(validateBlendWidth(v)).toBe("The blend width must be a number from 10 to 25.");
+  });
+
+  it("shows the readout and the summary as percentages", () => {
+    expect(formatBlendWidth(25)).toBe("25% of a tile");
+    expect(formatBlendWidth(12.5)).toBe("12.5% of a tile");
+    expect(formatBlendWidth(0.1 + 0.2 + 14.7)).toBe("15% of a tile");
+    expect(formatBlendWidthSummary(15)).toBe("15%");
+    expect(formatBlendWidthSummary(12.5)).toBe("12.5%");
   });
 });

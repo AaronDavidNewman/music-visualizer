@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import {
+  BLEND_WIDTH_RANGE,
   BRIGHTNESS_RANGE,
+  DEFAULT_BLEND_WIDTH,
   DEFAULT_BRIGHTNESS,
   DEFAULT_ENERGY,
+  DEFAULT_IMAGE_TYPE,
   DEFAULT_SMOOTHING,
   DEFAULT_SMOOTHING_WINDOW,
   DEFAULT_STEP,
@@ -12,6 +15,7 @@ import {
   ENERGY_RANGE,
   HUE_SCALE,
   HUE_STEPS,
+  IMAGE_TYPES,
   NA_STEP,
   SMOOTHING_RANGE,
   SMOOTHING_WINDOW_RANGE,
@@ -19,14 +23,17 @@ import {
   UNIT_SCALE,
   UNIT_STEPS,
   WINDOW_SIZES,
+  formatBlendWidth,
   formatSmoothing,
   formatThreshold,
   levelLabel,
   stepToNumber,
+  validateBlendWidth,
   validateBrightness,
   validateEnergy,
   validateFile,
   validateFrameRate,
+  validateImageType,
   validateSmoothing,
   validateSmoothingWindow,
   validateStep,
@@ -43,11 +50,13 @@ import {
   validateSpacing,
 } from "../utilities/spacing";
 import {
+  blendWidthHelp,
   brightnessHelp,
   brightnessStepHelp,
   energyHelp,
   frameRateHelp,
   hueStepHelp,
+  imageTypeHelp,
   saturationStepHelp,
   smoothingHelp,
   smoothingWindowHelp,
@@ -72,6 +81,8 @@ const brightnessStepText = ref(DEFAULT_STEP);
 const smoothing = ref<number>(DEFAULT_SMOOTHING);
 const smoothingWindowText = ref(String(DEFAULT_SMOOTHING_WINDOW));
 const threshold = ref<number>(DEFAULT_THRESHOLD);
+const imageType = ref<string>(DEFAULT_IMAGE_TYPE);
+const blendWidth = ref<number>(DEFAULT_BLEND_WIDTH);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
 function defaultSpacingText(sampleRate: number, frameRate: string, size: number): string | null {
@@ -95,6 +106,8 @@ const energyError = computed(() => validateEnergy(energyText.value));
 const smoothingError = computed(() => validateSmoothing(smoothing.value));
 const smoothingWindowError = computed(() => validateSmoothingWindow(smoothingWindowText.value));
 const thresholdError = computed(() => validateThreshold(threshold.value));
+const imageTypeError = computed(() => validateImageType(imageType.value));
+const blendWidthError = computed(() => validateBlendWidth(blendWidth.value));
 const hueStepError = computed(() => validateStep(hueStepText.value, HUE_STEPS, "hue"));
 const saturationStepError = computed(() => validateStep(saturationStepText.value, UNIT_STEPS, "saturation"));
 const brightnessStepError = computed(() => validateStep(brightnessStepText.value, UNIT_STEPS, "brightness"));
@@ -109,6 +122,8 @@ const canSubmit = computed(
     !smoothingError.value &&
     !smoothingWindowError.value &&
     !thresholdError.value &&
+    !imageTypeError.value &&
+    !blendWidthError.value &&
     !hueStepError.value &&
     !saturationStepError.value &&
     !brightnessStepError.value,
@@ -139,6 +154,8 @@ function onSubmit() {
     brightnessStep: stepToNumber(brightnessStepText.value),
     threshold: threshold.value,
     smoothingWindow: Number(smoothingWindowText.value),
+    imageType: imageType.value,
+    blendWidth: blendWidth.value,
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -325,6 +342,37 @@ function onSubmit() {
         <output class="slider-value slider-value-wide" for="threshold">{{ formatThreshold(threshold) }}</output>
       </span>
       <small v-if="thresholdError" class="error">{{ thresholdError }}</small>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label for="image-type">Image type</label>
+        <InfoPopover label="image type" :text="imageTypeHelp" />
+      </div>
+      <select id="image-type" v-model="imageType" :disabled="busy">
+        <option v-for="type in IMAGE_TYPES" :key="type.value" :value="type.value">{{ type.label }}</option>
+      </select>
+      <small v-if="imageTypeError" class="error">{{ imageTypeError }}</small>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label for="blend-width">Blend width</label>
+        <InfoPopover label="blend width" :text="blendWidthHelp" />
+      </div>
+      <span class="slider-row">
+        <input
+          id="blend-width"
+          v-model.number="blendWidth"
+          type="range"
+          :min="BLEND_WIDTH_RANGE.min"
+          :max="BLEND_WIDTH_RANGE.max"
+          :step="BLEND_WIDTH_RANGE.step"
+          :disabled="busy || imageType === 'tiles'"
+        />
+        <output class="slider-value slider-value-wide" for="blend-width">{{ formatBlendWidth(blendWidth) }}</output>
+      </span>
+      <small v-if="blendWidthError" class="error">{{ blendWidthError }}</small>
     </div>
 
     <button type="submit" :disabled="!canSubmit || busy">{{ busy ? "Working…" : "Create frames" }}</button>

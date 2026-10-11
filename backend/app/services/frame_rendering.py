@@ -10,19 +10,23 @@ tile's saturation is local to it: its gray level after the brightness root (show
 Its hue starts at 180 degrees and is moved by the (added-up) levels of related notes. Each of hue, saturation and
 brightness can finally be rounded to a few evenly spaced levels (see ``color_levels``); by default they are smooth.
 A threshold can hide faint notes: a note below it has a black tile (see ``hidden_notes``). Smoothing mixes each frame
-with a few earlier ones (see ``smooth_frames``) before any of this is worked out.
+with a few earlier ones (see ``smooth_frames``) before any of this is worked out. The finished tile colors can be
+written as the flat ``tiles`` picture or as ``blended`` tiles whose colors fade into each other (see ``image_types``).
 """
 
 import colorsys
 import functools
 import math
 import numbers
+import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
 from .color_levels import HUE_SCALE, HUE_STEPS, UNIT_SCALE, UNIT_STEPS, check_step, snap
+from .image_types import DEFAULT_BLEND_WIDTH, DEFAULT_IMAGE_TYPE, check_blend_width, check_image_type, make_blender
 from .note_analysis import NOTE_COUNT, AnalysisResult
 
 # 12 columns (the notes of an octave) by 7 rows (octaves) of tiles 21 wide by 24 tall: tile width is
@@ -404,6 +408,17 @@ def _palette_frame(colours: np.ndarray) -> Image.Image:
     return image
 
 
+# Blended frames are blended and encoded on a few threads: each frame is independent, numpy and the PNG encoder release
+# the interpreter lock for their heavy work, and the files are the same whatever the number of threads.
+_BLEND_WORKERS = max(1, min(4, os.cpu_count() or 1))
+
+
+def _save_blended(blend, colours: np.ndarray, path: Path) -> None:
+    # a blended frame has many colours, so it is a true-color PNG; level 1 costs far less time than level 6
+    # for a file only a little larger
+    Image.fromarray(blend(colours), "RGB").save(path, compress_level=1)
+
+
 def write_frames(
     frames: np.ndarray,
     directory: Path,
@@ -416,6 +431,8 @@ def write_frames(
     value_step: int | None = None,
     threshold: float = DEFAULT_THRESHOLD,
     smoothing_window: int = DEFAULT_SMOOTHING_WINDOW,
+    image_type: str = DEFAULT_IMAGE_TYPE,
+    blend_width: float = DEFAULT_BLEND_WIDTH,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -423,6 +440,11 @@ def write_frames(
     the note values over the frames (before they are scaled to gray levels), each tile's hue and each frame's
     brightness, all in the same way: a frame is the weighted average of itself and the ``smoothing_window`` frames
     before it, each of those with the weight ``smoothing`` (see ``smooth_frames``). Smoothing 0 changes nothing.
+
+    ``image_type`` is ``tiles`` (the default: flat tiles, written as palette PNGs exactly as before) or ``blended``
+    (the same finished tile colors, but the colors of neighbouring tiles fade into each other across every shared
+    edge; true-color PNGs). ``blend_width`` (10 to 25, default 25) is how far that fade reaches on each side of an
+    edge, as a percentage of the tile width; it has no effect for ``tiles``. See ``image_types``.
 
     ``hue_step`` (12, 36, 90, 180), ``saturation_step`` and ``value_step`` (the frame brightness; 5, 10, 20, 50) round
     that property to evenly spaced levels (``color_levels``) as the very last step, after smoothing and the roots;
@@ -445,6 +467,8 @@ def write_frames(
     value_step = check_step(value_step, UNIT_STEPS, "brightness")
     _check_threshold(threshold)
     _check_smoothing_window(smoothing_window)
+    image_type = check_image_type(image_type)
+    blend_width = check_blend_width(blend_width)
     values = None
     if energies is not None:
         energies = np.asarray(energies, dtype=np.float64)
@@ -458,8 +482,23 @@ def write_frames(
     levels = to_gray_levels(smoothed)
     hidden = hidden_notes(smoothed, threshold)
     hues = snap(hue_sequence(levels, brightness, smoothing, smoothing_window), hue_step, HUE_SCALE)
-    for i, row in enumerate(levels):
-        value = DEFAULT_VALUE if values is None else float(values[i])
-        colours = tile_colors(row, brightness, hues[i], value, saturation_step, hidden[i])
-        # Level 6 makes these files about a third of the size of level 1 for roughly 0.2 s more per 10,000 frames.
-        _palette_frame(colours).save(directory / f"frame_{i:06d}.png", compress_level=6)
+    blend = pool = None
+    futures = []
+    if image_type == "blended":
+        blend = make_blender(blend_width, GRID_COLUMNS, GRID_ROWS, TILE_WIDTH, TILE_HEIGHT)
+        pool = ThreadPoolExecutor(max_workers=_BLEND_WORKERS)
+    try:
+        for i, row in enumerate(levels):
+            value = DEFAULT_VALUE if values is None else float(values[i])
+            colours = tile_colors(row, brightness, hues[i], value, saturation_step, hidden[i])
+            path = directory / f"frame_{i:06d}.png"
+            if blend is None:
+                # Level 6 makes these files about a third of the size of level 1 for roughly 0.2 s more per 10,000 frames.
+                _palette_frame(colours).save(path, compress_level=6)
+            else:
+                futures.append(pool.submit(_save_blended, blend, colours, path))
+        for future in futures:
+            future.result()  # raises the first error of a worker, if there was one
+    finally:
+        if pool is not None:
+            pool.shutdown(wait=True)

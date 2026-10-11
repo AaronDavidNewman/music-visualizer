@@ -104,3 +104,42 @@ describe("the smoothing window field", () => {
     expect(input(await render(true))).toContain("disabled");
   });
 });
+
+describe("the image type controls", () => {
+  const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
+
+  it("offer Tiles and Blended tiles in a dropdown that starts at Tiles", async () => {
+    const html = await render();
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles"]);
+    const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
+    expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
+    expect(html).toContain(">Image type</label>");
+    expect(html).toContain('aria-label="About image type"');
+  });
+
+  it("have a blend width slider from 10 to 25 in steps of 1, starting at 25 with its readout", async () => {
+    const html = await render();
+    const tag = slider(html);
+    expect(tag).toContain('type="range"');
+    expect(tag).toContain('min="10"');
+    expect(tag).toContain('max="25"');
+    expect(tag).toContain('step="1"');
+    expect(tag).toContain('value="25"');
+    expect(html).toMatch(/<output[^>]*for="blend-width"[^>]*>25% of a tile<\/output>/);
+    expect(html).toContain(">Blend width</label>");
+    expect(html).toContain('aria-label="About blend width"');
+  });
+
+  it("disable the slider while Tiles is selected and both controls while a job runs", async () => {
+    expect(slider(await render())).toContain("disabled");
+    expect(slider(await render(true))).toContain("disabled");
+    expect(await render(true)).toMatch(/<select id="image-type"[^>]*disabled/);
+    expect(await render(false)).not.toMatch(/<select id="image-type"[^>]*disabled/);
+  });
+
+  it("come after the Threshold field", async () => {
+    const html = await render();
+    expect(html.indexOf('for="image-type"')).toBeGreaterThan(html.indexOf('for="threshold"'));
+    expect(html.indexOf('for="blend-width"')).toBeGreaterThan(html.indexOf('for="image-type"'));
+  });
+});

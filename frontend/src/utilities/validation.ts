@@ -145,3 +145,45 @@ export function validateSmoothingWindow(value: string | number): string | null {
   const ok = Number.isInteger(n) && n >= SMOOTHING_WINDOW_RANGE.min && n <= SMOOTHING_WINDOW_RANGE.max;
   return ok ? null : smoothingWindowMessage;
 }
+
+/** The kinds of picture: Tiles (flat tiles with hard edges, the default) and Blended tiles (colors fade across the tile edges). */
+export const IMAGE_TYPES = [
+  { value: "tiles", label: "Tiles" },
+  { value: "blended", label: "Blended tiles" },
+] as const;
+export const DEFAULT_IMAGE_TYPE = "tiles";
+
+const imageTypeMessage = `The image type must be one of ${IMAGE_TYPES.map((t) => t.value).join(", ")}.`;
+
+/** The name shown for an image type value such as "blended". */
+export function imageTypeLabel(value: string): string {
+  return IMAGE_TYPES.find((t) => t.value === value)?.label ?? value;
+}
+
+/** Returns an error message, or null when the image type is exactly one of the offered values. */
+export function validateImageType(value: string): string | null {
+  return IMAGE_TYPES.some((t) => t.value === value) ? null : imageTypeMessage;
+}
+
+/** The blend width: how far the fade between tiles reaches on each side of an edge, as a percentage of the tile width. */
+export const BLEND_WIDTH_RANGE = { min: 10, max: 25, step: 1 } as const;
+export const DEFAULT_BLEND_WIDTH = BLEND_WIDTH_RANGE.max;
+
+const blendWidthMessage = `The blend width must be a number from ${BLEND_WIDTH_RANGE.min} to ${BLEND_WIDTH_RANGE.max}.`;
+
+/** Returns an error message, or null when the blend width is a finite number from 10 to 25. */
+export function validateBlendWidth(value: string | number): string | null {
+  const n = parseNumber(value);
+  const ok = Number.isFinite(n) && n >= BLEND_WIDTH_RANGE.min && n <= BLEND_WIDTH_RANGE.max;
+  return ok ? null : blendWidthMessage;
+}
+
+/** The readout beside the slider, such as "25% of a tile". */
+export function formatBlendWidth(value: number): string {
+  return `${Number(value.toFixed(2))}% of a tile`;
+}
+
+/** The result summary item, such as "25%". */
+export function formatBlendWidthSummary(value: number): string {
+  return `${Number(value.toFixed(2))}%`;
+}

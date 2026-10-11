@@ -17,6 +17,10 @@ export interface JobResult {
   threshold: number;
   /** How many earlier frames are mixed into each frame (1 to 20). */
   smoothing_window: number;
+  /** "tiles" or "blended". */
+  image_type: string;
+  /** The fade width used for blended tiles, as a percentage of the tile width (10 to 25). */
+  blend_width: number;
   window_spacing: number;
   step_samples: number;
   window_count: number;
@@ -40,6 +44,10 @@ export interface JobSettings {
   threshold: number;
   /** 1 to 20. */
   smoothingWindow: number;
+  /** "tiles" or "blended". */
+  imageType: string;
+  /** 10 to 25. Only used by blended tiles. */
+  blendWidth: number;
 }
 
 /** Uploads the file and waits for the frames to be created. Rejects with a message fit to show the user. */
@@ -57,6 +65,8 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("brightness_step", settings.brightnessStep === null ? "N/A" : String(settings.brightnessStep));
   body.append("threshold", String(settings.threshold));
   body.append("smoothing_window", String(settings.smoothingWindow));
+  body.append("image_type", settings.imageType);
+  body.append("blend_width", String(settings.blendWidth));
 
   let res: Response;
   try {
