@@ -6,13 +6,7 @@ export interface JobResult {
   window_size: number;
   frame_rate: number;
   frame_count: number;
-  brightness: number;
   smoothing: number;
-  energy: number;
-  /** The steps used for hue, saturation and brightness: null is N/A (smooth). */
-  hue_step: number | null;
-  saturation_step: number | null;
-  brightness_step: number | null;
   /** Percent of the loudest note value below which a note is drawn black (0 is off). */
   threshold: number;
   /** How many earlier frames are mixed into each frame (1 to 20). */
@@ -21,6 +15,8 @@ export interface JobResult {
   image_type: string;
   /** The fade width used for blended tiles, as a percentage of the tile width (10 to 25). */
   blend_width: number;
+  /** The colormap used: "summer", "autumn", "hot" or "cool". */
+  colormap: string;
   window_spacing: number;
   step_samples: number;
   window_count: number;
@@ -33,13 +29,7 @@ export interface JobSettings {
   windowSize: number;
   frameRate: number;
   windowSpacing: number;
-  brightness: number;
   smoothing: number;
-  energy: number;
-  /** null is N/A (smooth); otherwise one of the allowed steps. */
-  hueStep: number | null;
-  saturationStep: number | null;
-  brightnessStep: number | null;
   /** 0 (off) to 10, percent of the loudest note value. */
   threshold: number;
   /** 1 to 20. */
@@ -48,6 +38,8 @@ export interface JobSettings {
   imageType: string;
   /** 10 to 25. Only used by blended tiles. */
   blendWidth: number;
+  /** "summer", "autumn", "hot" or "cool". */
+  colormap: string;
 }
 
 /** Uploads the file and waits for the frames to be created. Rejects with a message fit to show the user. */
@@ -57,16 +49,12 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("window_size", String(settings.windowSize));
   body.append("frame_rate", String(settings.frameRate));
   body.append("window_spacing", String(settings.windowSpacing));
-  body.append("brightness", String(settings.brightness));
   body.append("smoothing", String(settings.smoothing));
-  body.append("energy", String(settings.energy));
-  body.append("hue_step", settings.hueStep === null ? "N/A" : String(settings.hueStep));
-  body.append("saturation_step", settings.saturationStep === null ? "N/A" : String(settings.saturationStep));
-  body.append("brightness_step", settings.brightnessStep === null ? "N/A" : String(settings.brightnessStep));
   body.append("threshold", String(settings.threshold));
   body.append("smoothing_window", String(settings.smoothingWindow));
   body.append("image_type", settings.imageType);
   body.append("blend_width", String(settings.blendWidth));
+  body.append("colormap", settings.colormap);
 
   let res: Response;
   try {

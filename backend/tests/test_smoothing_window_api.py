@@ -116,34 +116,28 @@ def test_the_same_request_twice_gives_identical_frames(client):
         assert frame_bytes(client, a, i) == frame_bytes(client, b, i)
 
 
-def test_all_the_steps_and_the_threshold_work_on_the_smoothed_values(client):
-    import colorsys
-
-    from .test_jobs_api import frame_rgb
+def test_the_threshold_works_on_the_smoothed_values(client):
+    from .test_jobs_api import frame_levels, frame_rgb
 
     data = burst_wav()
-    settings = dict(smoothing="0.8", smoothing_window="8", saturation_step="20", brightness_step="50")
+    settings = dict(smoothing="0.8", smoothing_window="8")
     off = post_window(client, data, threshold="0", **settings).json()
     on = post_window(client, data, threshold="10", **settings).json()
-    seen = 0
+    expected = expected_pixels(off, 0.8, window=8)  # the table rows from the smoothed values, worked out independently
+    hidden = 0
     for i in range(off["frame_count"]):
         a, b = frame_rgb(client, off, i), frame_rgb(client, on, i)
         black = ~b.any(axis=1)
         assert (a[~black] == b[~black]).all(), i  # every tile is black or the tile without the threshold
-        for rgb in b:
-            top = int(rgb.max())
-            assert top in (0, 128, 255)  # the frame brightness is one of the three levels
-            if top >= 100:
-                hsv = colorsys.rgb_to_hsv(*(rgb / 255))
-                assert min(abs(hsv[1] - level / 5) for level in range(6)) < 0.03  # one of the six saturations
-                seen += 1
-    assert seen > 20
+        assert (frame_levels(client, off, i) == expected[i]).all(), i  # the colours follow the smoothed strengths
+        hidden += int(black.sum())
+    assert hidden > 0
 
 
-def test_silence_at_the_end_differs_only_where_it_does_without_the_steps(client):
+def test_silence_at_the_end_differs_only_where_it_does_without_the_threshold(client):
     audio = burst_then_silence()
     longer = np.concatenate([audio, np.zeros(SR)])
-    stepped = dict(smoothing="0.8", smoothing_window="8", saturation_step="50", brightness_step="50", threshold="10")
+    stepped = dict(smoothing="0.8", smoothing_window="8", threshold="10")
     plain = dict(smoothing="0.8", smoothing_window="8")
 
     def differing(fields):
@@ -153,5 +147,5 @@ def test_silence_at_the_end_differs_only_where_it_does_without_the_steps(client)
 
     job, with_steps = differing(stepped)
     _, without = differing(plain)
-    assert set(with_steps) <= set(without)  # the steps add no difference of their own
+    assert set(with_steps) <= set(without)  # the threshold adds no difference of its own
     assert all(i == job["frame_count"] - 1 for i in with_steps)  # at most the last frame, as before smoothing changed

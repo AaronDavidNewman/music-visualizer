@@ -1,25 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   BLEND_WIDTH_RANGE,
-  BRIGHTNESS_RANGE,
+  COLORMAPS,
+  DEFAULT_COLORMAP,
+  colormapLabel,
+  validateColormap,
   DEFAULT_BLEND_WIDTH,
   DEFAULT_IMAGE_TYPE,
   IMAGE_TYPES,
   SMOOTHING_RANGE,
   SMOOTHING_WINDOW_RANGE,
-  DEFAULT_BRIGHTNESS,
-  DEFAULT_ENERGY,
   DEFAULT_SMOOTHING,
   DEFAULT_SMOOTHING_WINDOW,
-  DEFAULT_STEP,
   DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
-  ENERGY_RANGE,
-  HUE_SCALE,
-  HUE_STEPS,
   THRESHOLD_RANGE,
-  UNIT_SCALE,
-  UNIT_STEPS,
   WINDOW_SIZES,
   formatBlendWidth,
   formatBlendWidthSummary,
@@ -27,18 +22,12 @@ import {
   imageTypeLabel,
   formatThreshold,
   formatThresholdSummary,
-  levelCount,
-  levelLabel,
-  stepToNumber,
-  validateBrightness,
-  validateEnergy,
   validateFile,
   validateFrameRate,
   validateBlendWidth,
   validateImageType,
   validateSmoothing,
   validateSmoothingWindow,
-  validateStep,
   validateThreshold,
   validateWindowSize,
 } from "./validation";
@@ -95,39 +84,6 @@ describe("validateFile", () => {
   });
 });
 
-describe("saturation (the API's brightness setting)", () => {
-  it("is a whole number from 2 to 100, defaulting to 2", () => {
-    expect(BRIGHTNESS_RANGE).toEqual({ min: 2, max: 100 });
-    expect(DEFAULT_BRIGHTNESS).toBe(2);
-  });
-
-  it.each(["2", "3", "50", "100", 7, "5.0", " 10 "])("accepts %s", (v) => {
-    expect(validateBrightness(v)).toBeNull();
-  });
-
-  it.each(["1", "101", "0", "-3", "2.5", "", "  ", "abc", "NaN", "Infinity", "1e9", "99.9"])("rejects %j", (v) => {
-    expect(validateBrightness(v)).toBe("The saturation must be a whole number from 2 to 100.");
-  });
-});
-
-describe("brightness (the API's energy setting)", () => {
-  it("is a whole number from 1 to 8, defaulting to 1", () => {
-    expect(ENERGY_RANGE).toEqual({ min: 1, max: 8 });
-    expect(DEFAULT_ENERGY).toBe(1);
-  });
-
-  it.each(["1", "2", "8", "5", 4, "3.0", " 6 "])("accepts %s", (v) => {
-    expect(validateEnergy(v)).toBeNull();
-  });
-
-  it.each(["0", "9", "-1", "2.5", "", "  ", "abc", "NaN", "Infinity", "-Infinity", "1e9", 0, 9, NaN, Infinity])(
-    "rejects %j",
-    (v) => {
-      expect(validateEnergy(v)).toBe("The brightness must be a whole number from 1 to 8.");
-    },
-  );
-});
-
 describe("smoothing", () => {
   it("is a number from 0 to 0.8 in steps of 0.01, defaulting to 0", () => {
     expect(SMOOTHING_RANGE).toEqual({ min: 0, max: 0.8, step: 0.01 });
@@ -155,53 +111,6 @@ describe("smoothing", () => {
     expect(formatSmoothing(0.30000000000000004)).toBe("0.30");
     expect(formatSmoothing(0.8)).toBe("0.80");
     expect(formatSmoothing(0.35)).toBe("0.35");
-  });
-});
-
-describe("color level steps", () => {
-  it("are the allowed choices, on scales of 360 and 100, starting at N/A", () => {
-    expect([...HUE_STEPS]).toEqual([12, 36, 90, 180]);
-    expect([...UNIT_STEPS]).toEqual([5, 10, 20, 50]);
-    expect([HUE_SCALE, UNIT_SCALE]).toEqual([360, 100]);
-    expect(DEFAULT_STEP).toBe("N/A");
-  });
-
-  it("give round((scale + step) / step) levels, never fewer than 3", () => {
-    expect(HUE_STEPS.map((s) => levelCount(s, HUE_SCALE))).toEqual([31, 11, 5, 3]);
-    expect(UNIT_STEPS.map((s) => levelCount(s, UNIT_SCALE))).toEqual([21, 11, 6, 3]);
-  });
-
-  it("label the choice with its level count", () => {
-    expect(levelLabel("N/A", UNIT_SCALE)).toBe("N/A (smooth)");
-    expect(levelLabel("n/a", UNIT_SCALE)).toBe("N/A (smooth)");
-    expect(levelLabel("20", UNIT_SCALE)).toBe("20 (6 levels)");
-    expect(levelLabel(10, UNIT_SCALE)).toBe("10 (11 levels)");
-    expect(levelLabel("90", HUE_SCALE)).toBe("90 (5 levels)");
-    expect(levelLabel("12", HUE_SCALE)).toBe("12 (31 levels)");
-    expect(levelLabel("", HUE_SCALE)).toBe("");
-  });
-
-  it.each(["N/A", "n/a", " N/A ", "12", "36", "90", "180", 90])("accepts %j for hue", (v) => {
-    expect(validateStep(v, HUE_STEPS, "hue")).toBeNull();
-  });
-
-  it.each(["N/A", "5", "10", "20", "50", 50])("accepts %j for saturation", (v) => {
-    expect(validateStep(v, UNIT_STEPS, "saturation")).toBeNull();
-  });
-
-  it.each(["", "0", "7", "51", "abc", "2.5", "-5", "5", "NaN", "Infinity"])("rejects %j for hue", (v) => {
-    expect(validateStep(v, HUE_STEPS, "hue")).toBe("The hue step must be N/A or one of 12, 36, 90, 180.");
-  });
-
-  it.each(["", "0", "7", "51", "abc", "2.5", "90", "180"])("rejects %j for brightness", (v) => {
-    expect(validateStep(v, UNIT_STEPS, "brightness")).toBe("The brightness step must be N/A or one of 5, 10, 20, 50.");
-  });
-
-  it("turns the choice into the value that is sent", () => {
-    expect(stepToNumber("N/A")).toBeNull();
-    expect(stepToNumber("n/a")).toBeNull();
-    expect(stepToNumber("20")).toBe(20);
-    expect(stepToNumber("180")).toBe(180);
   });
 });
 
@@ -289,5 +198,27 @@ describe("blend width", () => {
     expect(formatBlendWidth(0.1 + 0.2 + 14.7)).toBe("15% of a tile");
     expect(formatBlendWidthSummary(15)).toBe("15%");
     expect(formatBlendWidthSummary(12.5)).toBe("12.5%");
+  });
+});
+
+describe("colormap", () => {
+  it("offers Summer, Autumn, Hot and Cool in that order and starts at hot", () => {
+    expect(COLORMAPS.map((c) => [c.value, c.label])).toEqual([
+      ["summer", "Summer"],
+      ["autumn", "Autumn"],
+      ["hot", "Hot"],
+      ["cool", "Cool"],
+    ]);
+    expect(DEFAULT_COLORMAP).toBe("hot");
+    expect(colormapLabel("hot")).toBe("Hot");
+    expect(colormapLabel("cool")).toBe("Cool");
+  });
+
+  it.each(["summer", "autumn", "hot", "cool"])("accepts %j", (v) => {
+    expect(validateColormap(v)).toBeNull();
+  });
+
+  it.each(["", "Hot", "HOT", " hot", "viridis", "hot_r", "gray"])("rejects %j", (v) => {
+    expect(validateColormap(v)).toBe("The colormap must be one of summer, autumn, hot, cool.");
   });
 });

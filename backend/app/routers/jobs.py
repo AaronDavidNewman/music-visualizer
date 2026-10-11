@@ -9,19 +9,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse
 
 from ..config import settings
+from ..services.colormaps import COLORMAPS, DEFAULT_COLORMAP
 from ..services.frame_rendering import (
-    DEFAULT_BRIGHTNESS,
-    DEFAULT_ENERGY,
     DEFAULT_SMOOTHING,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_THRESHOLD,
-    MAX_BRIGHTNESS,
-    MAX_ENERGY,
     MAX_SMOOTHING,
     MAX_SMOOTHING_WINDOW,
     MAX_THRESHOLD,
-    MIN_BRIGHTNESS,
-    MIN_ENERGY,
     MIN_SMOOTHING,
     MIN_SMOOTHING_WINDOW,
     MIN_THRESHOLD,
@@ -29,7 +24,6 @@ from ..services.frame_rendering import (
     frame_count,
     write_frames,
 )
-from ..services.color_levels import HUE_STEPS, UNIT_STEPS
 from ..services.image_types import (
     DEFAULT_BLEND_WIDTH,
     DEFAULT_IMAGE_TYPE,
@@ -37,7 +31,6 @@ from ..services.image_types import (
     MAX_BLEND_WIDTH,
     MIN_BLEND_WIDTH,
 )
-from ..services.energy import frame_energies
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
 from ..services.window_spacing import default_spacing, resolve_step
 
@@ -98,57 +91,10 @@ def _parse_window_spacing(text: str | None) -> float | None:
 async def _sent_fields(request: Request) -> set[str]:
     """Names of the form fields the client actually sent.
 
-    FastAPI reports an empty form value as missing, which would make ``brightness=`` silently use the
-    default. This tells "not sent" apart from "sent empty", so an empty brightness can be refused.
+    FastAPI reports an empty form value as missing, which would make ``smoothing=`` silently use the
+    default. This tells "not sent" apart from "sent empty", so an empty smoothing can be refused.
     """
     return set((await request.form()).keys())
-
-
-def _parse_brightness(text: str | None, sent: bool) -> int:
-    """The requested brightness. Not sent means the default; anything sent must be a whole number 2..100."""
-    if text is None and not sent:
-        return DEFAULT_BRIGHTNESS
-    text = text or ""
-    message = f"The brightness must be a whole number from {MIN_BRIGHTNESS} to {MAX_BRIGHTNESS}."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if not value.is_integer() or not MIN_BRIGHTNESS <= value <= MAX_BRIGHTNESS:
-        raise HTTPException(status_code=400, detail=message)
-    return int(value)
-
-
-def _parse_energy(text: str | None, sent: bool) -> int:
-    """The requested energy root. Not sent means the default; anything sent must be a whole number 1..8."""
-    if text is None and not sent:
-        return DEFAULT_ENERGY
-    text = text or ""
-    message = f"The energy must be a whole number from {MIN_ENERGY} to {MAX_ENERGY}."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or not value.is_integer() or not MIN_ENERGY <= value <= MAX_ENERGY:
-        raise HTTPException(status_code=400, detail=message)
-    return int(value)
-
-
-def _parse_step(text: str | None, sent: bool, allowed: tuple[int, ...], label: str) -> int | None:
-    """The requested colour step. Not sent or ``N/A`` (any case) means no rounding (None); otherwise one of ``allowed``."""
-    if text is None and not sent:
-        return None
-    text = (text or "").strip()
-    if text.lower() == "n/a":
-        return None
-    message = f"The {label} step must be N/A or one of {', '.join(map(str, allowed))}."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or not value.is_integer() or int(value) not in allowed:
-        raise HTTPException(status_code=400, detail=message)
-    return int(value)
 
 
 def _parse_smoothing(text: str | None, sent: bool) -> float:
@@ -164,6 +110,15 @@ def _parse_smoothing(text: str | None, sent: bool) -> float:
     if not math.isfinite(value) or not MIN_SMOOTHING <= value <= MAX_SMOOTHING:
         raise HTTPException(status_code=400, detail=message)
     return value + 0.0  # turns -0.0 into 0.0
+
+
+def _parse_colormap(text: str | None, sent: bool) -> str:
+    """The requested colormap. Not sent means the default; anything sent must be exactly one of the offered names."""
+    if text is None and not sent:
+        return DEFAULT_COLORMAP
+    if text not in COLORMAPS:
+        raise HTTPException(status_code=400, detail=f"The colormap must be one of {', '.join(COLORMAPS)}.")
+    return text
 
 
 def _parse_image_type(text: str | None, sent: bool) -> str:
@@ -253,31 +208,23 @@ def create_job(
     window_size: str | None = Form(None),
     frame_rate: str | None = Form(None),
     window_spacing: str | None = Form(None),
-    brightness: str | None = Form(None),
     smoothing: str | None = Form(None),
-    energy: str | None = Form(None),
-    hue_step: str | None = Form(None),
-    saturation_step: str | None = Form(None),
-    brightness_step: str | None = Form(None),
     threshold: str | None = Form(None),
     smoothing_window: str | None = Form(None),
     image_type: str | None = Form(None),
     blend_width: str | None = Form(None),
+    colormap: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
     fps = _parse_frame_rate(frame_rate)
     requested_spacing = _parse_window_spacing(window_spacing)
-    brightness_root = _parse_brightness(brightness, "brightness" in sent)
     smoothing_value = _parse_smoothing(smoothing, "smoothing" in sent)
-    energy_root = _parse_energy(energy, "energy" in sent)
-    hue_levels = _parse_step(hue_step, "hue_step" in sent, HUE_STEPS, "hue")
-    saturation_levels = _parse_step(saturation_step, "saturation_step" in sent, UNIT_STEPS, "saturation")
-    brightness_levels = _parse_step(brightness_step, "brightness_step" in sent, UNIT_STEPS, "brightness")
     threshold_value = _parse_threshold(threshold, "threshold" in sent)
     window_value = _parse_smoothing_window(smoothing_window, "smoothing_window" in sent)
     image_type_value = _parse_image_type(image_type, "image_type" in sent)
     blend_width_value = _parse_blend_width(blend_width, "blend_width" in sent)
+    colormap_value = _parse_colormap(colormap, "colormap" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -316,23 +263,16 @@ def create_job(
                 ),
             )
         result = analyze_channels(left, right, file_rate, window, step=step)
-        energies = frame_energies(left, right, file_rate, fps, frames)
-        # write_frames smooths the note values, each tile's hue and each frame's brightness (from its energy),
-        # all with the same smoothing and window (each frame is mixed with the earlier frames of the window), and only then rounds hue, saturation and brightness to the chosen levels and
-        # blacks the tiles of notes below the threshold; the image type then decides how the finished tile colors are
-        # written
+        # write_frames smooths the note values (each frame is mixed with the earlier frames of the window), colors every
+        # tile from the colormap at its own note's strength, blacks the tiles of notes below the threshold, and writes
+        # the finished tile colors as the chosen image type
         write_frames(
             average_frames(result, fps, frames),
             frames_dir,
-            brightness=brightness_root,
+            colormap=colormap_value,
             smoothing=smoothing_value,
-            energies=energies,
-            energy_root=energy_root,
-            hue_step=hue_levels,
-            saturation_step=saturation_levels,
-            value_step=brightness_levels,
-            threshold=threshold_value,
             smoothing_window=window_value,
+            threshold=threshold_value,
             image_type=image_type_value,
             blend_width=blend_width_value,
         )
@@ -355,16 +295,12 @@ def create_job(
         "window_size": window,
         "frame_rate": fps,
         "frame_count": frames,
-        "brightness": brightness_root,
         "smoothing": smoothing_value,
-        "energy": energy_root,
-        "hue_step": hue_levels,
-        "saturation_step": saturation_levels,
-        "brightness_step": brightness_levels,
         "threshold": threshold_value,
         "smoothing_window": window_value,
         "image_type": image_type_value,
         "blend_width": blend_width_value,
+        "colormap": colormap_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

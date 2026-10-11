@@ -134,9 +134,9 @@ def test_the_same_request_twice_gives_identical_frames(client):
         assert first == second
 
 
-def test_the_hidden_set_does_not_depend_on_the_saturation_root_and_other_settings_leave_the_rest_alone(client):
+def test_the_hidden_set_does_not_depend_on_the_colormap_and_the_rest_stays_as_it_was(client):
     data = wav_bytes(two_tones())
-    settings = dict(smoothing="0.8", saturation_step="20", brightness_step="50")
+    settings = dict(smoothing="0.8")
     off = post_threshold(client, data, threshold="0", **settings).json()
     on = post_threshold(client, data, threshold="6", **settings).json()
     for i in (MID_FRAME - 4, MID_FRAME, MID_FRAME + 4):
@@ -144,8 +144,9 @@ def test_the_hidden_set_does_not_depend_on_the_saturation_root_and_other_setting
         black = ~b.any(axis=1)
         assert (a[~black] == b[~black]).all(), i  # every tile is black or the tile without the threshold
 
-    # the Saturation root (the API's brightness field) changes how strongly tiles are coloured, not which are hidden
-    low = post_threshold(client, data, threshold="6", brightness="2").json()
-    high = post_threshold(client, data, threshold="6", brightness="100").json()
+    # the colormap changes the colours of the tiles that are shown, not which tiles are hidden (black); the colormap
+    # `summer` has no black entry, so a black tile is always a hidden one
+    summer = post_threshold(client, data, threshold="6", colormap="summer").json()
+    cool = post_threshold(client, data, threshold="6", colormap="cool").json()
     for i in (MID_FRAME - 4, MID_FRAME, MID_FRAME + 4):
-        assert (~tiles(client, low, i).any(axis=1) == ~tiles(client, high, i).any(axis=1)).all(), i
+        assert (~tiles(client, summer, i).any(axis=1) == ~tiles(client, cool, i).any(axis=1)).all(), i

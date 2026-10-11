@@ -9,6 +9,7 @@ from scipy.io import wavfile
 
 from app.config import settings
 from app.main import app
+from app.services.colormaps import lookup_table
 
 SR = 44100
 
@@ -21,16 +22,8 @@ def client(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def full_client(client, monkeypatch):
-    """A client whose frames are all at full brightness, whatever the loudness.
-
-    The tests of the note-level pipeline (scaling, the brightness root, smoothing, layout) read each tile's
-    gray level from its saturation, which is exact when the frame's brightness is 1. Energy is tested on its own
-    in test_energy_api.py with the real measure.
-    """
-    from app.routers import jobs
-
-    monkeypatch.setattr(jobs, "frame_energies", lambda left, right, rate, fps, frames: np.ones(frames))
+def full_client(client):
+    """The same client. (The name stays for the tests that used it when frames also had a brightness of their own.)"""
     return client
 
 
@@ -49,31 +42,31 @@ def tone(freq, seconds, sample_rate=SR):
     return np.sin(2 * np.pi * freq * t)
 
 
-def post(
-    client, data, window="4096", fps="30", name="song.wav", spacing=None, brightness=None, smoothing=None, energy=None
-):
+def post(client, data, window="4096", fps="30", name="song.wav", spacing=None, smoothing=None):
     form = {"window_size": window, "frame_rate": fps}
-    if energy is not None:
-        form["energy"] = energy
     if spacing is not None:
         form["window_spacing"] = spacing
-    if brightness is not None:
-        form["brightness"] = brightness
     if smoothing is not None:
         form["smoothing"] = smoothing
     return client.post("/api/jobs", files={"file": (name, data, "audio/wav")}, data=form)
 
 
-def frame_levels(client, job, index):
+def frame_rgb(client, job, index):
+    """The centre-pixel colour of each of the 84 tiles of a served frame, shape (84, 3)."""
     r = client.get(job["frame_url_template"].replace("{index}", str(index)))
     assert r.status_code == 200
-    img = Image.open(io.BytesIO(r.content))
-    rgb = np.asarray(img.convert("RGB")).astype(int)
-    # a tile's gray level is its saturation: the largest colour channel minus the smallest, when the frame is at
-    # full brightness (use full_client); otherwise it is that level scaled by the frame's brightness
-    arr = rgb.max(axis=2) - rgb.min(axis=2)
-    # one value per note: the centre pixel of tile n, which is at row n // 12, column n % 12 (24 x 21 pixel tiles)
+    arr = np.asarray(Image.open(io.BytesIO(r.content)).convert("RGB"))
     return np.array([arr[(n // 12) * 24 + 12, (n % 12) * 21 + 10] for n in range(84)])
+
+
+HOT_ROWS = {tuple(row): i for i, row in enumerate(lookup_table("hot").tolist())}
+
+
+def frame_levels(client, job, index):
+    """The row (0 to 255) in the ``hot`` table (the default colormap) of each of the 84 tiles of a served frame, decoded
+    from the tile's centre pixel by exact lookup (every row of the table is a different colour); -1 for a colour that is
+    not in the table, such as the black of a tile that the threshold hides."""
+    return np.array([HOT_ROWS.get(tuple(int(v) for v in c), -1) for c in frame_rgb(client, job, index)])
 
 
 def test_submission_creates_frames_in_separate_dirs(client):
@@ -115,7 +108,7 @@ def test_loudest_note_reaches_white_somewhere(full_client):
     assert peak == 255
 
 
-def test_silent_file_gives_black_frames(client):
+def test_silent_file_gives_the_first_colour_of_the_colormap_in_every_tile(client):
     job = post(client, wav_bytes(np.zeros(SR), np.zeros(SR))).json()
     assert job["frame_count"] == 30
     for index in (0, 15, 29):
@@ -323,20 +316,21 @@ def test_same_settings_give_identical_frames(client):
         assert ra == rb
 
 
-def test_spacing_one_matches_consecutive_window_analysis(full_client):
+def test_spacing_one_matches_consecutive_window_analysis(client):
     """SC-002: spacing 1 gives the frames the application produced before spacing existed."""
-    from app.services.frame_rendering import average_frames, boost_levels, frame_count, to_gray_levels
+    from app.services.frame_rendering import average_frames, frame_count
     from app.services.note_analysis import analyze_channels, read_wav
 
     left, right = tone(440, 2.0), tone(660, 2.0)
-    job = post(full_client, wav_bytes(left, right), window="4096", spacing="1").json()
+    job = post(client, wav_bytes(left, right), window="4096", spacing="1").json()
     rate, l, r = read_wav(settings.audio_temp_dir / job["job_id"] / "audio.wav")
     # consecutive windows: starts at multiples of the window size, the previous default behavior
     result = analyze_channels(l, r, rate, 4096)
     assert result.starts.tolist() == [i * 4096 for i in range(math.ceil(len(l) / 4096))]
-    expected = boost_levels(to_gray_levels(average_frames(result, 30, frame_count(len(l), rate, 30))))
+    values = average_frames(result, 30, frame_count(len(l), rate, 30))
+    expected = np.rint(np.sqrt(values[:, :84] / values.max()) * 255).astype(int)
     for index in (0, 7, 30, 59):
-        assert np.array_equal(frame_levels(full_client, job, index), expected[index][:84])
+        assert np.array_equal(frame_levels(client, job, index), expected[index])
 
 
 @pytest.mark.parametrize("spacing", [None, "", "   "])
@@ -360,9 +354,6 @@ def test_default_changes_with_frame_rate_and_window_size(client):
     data = wav_bytes(audio, audio)
     assert post(client, data, fps="60").json()["window_spacing"] == 0.179443
     assert post(client, data, window="8192", fps="60").json()["window_spacing"] == 0.089721
-
-
-# --- spacing limits and errors (feature 003, User Story 3) ----------------------
 
 
 def test_step_below_one_sample_is_raised_and_reported(client, monkeypatch):
@@ -441,133 +432,6 @@ def test_recovers_after_a_spacing_error(client):
     assert post(client, data, spacing="0.5").status_code == 200
 
 
-# --- brightness (feature 004) ---------------------------------------------------
-
-
-def raw_levels(client, job, count=None):
-    """The pre-brightness 0..255 levels for the frames of a stored job, computed straight from the services."""
-    from app.services.frame_rendering import average_frames, frame_count, to_gray_levels
-    from app.services.note_analysis import analyze_channels, read_wav
-
-    rate, left, right = read_wav(settings.audio_temp_dir / job["job_id"] / "audio.wav")
-    result = analyze_channels(left, right, rate, job["window_size"], step=job["step_samples"])
-    frames = average_frames(result, job["frame_rate"], frame_count(len(left), rate, job["frame_rate"]))
-    return to_gray_levels(frames)
-
-
-def displayed(levels, brightness):
-    """Independent computation of the displayed level (does not use boost_levels)."""
-    return np.array([round(255 * (int(v) / 255) ** (1 / brightness)) for v in levels.reshape(-1)]).reshape(levels.shape)
-
-
-def test_no_brightness_means_two_and_matches_the_old_square_root(full_client):
-    left, right = tone(440, 1.0), tone(660, 1.0)
-    job = post(full_client, wav_bytes(left, right)).json()
-    assert job["brightness"] == 2
-    levels = raw_levels(full_client, job)
-    for index in (0, 5, 29):
-        assert np.array_equal(frame_levels(full_client, job, index), displayed(levels[index][:84], 2))
-        assert np.array_equal(
-            frame_levels(full_client, job, index), np.array([round(255 * (v / 255) ** 0.5) for v in levels[index][:84]])
-        )
-
-
-def test_brightness_four_uses_the_fourth_root(full_client):
-    audio = tone(440, 1.0)
-    job = post(full_client, wav_bytes(audio, audio), brightness="4").json()
-    assert job["brightness"] == 4
-    levels = raw_levels(full_client, job)
-    for index in (0, 10, 29):
-        assert np.array_equal(frame_levels(full_client, job, index), displayed(levels[index][:84], 4))
-
-
-def test_brightness_changes_only_the_gray_levels(client):
-    left, right = tone(440, 1.0), tone(660, 1.0)
-    data = wav_bytes(left, right)
-    jobs = {b: post(client, data, brightness=str(b)).json() for b in (2, 4, 10)}
-    keys = ("frame_count", "window_count", "step_samples", "window_spacing", "duration_seconds", "frame_rate")
-    for b in (4, 10):
-        assert {k: jobs[b][k] for k in keys} == {k: jobs[2][k] for k in keys}
-    previous_mean = -1.0
-    for b in (2, 4, 10):
-        first = frame_levels(client, jobs[b], 0)
-        assert first.mean() > previous_mean
-        previous_mean = first.mean()
-    for index in (0, 10, 29):
-        low, mid, high = (frame_levels(client, jobs[b], index) for b in (2, 4, 10))
-        assert (mid >= low).all() and (high >= mid).all()
-
-
-@pytest.mark.parametrize("brightness", ["2", "100"])
-def test_silent_file_stays_black_at_any_brightness(client, brightness):
-    job = post(client, wav_bytes(np.zeros(SR), np.zeros(SR)), brightness=brightness).json()
-    for index in (0, 15, 29):
-        assert not frame_levels(client, job, index).any()
-
-
-@pytest.mark.parametrize("brightness", [None, "10"])
-def test_the_loudest_note_is_still_the_brightest_square(client, brightness):
-    audio = tone(40 * SR / 4096, 1.0)
-    job = post(client, wav_bytes(audio, audio), brightness=brightness).json()
-    hits = sum(frame_levels(client, job, i).argmax() == 36 for i in range(job["frame_count"]))
-    assert hits / job["frame_count"] >= 0.95
-
-
-def test_same_brightness_gives_identical_frames(client):
-    audio = tone(440, 1.0)
-    data = wav_bytes(audio, audio)
-    a = post(client, data, brightness="4").json()
-    b = post(client, data, brightness="4").json()
-    for index in (0, 10, 29):
-        ra = client.get(a["frame_url_template"].replace("{index}", str(index))).content
-        rb = client.get(b["frame_url_template"].replace("{index}", str(index))).content
-        assert ra == rb
-
-
-def test_a_whole_number_with_a_decimal_point_is_accepted(client):
-    audio = tone(440, 0.3)
-    job = post(client, wav_bytes(audio, audio), brightness="5.0").json()
-    assert job["brightness"] == 5
-
-
-# --- brightness: refusing bad values (feature 004, User Story 2) -----------------
-# These confirm the strict rule written with the router change; they pass as soon as they are added.
-
-
-@pytest.mark.parametrize("brightness", ["1", "101", "0", "-3", "2.5", "abc", "nan", "inf", "-inf", "1e9", "", "  "])
-def test_bad_brightness_is_refused(client, brightness):
-    audio = tone(440, 0.2)
-    r = post(client, wav_bytes(audio, audio), brightness=brightness)
-    assert_rejected(r, 400, "brightness", "whole number", "2", "100")
-    assert r.json()["detail"] == "The brightness must be a whole number from 2 to 100."
-
-
-def test_a_refused_brightness_never_reads_the_file(client, monkeypatch):
-    from app.routers import jobs
-
-    def fail(*args, **kwargs):
-        raise AssertionError("the file must not be read")
-
-    monkeypatch.setattr(jobs, "read_wav", fail)
-    audio = tone(440, 0.2)
-    assert_rejected(post(client, wav_bytes(audio, audio), brightness="101"), 400, "brightness")
-
-
-@pytest.mark.parametrize("brightness", ["2", "100"])
-def test_the_limits_are_accepted(client, brightness):
-    audio = tone(440, 0.2)
-    r = post(client, wav_bytes(audio, audio), brightness=brightness)
-    assert r.status_code == 200
-    assert r.json()["brightness"] == int(brightness)
-
-
-def test_recovers_after_a_brightness_error(client):
-    audio = tone(440, 0.2)
-    data = wav_bytes(audio, audio)
-    assert post(client, data, brightness="1").status_code == 400
-    assert post(client, data, brightness="3").status_code == 200
-
-
 # --- octave grid layout (feature 005) --------------------------------------------
 
 
@@ -579,11 +443,8 @@ def note_tone(note, seconds=1.0, window=4096):
 
 
 def tile_means(client, job, index):
-    """Mean gray of each tile as a 7 x 12 array, found from the pixels alone (rows = octaves, columns = notes)."""
-    r = client.get(job["frame_url_template"].replace("{index}", str(index)))
-    rgb = np.asarray(Image.open(io.BytesIO(r.content)).convert("RGB")).astype(float)
-    arr = rgb.max(axis=2) - rgb.min(axis=2)  # a tile's gray level is its saturation (use full_client)
-    return arr.reshape(7, 24, 12, 21).mean(axis=(1, 3))
+    """The table row of each tile as a 7 x 12 array, found from the pixels alone (rows = octaves, columns = notes)."""
+    return frame_levels(client, job, index).reshape(7, 12).astype(float)
 
 
 def brightest_tile_share(client, job, row, col):
@@ -628,7 +489,7 @@ def test_one_of_the_four_omitted_notes_leaves_no_visible_tile_at_full_white(clie
         assert frame_levels(client, job, index).max() < 255
 
 
-# --- note smoothing (feature 006) -------------------------------------------------
+# --- note smoothing (features 006 and 012) -------------------------------------------
 
 
 def frame_values(job):
@@ -655,14 +516,15 @@ def ref_smooth(values, s, w=1):
     return out
 
 
-def expected_pixels(job, smoothing, brightness=2, window=1):
-    """Frame pixels worked out independently: smooth the values, scale them to 0-255, then brighten."""
-    from app.services.frame_rendering import to_gray_levels
-
+def expected_pixels(job, smoothing, window=1):
+    """The hot-table row of every tile of every frame, worked out independently of the code under test: smooth the values
+    by hand, take the share of the largest smoothed value, the square root, and round to one of 256 entries."""
     values = frame_values(job)
     if smoothing:
         values = ref_smooth(values.tolist(), smoothing, window)
-    return displayed(to_gray_levels(values), brightness)[:, :84]
+    peak = values.max()
+    share = values[:, :84] / peak if peak > 0 else np.zeros((len(values), 84))
+    return np.rint(np.sqrt(share) * 255).astype(int)
 
 
 def burst_then_silence():
@@ -759,10 +621,6 @@ def test_smoothing_values_in_range_are_accepted_and_reported(client, smoothing, 
     assert r.json()["smoothing"] == expected
 
 
-# --- smoothing: refusing bad values (feature 006, User Story 2) ---------------------
-# These confirm the strict rule written with the router change; they pass as soon as they are added.
-
-
 @pytest.mark.parametrize("smoothing", ["-0.1", "0.81", "1", "1e9", "abc", "nan", "inf", "-inf", "", "  "])
 def test_bad_smoothing_is_refused(client, smoothing):
     audio = tone(440, 0.2)
@@ -789,56 +647,20 @@ def test_recovers_after_a_smoothing_error(client):
     assert post(client, data, smoothing="0.3").status_code == 200
 
 
-# --- harmonic colour (feature 007) ----------------------------------------------------
-
-
-def frame_rgb(client, job, index):
-    """The centre-pixel colour of each of the 84 tiles of a served frame, shape (84, 3)."""
-    r = client.get(job["frame_url_template"].replace("{index}", str(index)))
-    assert r.status_code == 200
-    arr = np.asarray(Image.open(io.BytesIO(r.content)).convert("RGB"))
-    return np.array([arr[(n // 12) * 24 + 12, (n % 12) * 21 + 10] for n in range(84)])
+# --- the served pictures --------------------------------------------------------------
 
 
 def two_notes():
-    """Note 24 and its first "down" partner (24 + RELATED_DOWN[0]) sounding together for one second."""
-    from app.services.frame_rendering import RELATED_DOWN
-
-    return (note_tone(24) + note_tone(24 + RELATED_DOWN[0])) / 2
+    """Notes 24 and 28 sounding together for one second."""
+    return (note_tone(24) + note_tone(28)) / 2
 
 
-def ref_hue_fractions(job, index, brightness=2, smoothing=0):
-    """The hue of each tile worked out independently from the displayed gray levels of all 88 notes."""
-    from app.services.frame_rendering import to_gray_levels
-
-    values = frame_values(job)
-    if smoothing:
-        values = ref_smooth(values.tolist(), smoothing)
-    shown = displayed(to_gray_levels(values)[index], brightness) / 255
-
-    from app.services.frame_rendering import RELATED_DOWN, RELATED_UP
-
-    def lum(k):
-        return shown[k] if 0 <= k < 88 else 0.0
-
-    # the brightness of the partners is added (not averaged) and the hue is clipped to the wheel
-    return np.array(
-        [
-            min(
-                1.0,
-                max(
-                    0.0,
-                    0.5 + 0.5 * (sum(lum(n + o) for o in RELATED_UP) - sum(lum(n + o) for o in RELATED_DOWN)),
-                ),
-            )
-            for n in range(84)
-        ]
-    )
-
-
-def hue_gap_degrees(a, b):
-    d = abs(a - b) % 1.0
-    return min(d, 1 - d) * 360
+def chord_wav(seconds=3):
+    """Several notes whose loudness falls and rises, so that frames differ from one another."""
+    t = np.arange(seconds * SR) / SR
+    audio = sum(a * np.sin(2 * np.pi * f * t) for f, a in ((220, 0.5), (277.18, 0.35), (329.63, 0.3), (440, 0.2)))
+    audio = audio * np.interp(t, [0, 1, 2, 3], [1.0, 0.3, 0.9, 0.05])
+    return wav_bytes(0.8 * audio / np.abs(audio).max())
 
 
 def test_served_frames_are_rgb_images_of_the_same_size_and_shape(client):
@@ -851,88 +673,6 @@ def test_served_frames_are_rgb_images_of_the_same_size_and_shape(client):
         assert np.asarray(img.convert("RGB")).shape == (168, 252, 3)
         assert img.size == (252, 168)
         assert img.size[0] * 2 == img.size[1] * 3
-
-
-def expected_values(data, fps=30, root=1):
-    """Each frame's brightness worked out from the WAV bytes by the plain-Python reference in test_energy.py."""
-    from .test_energy import reference_energies
-
-    rate, arr = wavfile.read(io.BytesIO(data))
-    left, right = (arr, arr) if arr.ndim == 1 else (arr[:, 0], arr[:, 1])
-    scale = float(np.iinfo(arr.dtype).max) + 1.0
-    frames = math.ceil(len(left) * fps / rate - 1e-9)
-    energies = np.array(reference_energies(left / scale, right / scale, rate, fps, frames))
-    peak = energies.max()
-    return (energies / peak) ** (1.0 / root) if peak > 0 else np.zeros(frames)
-
-
-def test_every_tile_has_the_frames_brightness_and_its_own_level_as_its_saturation(client):
-    audio = two_notes()
-    data = wav_bytes(audio, audio)
-    job = post(client, data).json()
-    levels = expected_pixels(job, 0)  # gray levels worked out independently of the drawing code
-    value = expected_values(data)  # the frame's energy relative to the loudest frame (root 1)
-    assert value.max() == 1.0
-    for index in (0, 5, 15, 29):
-        rgb = frame_rgb(client, job, index)
-        top = round(255 * value[index])
-        assert (np.abs(rgb.max(axis=1) - top) <= 1).all(), index  # the same brightness in every tile of the frame
-        darkest = top * (1 - levels[index] / 255)  # saturation is the tile's own level
-        assert (np.abs(rgb.min(axis=1) - darkest) <= 1.5).all(), index
-
-
-def hue_readable(rgb):
-    """Whether a tile's hue can be read back from its 8-bit colour: bright enough and saturated enough."""
-    top, low = int(rgb.max()), int(rgb.min())
-    return top >= 128 and (top - low) / top >= 0.5
-
-
-def test_the_hue_of_a_tile_follows_the_related_notes(client):
-    import colorsys
-
-    audio = two_notes()
-    job = post(client, wav_bytes(audio, audio)).json()
-    checked = 0
-    for index in (3, 10, 20):
-        rgb = frame_rgb(client, job, index)
-        expected = ref_hue_fractions(job, index)
-        for n in range(84):
-            if hue_readable(rgb[n]):
-                h, _s, _v = colorsys.rgb_to_hsv(*(rgb[n] / 255))
-                assert hue_gap_degrees(h, expected[n]) <= 2.0, (index, n)
-                checked += 1
-    assert checked > 0
-    # the second note is a "down" partner of note 24, so tile 24 is pulled below 180 degrees while both sound
-    rgb = frame_rgb(client, job, 10)
-    h, _s, _v = colorsys.rgb_to_hsv(*(rgb[24] / 255))
-    assert h * 360 < 180
-
-
-def test_a_single_steady_note_is_cyan(client):
-    import colorsys
-
-    audio = note_tone(40)
-    data = wav_bytes(audio, audio)
-    job = post(client, data).json()
-    rgb = frame_rgb(client, job, 10)
-    most_saturated = int((rgb.max(axis=1).astype(int) - rgb.min(axis=1)).argmax())
-    assert most_saturated == 40  # the loudest note has the most saturated tile
-    h, s, v = colorsys.rgb_to_hsv(*(rgb[40] / 255))
-    assert abs(h * 360 - 180) <= 3
-    assert s > 0.9
-    # every tile has the frame's brightness: its energy relative to the loudest frame (a steady tone: nearly 1)
-    assert v == pytest.approx(expected_values(data)[10], abs=0.02)
-    assert v > 0.9
-    assert (rgb.max(axis=1) == rgb[40].max()).all()
-
-
-@pytest.mark.parametrize("brightness, smoothing", [("2", "0"), ("100", "0"), ("2", "0.8")])
-def test_a_silent_file_is_black_in_every_channel(client, brightness, smoothing):
-    job = post(client, wav_bytes(np.zeros(SR), np.zeros(SR)), brightness=brightness, smoothing=smoothing).json()
-    for index in (0, 15, 29):
-        r = client.get(job["frame_url_template"].replace("{index}", str(index)))
-        arr = np.asarray(Image.open(io.BytesIO(r.content)).convert("RGB"))
-        assert arr.shape == (168, 252, 3) and not arr.any()
 
 
 def test_counts_and_timing_do_not_depend_on_colour(client):
@@ -951,116 +691,4 @@ def test_the_same_file_and_settings_give_byte_identical_colour_frames(client):
     for index in (0, 10, 29):
         ra = client.get(a["frame_url_template"].replace("{index}", str(index))).content
         rb = client.get(b["frame_url_template"].replace("{index}", str(index))).content
-        assert ra == rb
-
-
-def test_brightness_and_smoothing_still_set_the_tile_saturation(full_client):
-    audio = burst_then_silence()
-    data = wav_bytes(audio, audio)
-    four = post(full_client, data, brightness="4").json()
-    expected = expected_pixels(four, 0, brightness=4)
-    for index in (5, 20, 33):
-        assert np.array_equal(frame_levels(full_client, four, index), expected[index])
-    smooth = post(full_client, data, smoothing="0.5").json()
-    expected = expected_pixels(smooth, 0.5)
-    for index in (5, 30, 33):
-        assert np.array_equal(frame_levels(full_client, smooth, index), expected[index])
-
-
-def test_the_loudest_frame_reaches_full_brightness_in_every_tile(client):
-    audio = two_notes()
-    job = post(client, wav_bytes(audio, audio)).json()
-    assert max(frame_rgb(client, job, i).max() for i in range(job["frame_count"])) == 255
-    loudest = int(expected_values(wav_bytes(audio, audio)).argmax())
-    assert (frame_rgb(client, job, loudest).max(axis=1) == 255).all()
-
-
-# --- smoothing also applies to the hues (feature 006 and 007) ---------------------------
-
-
-def partner_burst():
-    """Note 24 and its first "down" partner for one second, then silence: the tile's hue changes over time."""
-    return np.concatenate([two_notes(), np.zeros(SR)])
-
-
-def ref_smoothed_hue_rows(job, smoothing):
-    """Per-frame hues worked out independently: smooth the values, scale, brighten, hue, then smooth the hues."""
-    from app.services.frame_rendering import RELATED_DOWN, RELATED_UP, to_gray_levels
-
-    values = frame_values(job)
-    if smoothing:
-        values = ref_smooth(values.tolist(), smoothing)
-    levels = to_gray_levels(values)
-    raw = []
-    for row in levels:
-        shown = displayed(row, 2) / 255
-
-        def lum(k):
-            return shown[k] if 0 <= k < 88 else 0.0
-
-        raw.append(
-            [
-                min(1.0, max(0.0, 0.5 + 0.5 * (sum(lum(n + o) for o in RELATED_UP) - sum(lum(n + o) for o in RELATED_DOWN))))
-                for n in range(84)
-            ]
-        )
-    raw = np.array(raw)
-    return raw, ref_smooth(raw, smoothing)
-
-
-def pixel_hue_fraction(rgb):
-    import colorsys
-
-    return colorsys.rgb_to_hsv(*(rgb / 255))[0]
-
-
-def test_the_hues_in_the_served_frames_are_smoothed_with_the_same_parameter(client):
-    audio = partner_burst()
-    job = post(client, wav_bytes(audio, audio), smoothing="0.5").json()
-    raw, smoothed = ref_smoothed_hue_rows(job, 0.5)
-    checked = differs = 0
-    for index in range(0, 40):
-        rgb = frame_rgb(client, job, index)
-        for n in (24, 28):  # the two notes that are sounding; their tiles are saturated and their colour is readable
-            if hue_readable(rgb[n]):
-                got = pixel_hue_fraction(rgb[n])
-                gap = abs(got - smoothed[index][n]) % 1.0
-                assert min(gap, 1 - gap) * 360 <= 2.0, (index, n, got * 360, smoothed[index][n] * 360)
-                checked += 1
-                raw_gap = abs(got - raw[index][n]) % 1.0
-                differs += int(min(raw_gap, 1 - raw_gap) * 360 > 2.0)
-    assert checked > 10
-    assert differs > 0  # smoothing the hues really changes the colours compared with the unsmoothed hues
-
-
-def test_without_smoothing_the_hues_are_the_unsmoothed_ones(client):
-    audio = partner_burst()
-    job = post(client, wav_bytes(audio, audio)).json()
-    raw, smoothed = ref_smoothed_hue_rows(job, 0)
-    assert np.array_equal(raw, smoothed)
-    checked = 0
-    for index in range(0, 30, 3):
-        rgb = frame_rgb(client, job, index)
-        for n in (24, 28):
-            if hue_readable(rgb[n]):
-                got = pixel_hue_fraction(rgb[n])
-                gap = abs(got - raw[index][n]) % 1.0
-                assert min(gap, 1 - gap) * 360 <= 2.0
-                checked += 1
-    assert checked > 5
-
-
-def test_hue_smoothing_does_not_change_saturation_counts_or_timing(full_client):
-    audio = partner_burst()
-    data = wav_bytes(audio, audio)
-    a = post(full_client, data, smoothing="0.8").json()
-    b = post(full_client, data, smoothing="0.8").json()
-    keys = ("frame_count", "window_count", "step_samples", "window_spacing", "duration_seconds")
-    assert {k: a[k] for k in keys} == {k: b[k] for k in keys}
-    expected = expected_pixels(a, 0.8)  # the saturation is still the smoothed, scaled, brightened gray level
-    for index in (3, 15, 29, 35):
-        assert np.array_equal(frame_levels(full_client, a, index), expected[index])
-    for index in (0, 10, 40):  # byte-identical on repeat
-        ra = full_client.get(a["frame_url_template"].replace("{index}", str(index))).content
-        rb = full_client.get(b["frame_url_template"].replace("{index}", str(index))).content
         assert ra == rb

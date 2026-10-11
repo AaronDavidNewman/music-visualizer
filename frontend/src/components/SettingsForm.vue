@@ -2,41 +2,29 @@
 import { computed, ref, watch } from "vue";
 import {
   BLEND_WIDTH_RANGE,
-  BRIGHTNESS_RANGE,
+  COLORMAPS,
+  DEFAULT_COLORMAP,
   DEFAULT_BLEND_WIDTH,
-  DEFAULT_BRIGHTNESS,
-  DEFAULT_ENERGY,
   DEFAULT_IMAGE_TYPE,
   DEFAULT_SMOOTHING,
   DEFAULT_SMOOTHING_WINDOW,
-  DEFAULT_STEP,
   DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
-  ENERGY_RANGE,
-  HUE_SCALE,
-  HUE_STEPS,
   IMAGE_TYPES,
-  NA_STEP,
   SMOOTHING_RANGE,
   SMOOTHING_WINDOW_RANGE,
   THRESHOLD_RANGE,
-  UNIT_SCALE,
-  UNIT_STEPS,
   WINDOW_SIZES,
   formatBlendWidth,
   formatSmoothing,
   formatThreshold,
-  levelLabel,
-  stepToNumber,
   validateBlendWidth,
-  validateBrightness,
-  validateEnergy,
+  validateColormap,
   validateFile,
   validateFrameRate,
   validateImageType,
   validateSmoothing,
   validateSmoothingWindow,
-  validateStep,
   validateThreshold,
   validateWindowSize,
 } from "../utilities/validation";
@@ -51,13 +39,9 @@ import {
 } from "../utilities/spacing";
 import {
   blendWidthHelp,
-  brightnessHelp,
-  brightnessStepHelp,
-  energyHelp,
+  colormapHelp,
   frameRateHelp,
-  hueStepHelp,
   imageTypeHelp,
-  saturationStepHelp,
   smoothingHelp,
   smoothingWindowHelp,
   spacingHelp,
@@ -72,12 +56,7 @@ const emit = defineEmits<{ submit: [file: File, settings: JobSettings] }>();
 
 const windowSize = ref<number>(DEFAULT_WINDOW_SIZE);
 const frameRateText = ref("30");
-const brightnessText = ref(String(DEFAULT_BRIGHTNESS));
-const energyText = ref(String(DEFAULT_ENERGY));
-// The step choices are kept as the text of the selected option: "N/A" or a number.
-const hueStepText = ref(DEFAULT_STEP);
-const saturationStepText = ref(DEFAULT_STEP);
-const brightnessStepText = ref(DEFAULT_STEP);
+const colormap = ref<string>(DEFAULT_COLORMAP);
 const smoothing = ref<number>(DEFAULT_SMOOTHING);
 const smoothingWindowText = ref(String(DEFAULT_SMOOTHING_WINDOW));
 const threshold = ref<number>(DEFAULT_THRESHOLD);
@@ -101,32 +80,24 @@ const fileError = computed(() => validateFile(props.file));
 const windowError = computed(() => validateWindowSize(windowSize.value));
 const frameRateError = computed(() => validateFrameRate(frameRateText.value));
 const spacingError = computed(() => validateSpacing(spacingText.value));
-const brightnessError = computed(() => validateBrightness(brightnessText.value));
-const energyError = computed(() => validateEnergy(energyText.value));
 const smoothingError = computed(() => validateSmoothing(smoothing.value));
 const smoothingWindowError = computed(() => validateSmoothingWindow(smoothingWindowText.value));
 const thresholdError = computed(() => validateThreshold(threshold.value));
 const imageTypeError = computed(() => validateImageType(imageType.value));
 const blendWidthError = computed(() => validateBlendWidth(blendWidth.value));
-const hueStepError = computed(() => validateStep(hueStepText.value, HUE_STEPS, "hue"));
-const saturationStepError = computed(() => validateStep(saturationStepText.value, UNIT_STEPS, "saturation"));
-const brightnessStepError = computed(() => validateStep(brightnessStepText.value, UNIT_STEPS, "brightness"));
+const colormapError = computed(() => validateColormap(colormap.value));
 const canSubmit = computed(
   () =>
     !fileError.value &&
     !windowError.value &&
     !frameRateError.value &&
     !spacingError.value &&
-    !brightnessError.value &&
-    !energyError.value &&
     !smoothingError.value &&
     !smoothingWindowError.value &&
     !thresholdError.value &&
     !imageTypeError.value &&
     !blendWidthError.value &&
-    !hueStepError.value &&
-    !saturationStepError.value &&
-    !brightnessStepError.value,
+    !colormapError.value,
 );
 
 const belowMinimum = computed(
@@ -147,15 +118,11 @@ function onSubmit() {
     windowSize: windowSize.value,
     frameRate: Number(frameRateText.value),
     windowSpacing: Number(spacingText.value),
-    brightness: Number(brightnessText.value),
-    energy: Number(energyText.value),
-    hueStep: stepToNumber(hueStepText.value),
-    saturationStep: stepToNumber(saturationStepText.value),
-    brightnessStep: stepToNumber(brightnessStepText.value),
     threshold: threshold.value,
     smoothingWindow: Number(smoothingWindowText.value),
     imageType: imageType.value,
     blendWidth: blendWidth.value,
+    colormap: colormap.value,
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -202,88 +169,15 @@ function onSubmit() {
       </div>
     </div>
 
-    <!-- What the user sees is Brightness then Saturation. The values keep the API names: Brightness is the
-         `energy` setting (a root, 1 to 8, on the frame's loudness) and Saturation is the `brightness` setting
-         (a root, 2 to 100, on each tile's note level). -->
-    <div class="field-row">
-      <div class="field">
-        <div class="field-head">
-          <label for="brightness">Brightness</label>
-          <InfoPopover label="brightness" :text="energyHelp" />
-        </div>
-        <input
-          id="brightness"
-          v-model="energyText"
-          type="number"
-          step="1"
-          :min="ENERGY_RANGE.min"
-          :max="ENERGY_RANGE.max"
-          inputmode="numeric"
-          :disabled="busy"
-        />
-        <small v-if="energyError" class="error">{{ energyError }}</small>
+    <div class="field">
+      <div class="field-head">
+        <label for="colormap">Colormap</label>
+        <InfoPopover label="colormap" :text="colormapHelp" />
       </div>
-
-      <div class="field">
-        <div class="field-head">
-          <label for="saturation">Saturation</label>
-          <InfoPopover label="saturation" :text="brightnessHelp" />
-        </div>
-        <input
-          id="saturation"
-          v-model="brightnessText"
-          type="number"
-          step="1"
-          :min="BRIGHTNESS_RANGE.min"
-          :max="BRIGHTNESS_RANGE.max"
-          inputmode="numeric"
-          :disabled="busy"
-        />
-        <small v-if="brightnessError" class="error">{{ brightnessError }}</small>
-      </div>
-    </div>
-
-    <!-- Steps round a finished value to evenly spaced levels; N/A leaves it smooth. The API fields are
-         `hue_step`, `saturation_step` and `brightness_step`. -->
-    <div class="field-row">
-      <div class="field">
-        <div class="field-head">
-          <label for="hue-step">Hue steps</label>
-          <InfoPopover label="hue steps" :text="hueStepHelp" />
-        </div>
-        <select id="hue-step" v-model="hueStepText" :disabled="busy">
-          <option :value="NA_STEP">{{ NA_STEP }}</option>
-          <option v-for="step in HUE_STEPS" :key="step" :value="String(step)">{{ step }}</option>
-        </select>
-        <output class="level-count" for="hue-step">{{ levelLabel(hueStepText, HUE_SCALE) }}</output>
-        <small v-if="hueStepError" class="error">{{ hueStepError }}</small>
-      </div>
-
-      <div class="field">
-        <div class="field-head">
-          <label for="saturation-step">Saturation steps</label>
-          <InfoPopover label="saturation steps" :text="saturationStepHelp" />
-        </div>
-        <select id="saturation-step" v-model="saturationStepText" :disabled="busy">
-          <option :value="NA_STEP">{{ NA_STEP }}</option>
-          <option v-for="step in UNIT_STEPS" :key="step" :value="String(step)">{{ step }}</option>
-        </select>
-        <output class="level-count" for="saturation-step">{{ levelLabel(saturationStepText, UNIT_SCALE) }}</output>
-        <small v-if="saturationStepError" class="error">{{ saturationStepError }}</small>
-      </div>
-
-      <div class="field">
-        <div class="field-head">
-          <label for="brightness-step">Brightness steps</label>
-          <InfoPopover label="brightness steps" :text="brightnessStepHelp" />
-        </div>
-        <select id="brightness-step" v-model="brightnessStepText" :disabled="busy">
-          <option :value="NA_STEP">{{ NA_STEP }}</option>
-          <option v-for="step in UNIT_STEPS" :key="step" :value="String(step)">{{ step }}</option>
-        </select>
-        <output class="level-count" for="brightness-step">{{ levelLabel(brightnessStepText, UNIT_SCALE) }}</output>
-        <small v-if="brightnessStepError" class="error">{{ brightnessStepError }}</small>
-      </div>
+      <select id="colormap" v-model="colormap" :disabled="busy">
+        <option v-for="map in COLORMAPS" :key="map.value" :value="map.value">{{ map.label }}</option>
+      </select>
+      <small v-if="colormapError" class="error">{{ colormapError }}</small>
     </div>
 
     <div class="field">
@@ -426,10 +320,6 @@ small {
 }
 .slider-value-wide {
   min-width: 9rem;
-}
-.level-count {
-  color: #555;
-  font-size: 0.85em;
 }
 small.error {
   color: #b00020;

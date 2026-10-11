@@ -8,8 +8,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from .test_color_levels_api import chord_wav
-from .test_jobs_api import client, frame_rgb, leftovers, wav_bytes  # noqa: F401
+from .test_jobs_api import chord_wav, client, frame_rgb, leftovers, wav_bytes  # noqa: F401
 
 TYPE_MESSAGE = "The image type must be one of tiles, blended."
 WIDTH_MESSAGE = "The blend width must be a number from 10 to 25."
@@ -140,16 +139,7 @@ def test_served_pictures_have_the_right_format_size_and_headers(client):
 
 def test_the_middles_agree_with_tiles_for_a_combination_of_other_settings(client):
     data = chord_wav(2)
-    other = dict(
-        smoothing="0.5",
-        smoothing_window="3",
-        saturation_step="20",
-        brightness_step="50",
-        hue_step="90",
-        threshold="5",
-        brightness="3",
-        energy="2",
-    )
+    other = dict(smoothing="0.5", smoothing_window="3", threshold="5", colormap="cool")
     tiles = post_type(client, data, image_type="tiles", **other).json()
     blended = post_type(client, data, image_type="blended", blend_width="12", **other).json()
     assert tiles["frame_count"] == blended["frame_count"]

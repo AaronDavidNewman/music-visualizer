@@ -15,41 +15,6 @@ function options(html: string, id: string): string[] {
   return [...select![1].matchAll(/<option[^>]*>([^<]*)<\/option>/g)].map((m) => m[1]);
 }
 
-describe("the step dropdowns", () => {
-  it("offer N/A and the allowed steps for hue, saturation and brightness", async () => {
-    const html = await render();
-    expect(options(html, "hue-step")).toEqual(["N/A", "12", "36", "90", "180"]);
-    expect(options(html, "saturation-step")).toEqual(["N/A", "5", "10", "20", "50"]);
-    expect(options(html, "brightness-step")).toEqual(["N/A", "5", "10", "20", "50"]);
-  });
-
-  it("are labelled Hue steps, Saturation steps and Brightness steps, in that order, with info buttons", async () => {
-    const html = await render();
-    const labels = ["Hue steps", "Saturation steps", "Brightness steps"].map((l) => html.indexOf(`>${l}</label>`));
-    expect(labels.every((i) => i > 0)).toBe(true);
-    expect([...labels].sort((a, b) => a - b)).toEqual(labels);
-    for (const name of ["hue steps", "saturation steps", "brightness steps"]) expect(html).toContain(name);
-  });
-
-  it("start at N/A and show that the value is smooth", async () => {
-    const html = await render();
-    expect(html.match(/N\/A \(smooth\)/g)).toHaveLength(3);
-    for (const id of ["hue-step", "saturation-step", "brightness-step"]) {
-      const select = html.match(new RegExp(`<select id="${id}"[^>]*>([^]*?)</select>`));
-      expect(select![1]).toMatch(/<option value="N\/A"[^>]*selected/);  // the starting choice
-      expect(html).toContain(`for="${id}"`);
-    }
-  });
-
-  it("are disabled while a job is running", async () => {
-    const html = await render(true);
-    for (const id of ["hue-step", "saturation-step", "brightness-step"]) {
-      expect(html).toMatch(new RegExp(`<select id="${id}"[^>]*disabled`));
-    }
-    expect(await render(false)).not.toMatch(/<select id="hue-step"[^>]*disabled/);
-  });
-});
-
 describe("the threshold slider", () => {
   const input = (html: string) => html.match(/<input id="threshold"[^>]*>/)?.[0] ?? "";
 
@@ -141,5 +106,37 @@ describe("the image type controls", () => {
     const html = await render();
     expect(html.indexOf('for="image-type"')).toBeGreaterThan(html.indexOf('for="threshold"'));
     expect(html.indexOf('for="blend-width"')).toBeGreaterThan(html.indexOf('for="image-type"'));
+  });
+});
+
+describe("the colormap dropdown", () => {
+  it("offers Summer, Autumn, Hot and Cool in that order, starts at Hot, and has a label and an info button", async () => {
+    const html = await render();
+    expect(options(html, "colormap")).toEqual(["Summer", "Autumn", "Hot", "Cool"]);
+    const select = html.match(new RegExp(`<select id="colormap"[^>]*>([^]*?)</select>`));
+    expect(select![1]).toMatch(/<option value="hot"[^>]*selected/);
+    expect(html).toContain(">Colormap</label>");
+    expect(html).toContain('aria-label="About colormap"');
+  });
+
+  it("is disabled while a job is running and not otherwise", async () => {
+    expect(await render(true)).toMatch(/<select id="colormap"[^>]*disabled/);
+    expect(await render(false)).not.toMatch(/<select id="colormap"[^>]*disabled/);
+  });
+
+  it("comes after the window size row and before the smoothing window", async () => {
+    const html = await render();
+    expect(html.indexOf('for="colormap"')).toBeGreaterThan(html.indexOf('for="window-spacing"'));
+    expect(html.indexOf('for="colormap"')).toBeLessThan(html.indexOf('for="smoothing-window"'));
+  });
+
+  it("replaces the controls that were removed: no brightness, saturation or level steps", async () => {
+    const html = await render();
+    for (const id of ["brightness", "saturation", "hue-step", "saturation-step", "brightness-step"]) {
+      expect(html).not.toContain(`id="${id}"`);
+    }
+    for (const label of ["Brightness", "Saturation", "Hue steps", "Saturation steps", "Brightness steps"]) {
+      expect(html).not.toContain(`>${label}</label>`);
+    }
   });
 });

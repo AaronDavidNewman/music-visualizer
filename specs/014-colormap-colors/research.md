@@ -1,0 +1,52 @@
+# Research: Colormap Colors
+
+No `NEEDS CLARIFICATION` items remained in the spec: matplotlib, the mapping (a tile's own note strength on a square-root scale), the four colormaps and the default (`hot`) were confirmed by the user on 2026-10-11. These are the design decisions the plan rests on.
+
+## Decision 1: Replace, and delete what is replaced
+
+- **Decision**: The harmonic hue rules, the per-frame brightness from the audio's energy, the Saturation root and the three level steps are removed from the code, not hidden. Deleted: `app/services/energy.py` and `app/services/color_levels.py`; in `frame_rendering.py` the functions `to_gray_levels`, `boost_levels`, `_boost_table`, `tile_hues`, `hue_sequence`, `value_sequence`, `_check_energy_root`, `_check_value`, `tile_colors`, `render_frame`, `_require_drawable` and the constants `MIN/MAX/DEFAULT_BRIGHTNESS`, `MIN/MAX/DEFAULT_ENERGY`, `DEFAULT_VALUE`, `DEFAULT_HUE`, `RELATED_DOWN`, `RELATED_UP`, `_PARTNER_REACH`; in `jobs.py` the parsers and fields for `energy`, `brightness`, `hue_step`, `saturation_step` and `brightness_step`, and the call that measured the energies. Kept: `frame_count`, `average_frames`, `smooth_frames` and its window check, `hidden_notes` and the threshold check, `_palette_frame`, `_save_blended`, the grid constants, and `write_frames`.
+- **Rationale**: The user asked for the settings to be removed and the colors to be calculated differently; the old rules would be reachable only through tests. Deleting them keeps the codebase honest and shrinks what must be maintained (two whole modules, a large part of `frame_rendering.py`, five test modules and most of the two big test files).
+- **Alternatives considered**: Keeping the old pipeline selectable (the user wants a simpler list of settings, and the spec says the rules are retired); leaving the modules in place unused (dead code with tests that would keep passing and mislead).
+
+## Decision 2: matplotlib as a dependency, read lazily, 8-bit exactly as matplotlib makes it
+
+- **Decision**: Add `matplotlib>=3.8` to `backend/requirements.txt` and install it into the backend virtual environment (it is not installed now; a dry run of `pip install matplotlib` resolves 3.10.9 with contourpy, cycler, fonttools, kiwisolver, pyparsing, python-dateutil and six, so the index is reachable). `colormaps.lookup_table(name)` returns a read-only `(256, 3)` `uint8` array from `matplotlib.colormaps[name](np.arange(256), bytes=True)[:, :3]` (integer input indexes the 256-entry table directly; `bytes=True` is the 8-bit conversion matplotlib itself uses when it draws an image), cached per name, with `matplotlib` imported inside the function the first time it is called. `matplotlib.pyplot` is never imported (no GUI backend, no font cache work).
+- **Rationale**: The user named matplotlib twice and said more colormaps and functions will follow, so the real library is the right source: adding a name later is adding it to a tuple. Importing only the `colormaps` registry is much cheaper than `pyplot`, and doing it lazily keeps the import cost (a few hundred milliseconds) out of server start and out of every test that does not draw. Using matplotlib's own `bytes=True` conversion means the colors are exactly what `imshow` would show, which a test can assert.
+- **Alternatives considered**: Hard-coding the four formulas (`summer`, `autumn`, `cool` are linear, `hot` is piecewise linear): no dependency, but it would drift from matplotlib and every later colormap would need its own formula. Hard-coding four 256-entry tables generated once: no dependency but opaque data in the repository. Both remain a fallback if the environment cannot install packages.
+
+## Decision 3: The mapping function
+
+- **Decision**: For a file's smoothed note values `S` (shape `(frames, 88)`), `peak = S.max()`; for the drawn notes `share = S[:, :84] / peak` (all zeros when `peak` is 0); `position = sqrt(share)`; `index = rint(position * 255)` as integers 0 to 255; `color = lookup_table(name)[index]`. The strongest value maps to index 255 exactly (`sqrt(1) = 1`) and no strength to index 0. The result for the whole file is one `(frames, 84, 3)` array computed in a single vectorized step before the frames are written.
+- **Rationale**: This is the specified mapping. The square root is the default that the removed Saturation setting had (root 2), so the picture keeps the contrast it has today and quiet notes are not all squeezed into the first few colors. Computing it once for the whole file is how the old gray levels were computed too (they also scaled against the file's largest value), so all 88 notes (including the four undrawn ones) keep counting for the peak. A tile's color then depends only on its own smoothed value and the file's `peak`, which is the property that removes the blinking and makes the locality tests possible.
+- **Alternatives considered**: A linear scale (most tiles near the first color); a logarithmic scale (a floor is needed, one more constant); mapping the share through a per-frame normalization (what made frames blink).
+
+## Decision 4: The threshold and the image types are untouched
+
+- **Decision**: `hidden_notes(smoothed, threshold)` still decides which tiles are black; `write_frames` sets those rows of the `(84, 3)` colors to `(0, 0, 0)` after the colormap lookup. The image types and the blend width take the 84 finished colors exactly as before (`tiles`: `_palette_frame`; `blended`: `make_blender` on a pool of threads).
+- **Rationale**: Black for hidden notes is specified (and stays distinct from the colormap's first color for three of the four colormaps; for `hot` the first color is a very dark red, (10, 0, 0), almost black, a consequence the user accepted). Nothing in the writers depends on how the colors were made.
+
+## Decision 5: The API
+
+- **Decision**: New optional form field `colormap`: exactly `summer`, `autumn`, `hot` or `cool` (lowercase, no trimming). Not sent: `hot`. Sent but empty or anything else (`Hot`, `viridis`, `hot_r`, ` hot`): HTTP 400 `The colormap must be one of summer, autumn, hot, cool.`, before any audio is read. The response always carries `colormap`. The five removed fields are no longer declared by the endpoint, so FastAPI drops them from the form and they have no effect; the response no longer contains `brightness`, `energy`, `hue_step`, `saturation_step` or `brightness_step`.
+- **Rationale**: Same handling as `image_type` (exact names, `_sent_fields` tells "not sent" from "sent empty"). Not declaring the old fields is the simplest way to "accept and ignore" them and cannot refuse an old client; a test sends them and compares the frames with a request that does not.
+- **Alternatives considered**: Refusing the old fields (breaks old clients, and the spec says to accept them); declaring them and discarding them (dead parameters).
+
+## Decision 6: The tests
+
+- **Decision**: Delete the modules that tested only retired behavior: `test_energy.py`, `test_energy_api.py`, `test_frame_brightness.py`, `test_color_levels.py`, `test_color_levels_api.py`. Prune `test_frame_rendering.py` (about 1,650 lines) to what still exists (frame counting, averaging, smoothing, the window, the threshold, the writers, image types, threaded writing) and add tests for the new `write_frames`; prune `test_jobs_api.py` (about 1,050 lines) the same way (upload, validation of the remaining settings, window and frame settings, file handling, errors, the served frames) and rewrite its helpers (`frame_levels`, `expected_pixels`, `frame_values`, `full_client`) around the colormap: a served tile color is decoded back to its table index by exact lookup in the `hot` table (every entry of the `hot` table is distinct, which a test asserts; `cool` too, while `summer` and `autumn` have a few identical neighboring entries because matplotlib's own 8-bit conversion truncates, so for those two tests compare colors with `table[row]` instead), so a test can compare it with the index it expects from independent arithmetic. Helpers that other test modules import from the deleted `test_color_levels_api.py` (`chord_wav`) move into `test_jobs_api.py`. `test_threshold_api.py`, `test_smoothing_window_api.py` and `test_image_type_api.py` keep their intent and are adapted to the new colors (for example "a tile is black" stays; "saturation" assertions become colormap-index assertions).
+- **Rationale**: Tests of retired code would fail or, worse, keep passing against code that is gone. The decoded-index technique is exact and independent of the implementation (it uses matplotlib's table, not the code under test).
+
+## Decision 7: The page
+
+- **Decision**: Remove the Brightness and Saturation number fields, the three level-step dropdowns and their readouts, validation helpers, help texts, summary lines and the settings and result fields. Add a Colormap `<select>` (labels `Summer`, `Autumn`, `Hot`, `Cool`; values `summer`, `autumn`, `hot`, `cool`; starting at `hot`) with an info button and the summary line `Colormap: Hot`, placed directly after the window size / frame rate / window spacing row. The explanation says what each scale looks like and that the same strength always gets the same color.
+- **Rationale**: Matches the spec (Story 2) and the existing patterns (a dropdown like Window size and Image type).
+
+## Decision 8: Documentation
+
+- **Decision**: In the README, rewrite the paragraph that describes how a tile's color is made and delete the bullets for the removed settings (Color/Harmonic color, Saturation, Brightness, and the Hue/Saturation/Brightness steps), add a **Colormap** bullet, and keep the Smoothing, Smoothing window, Threshold, Image type and Blend width bullets (adjusting words such as "the Saturation root" that no longer exist). The earlier specifications under `specs/` are history and are left as they are; the new spec's Edge Cases and Assumptions record what was retired.
+
+## Consequences worth knowing
+
+- A silent file is uniformly the colormap's first color (for `hot` a very dark red, (10, 0, 0)), not black, and a threshold hides nothing in it.
+- With `hot`, a quiet tile and a tile hidden by the threshold are both near black (the first colors of `hot` are a very dark red and dark reds); the other three colormaps keep hidden tiles distinct. This is the trade-off the user accepted when choosing `hot`.
+- Frames made with the removed settings no longer exist as an option; results already created are unchanged.
