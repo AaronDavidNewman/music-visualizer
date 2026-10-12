@@ -11,11 +11,11 @@ export interface JobResult {
   threshold: number;
   /** How many earlier frames are mixed into each frame (1 to 20). */
   smoothing_window: number;
-  /** "tiles" or "blended". */
+  /** "tiles", "blended" or "contour". */
   image_type: string;
   /** The fade width used for blended tiles, as a percentage of the tile width (10 to 25). */
   blend_width: number;
-  /** The colormap used: "summer", "autumn", "hot" or "cool". */
+  /** The colormap used: one of the names in COLORMAPS (utilities/validation.ts). */
   colormap: string;
   window_spacing: number;
   step_samples: number;
@@ -34,11 +34,11 @@ export interface JobSettings {
   threshold: number;
   /** 1 to 20. */
   smoothingWindow: number;
-  /** "tiles" or "blended". */
+  /** "tiles", "blended" or "contour". */
   imageType: string;
-  /** 10 to 25. Only used by blended tiles. */
+  /** 10 to 25. Only used by blended tiles (not by tiles or contour). */
   blendWidth: number;
-  /** "summer", "autumn", "hot" or "cool". */
+  /** One of the names in COLORMAPS (utilities/validation.ts). */
   colormap: string;
 }
 

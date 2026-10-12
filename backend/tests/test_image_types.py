@@ -68,9 +68,13 @@ def reference(colors, pct):
     return np.rint(out).astype(np.uint8), contributors
 
 
+TYPE_MESSAGE = f"The image type must be one of {', '.join(IMAGE_TYPES)}."
+
+
 def test_constants():
-    assert IMAGE_TYPES == ("tiles", "blended")
-    assert DEFAULT_IMAGE_TYPE == "tiles"
+    assert IMAGE_TYPES[:2] == ("tiles", "blended")  # the first two are the ones of feature 013, in order
+    assert set(IMAGE_TYPES) >= {"tiles", "blended", "contour"}  # the three of the spec (a later type may be added)
+    assert DEFAULT_IMAGE_TYPE == "tiles" and DEFAULT_IMAGE_TYPE in IMAGE_TYPES
     assert (MIN_BLEND_WIDTH, MAX_BLEND_WIDTH, DEFAULT_BLEND_WIDTH) == (10, 25, 25)
 
 
@@ -228,16 +232,18 @@ def test_the_input_is_not_modified_and_results_repeat():
     assert (blend_tile_colors(colors, 18, *GEOMETRY) == a).all()
 
 
-@pytest.mark.parametrize("value", ["tiles", "blended"])
+@pytest.mark.parametrize("value", IMAGE_TYPES)
 def test_the_offered_image_types_are_accepted(value):
     assert check_image_type(value) == value
 
 
-@pytest.mark.parametrize("bad", ["", "Tiles", "BLENDED", " tiles", "tiles ", "gradient", None, 1, b"tiles"])
+@pytest.mark.parametrize(
+    "bad", ["", "Tiles", "BLENDED", "Contour", " tiles", "tiles ", "contour ", "contours", "gradient", None, 1, b"tiles"]
+)
 def test_other_image_types_are_refused(bad):
     with pytest.raises(ValueError) as error:
         check_image_type(bad)
-    assert str(error.value) == "The image type must be one of tiles, blended."
+    assert str(error.value) == TYPE_MESSAGE
 
 
 @pytest.mark.parametrize("value", [10, 25, 12.5, np.int64(20), 17])

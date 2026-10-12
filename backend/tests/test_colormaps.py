@@ -1,4 +1,11 @@
-"""The colormaps and the strength-to-color mapping: ``app/services/colormaps.py``."""
+"""The colormaps and the strength-to-color mapping: ``app/services/colormaps.py``.
+
+Nothing here names a colormap: the list can be changed by hand, and every test uses ``COLORMAPS`` and ``DEFAULT_COLORMAP``
+(see ``colormap_names.py``). A name only has to be a valid matplotlib colormap and be the same in the frontend.
+"""
+
+import re
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -12,8 +19,10 @@ from app.services.colormaps import (
     lookup_table,
 )
 
+from .colormap_names import DECODABLE, FIRST, INVALID, MESSAGE, distinct_rows
+
 SHOWN = 84
-MESSAGE = "The colormap must be one of summer, autumn, hot, cool."
+FRONTEND_VALIDATION = Path(__file__).resolve().parents[2] / "frontend" / "src" / "utilities" / "validation.ts"
 
 
 def matplotlib_table(name):
@@ -24,7 +33,7 @@ def matplotlib_table(name):
 
 
 def row_index(table, colour):
-    """The table row of an exact colour. Only for tables whose rows are all different (hot and cool)."""
+    """The table row of an exact colour. Only for tables whose rows are all different (see DECODABLE)."""
     matches = np.flatnonzero((table == np.asarray(colour)).all(axis=1))
     assert matches.size == 1, colour
     return int(matches[0])
@@ -39,10 +48,40 @@ def notes(*frames):
     return out
 
 
-def test_constants():
-    assert COLORMAPS == ("summer", "autumn", "hot", "cool")
-    assert DEFAULT_COLORMAP == "hot"
+# --- the list itself ----------------------------------------------------------------------------------------------------
+
+
+def test_the_list_is_a_set_of_distinct_names_with_a_default():
+    assert len(COLORMAPS) >= 1
+    assert all(isinstance(name, str) and name for name in COLORMAPS)
+    assert len(set(COLORMAPS)) == len(COLORMAPS)
+    assert DEFAULT_COLORMAP in COLORMAPS
     assert COLORMAP_STEPS == 256
+
+
+@pytest.mark.parametrize("name", COLORMAPS)
+def test_every_offered_name_is_a_valid_matplotlib_colormap(name):
+    from matplotlib import colormaps
+
+    assert name in colormaps, f"{name!r} is not a matplotlib colormap (matplotlib's names are case-sensitive)"
+
+
+def frontend_source():
+    return FRONTEND_VALIDATION.read_text(encoding="utf-8")
+
+
+def frontend_names():
+    """The values of the frontend's COLORMAPS list, read from the source file, in order."""
+    block = re.search(r"export const COLORMAPS = \[(.*?)\] as const;", frontend_source(), re.S).group(1)
+    return re.findall(r"value:\s*\"([^\"]+)\"", block)
+
+
+def test_the_frontends_list_matches_this_one_name_for_name_in_the_same_order():
+    assert frontend_names() == list(COLORMAPS)
+
+
+def test_the_frontends_default_matches_this_one():
+    assert re.search(r"export const DEFAULT_COLORMAP = \"([^\"]+)\"", frontend_source()).group(1) == DEFAULT_COLORMAP
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
@@ -50,11 +89,18 @@ def test_the_offered_names_are_accepted(name):
     assert check_colormap(name) == name
 
 
-@pytest.mark.parametrize("bad", ["", "Hot", "HOT", " hot", "hot ", "viridis", "hot_r", "gray", None, 1, b"hot"])
+@pytest.mark.parametrize("bad", [*INVALID, None, 1, b"bytes"])
 def test_any_other_name_is_refused_with_the_choices(bad):
     with pytest.raises(ValueError) as error:
         check_colormap(bad)
     assert str(error.value) == MESSAGE
+
+
+def test_the_message_lists_every_offered_name_in_order():
+    assert MESSAGE == "The colormap must be one of " + ", ".join(COLORMAPS) + "."
+
+
+# --- the tables ---------------------------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
@@ -71,36 +117,19 @@ def test_the_table_is_cached_and_read_only(name):
         lookup_table(name)[0, 0] = 1
 
 
-@pytest.mark.parametrize("name", ["hot", "cool"])
-def test_every_row_of_hot_and_cool_is_a_different_colour_so_a_colour_can_be_decoded(name):
-    table = lookup_table(name)
-    assert len({tuple(row) for row in table.tolist()}) == 256
-
-
-@pytest.mark.parametrize("name", ["summer", "autumn"])
-def test_summer_and_autumn_have_a_few_identical_neighbouring_rows_as_in_matplotlib(name):
-    # matplotlib's own 8-bit conversion truncates, so a few neighbouring entries of these two tables are the same colour;
-    # the table is matplotlib's, so we keep it as it is and compare colours, not row numbers, where it matters
-    table = lookup_table(name)
-    distinct = len({tuple(row) for row in table.tolist()})
-    assert 200 <= distinct <= 256  # matplotlib's tables, kept as they are (summer 253 and autumn 232 distinct colours)
-
-
-def test_the_ends_of_the_scales():
-    # matplotlib's hot starts at a very dark red, not at pure black, and ends at white
-    assert lookup_table("hot")[0].tolist() == [10, 0, 0]
-    assert lookup_table("hot")[255].tolist() == [255, 255, 255]
-    assert lookup_table("summer")[0].tolist() == [0, 127, 102]
-    assert lookup_table("summer")[255].tolist() == [255, 255, 102]
-    assert lookup_table("autumn")[0].tolist() == [255, 0, 0]
-    assert lookup_table("autumn")[255].tolist() == [255, 255, 0]
-    assert lookup_table("cool")[0].tolist() == [0, 255, 255]
-    assert lookup_table("cool")[255].tolist() == [255, 0, 255]
+@pytest.mark.parametrize("name", COLORMAPS)
+def test_a_table_has_many_different_colours(name):
+    # matplotlib's own 8-bit conversion truncates, so a few neighbouring rows of some tables are the same colour; the table is
+    # kept as matplotlib makes it, and only the tables with 256 different rows can be decoded back to a row (DECODABLE)
+    assert 2 <= distinct_rows(name) <= 256
 
 
 def test_an_unknown_name_cannot_make_a_table():
-    with pytest.raises(ValueError, match=MESSAGE):
-        lookup_table("viridis")
+    with pytest.raises(ValueError, match=re.escape(MESSAGE)):
+        lookup_table(INVALID[0])
+
+
+# --- the strength-to-color mapping ----------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
@@ -125,7 +154,7 @@ def test_the_strongest_note_is_the_last_colour_and_no_strength_the_first(name):
     assert (got[3, 7] == table[0]).all()
 
 
-@pytest.mark.parametrize("name", ["hot", "cool"])
+@pytest.mark.parametrize("name", DECODABLE)
 def test_a_stronger_note_never_has_an_earlier_colour(name):
     sweep = np.linspace(0, 100, 5001)
     values = np.zeros((len(sweep), 88))
@@ -138,7 +167,7 @@ def test_a_stronger_note_never_has_an_earlier_colour(name):
 
 @pytest.mark.parametrize("name", COLORMAPS)
 def test_every_colour_is_the_table_entry_of_the_square_root_position(name):
-    # an independent route: the table entries are worked out here from the strengths, for all four colormaps
+    # an independent route: the table entries are worked out here from the strengths, for every colormap offered
     sweep = np.linspace(0, 100, 2001)
     values = np.zeros((len(sweep), 88))
     values[:, 0] = sweep
@@ -149,9 +178,8 @@ def test_every_colour_is_the_table_entry_of_the_square_root_position(name):
 
 def test_the_scale_is_the_square_root_of_the_share():
     values = notes({0: 100.0, 1: 36.0})
-    table = lookup_table("autumn")
-    got = colorize(values, "autumn", SHOWN)
-    assert (got[0, 1] == table[round(255 * 0.6)]).all()  # sqrt(0.36) = 0.6 -> 153
+    got = colorize(values, DEFAULT_COLORMAP, SHOWN)
+    assert (got[0, 1] == lookup_table(DEFAULT_COLORMAP)[round(255 * 0.6)]).all()  # sqrt(0.36) = 0.6 -> 153
 
 
 def test_a_silent_input_is_the_first_colour_everywhere_and_does_not_fail():
@@ -163,14 +191,14 @@ def test_a_silent_input_is_the_first_colour_everywhere_and_does_not_fail():
 
 def test_the_same_strength_has_the_same_colour_wherever_and_whenever_it_sounds():
     values = notes({3: 50.0, 70: 100.0}, {10: 50.0, 70: 100.0}, {83: 50.0, 70: 100.0})
-    got = colorize(values, "hot", SHOWN)
+    got = colorize(values, DEFAULT_COLORMAP, SHOWN)
     assert (got[0, 3] == got[1, 10]).all() and (got[1, 10] == got[2, 83]).all()
 
 
 def test_changing_the_other_notes_changes_no_other_tile():
     base = notes({5: 40.0, 60: 100.0})
     other = notes({5: 40.0, 60: 100.0, 20: 70.0, 30: 3.0})  # other notes, the same peak
-    a, b = colorize(base, "cool", SHOWN), colorize(other, "cool", SHOWN)
+    a, b = colorize(base, FIRST, SHOWN), colorize(other, FIRST, SHOWN)
     untouched = [n for n in range(SHOWN) if n not in (20, 30)]
     assert (a[:, untouched] == b[:, untouched]).all()
     assert not (a[:, [20, 30]] == b[:, [20, 30]]).all()
@@ -180,44 +208,44 @@ def test_a_steady_value_has_one_colour_in_every_frame():
     values = np.zeros((40, 88))
     values[:, 12] = 30.0
     values[7, 50] = 100.0  # the peak, in one frame only
-    got = colorize(values, "summer", SHOWN)
+    got = colorize(values, DEFAULT_COLORMAP, SHOWN)
     assert (got[:, 12] == got[0, 12]).all()
 
 
 def test_the_loudness_of_a_frame_does_not_dim_it():
     # a frame whose notes are all quiet is not brightened or dimmed as a whole: only each note's own strength counts
     loud = notes({0: 100.0, 1: 9.0}, {1: 9.0})
-    got = colorize(loud, "hot", SHOWN)
+    got = colorize(loud, DEFAULT_COLORMAP, SHOWN)
     assert (got[0, 1] == got[1, 1]).all()
 
 
 def test_the_undrawn_notes_count_for_the_peak_but_are_not_in_the_result():
     values = notes({0: 10.0, 85: 100.0})
-    got = colorize(values, "hot", SHOWN)
+    got = colorize(values, DEFAULT_COLORMAP, SHOWN)
     assert got.shape == (1, SHOWN, 3)
-    assert row_index(lookup_table("hot"), got[0, 0]) == round(255 * np.sqrt(0.1))
+    assert (got[0, 0] == lookup_table(DEFAULT_COLORMAP)[round(255 * np.sqrt(0.1))]).all()
 
 
 def test_no_frames_gives_an_empty_result():
-    got = colorize(np.zeros((0, 88)), "hot", SHOWN)
+    got = colorize(np.zeros((0, 88)), DEFAULT_COLORMAP, SHOWN)
     assert got.shape == (0, SHOWN, 3) and got.dtype == np.uint8
 
 
 def test_shape_dtype_and_the_input_is_left_alone():
     values = np.random.default_rng(4).random((5, 88))
     before = values.copy()
-    got = colorize(values, "hot", SHOWN)
+    got = colorize(values, DEFAULT_COLORMAP, SHOWN)
     assert got.shape == (5, SHOWN, 3) and got.dtype == np.uint8
     assert (values == before).all()
-    assert (colorize(values, "hot", SHOWN) == got).all()
+    assert (colorize(values, DEFAULT_COLORMAP, SHOWN) == got).all()
 
 
 @pytest.mark.parametrize("bad", [np.ones((2, 83)), np.ones(88), np.ones((2, 88)) * -1])
 def test_bad_input_is_refused(bad):
     with pytest.raises(ValueError):
-        colorize(bad, "hot", SHOWN)
+        colorize(bad, DEFAULT_COLORMAP, SHOWN)
 
 
 def test_a_bad_colormap_name_is_refused():
-    with pytest.raises(ValueError, match=MESSAGE):
-        colorize(np.ones((2, 88)), "viridis", SHOWN)
+    with pytest.raises(ValueError, match=re.escape(MESSAGE)):
+        colorize(np.ones((2, 88)), INVALID[0], SHOWN)

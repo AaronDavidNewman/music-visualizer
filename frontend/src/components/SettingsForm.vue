@@ -15,6 +15,7 @@ import {
   SMOOTHING_WINDOW_RANGE,
   THRESHOLD_RANGE,
   WINDOW_SIZES,
+  blendWidthApplies,
   formatBlendWidth,
   formatSmoothing,
   formatThreshold,
@@ -262,7 +263,7 @@ function onSubmit() {
           :min="BLEND_WIDTH_RANGE.min"
           :max="BLEND_WIDTH_RANGE.max"
           :step="BLEND_WIDTH_RANGE.step"
-          :disabled="busy || imageType === 'tiles'"
+          :disabled="busy || !blendWidthApplies(imageType)"
         />
         <output class="slider-value slider-value-wide" for="blend-width">{{ formatBlendWidth(blendWidth) }}</output>
       </span>

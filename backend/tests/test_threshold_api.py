@@ -11,6 +11,7 @@ from app.services.frame_rendering import average_frames
 from app.services.note_analysis import NoteBinAnalyzer, analyze_channels
 from app.services.window_spacing import default_spacing, resolve_step
 
+from .colormap_names import WITHOUT_BLACK
 from .test_jobs_api import SR, client, frame_rgb, leftovers, wav_bytes  # noqa: F401
 
 FPS = 10
@@ -145,8 +146,9 @@ def test_the_hidden_set_does_not_depend_on_the_colormap_and_the_rest_stays_as_it
         assert (a[~black] == b[~black]).all(), i  # every tile is black or the tile without the threshold
 
     # the colormap changes the colours of the tiles that are shown, not which tiles are hidden (black); the colormap
-    # `summer` has no black entry, so a black tile is always a hidden one
-    summer = post_threshold(client, data, threshold="6", colormap="summer").json()
-    cool = post_threshold(client, data, threshold="6", colormap="cool").json()
-    for i in (MID_FRAME - 4, MID_FRAME, MID_FRAME + 4):
-        assert (~tiles(client, summer, i).any(axis=1) == ~tiles(client, cool, i).any(axis=1)).all(), i
+    # colormap with no black entry, where a black tile is always a hidden one (compared only if two such are offered)
+    if len(WITHOUT_BLACK) >= 2:
+        one = post_threshold(client, data, threshold="6", colormap=WITHOUT_BLACK[0]).json()
+        two = post_threshold(client, data, threshold="6", colormap=WITHOUT_BLACK[1]).json()
+        for i in (MID_FRAME - 4, MID_FRAME, MID_FRAME + 4):
+            assert (~tiles(client, one, i).any(axis=1) == ~tiles(client, two, i).any(axis=1)).all(), i

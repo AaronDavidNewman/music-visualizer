@@ -19,6 +19,10 @@ from app.services.frame_rendering import (
 )
 from app.services.note_analysis import NOTE_COUNT, AnalysisResult
 
+from app.services.image_types import IMAGE_TYPES
+
+from .colormap_names import FIRST, INVALID, MESSAGE, SECOND, TRACEABLE
+
 
 # --- frame counting and averaging notes into frames ---------------------------------------------------------
 
@@ -387,11 +391,11 @@ def test_every_tile_is_the_colormap_colour_of_its_own_strength(tmp_path, colorma
     assert (got == expected_colours(LEVEL_FRAMES, colormap, **options)).all()
 
 
-def test_the_default_colormap_is_hot(tmp_path):
-    assert DEFAULT_COLORMAP == "hot"
+def test_the_default_colormap_is_used_when_none_is_given(tmp_path):
+    assert DEFAULT_COLORMAP in COLORMAPS
     write_frames(LEVEL_FRAMES, tmp_path / "none")
-    write_frames(LEVEL_FRAMES, tmp_path / "hot", colormap="hot")
-    assert frame_files(tmp_path / "none") == frame_files(tmp_path / "hot")
+    write_frames(LEVEL_FRAMES, tmp_path / "named", colormap=DEFAULT_COLORMAP)
+    assert frame_files(tmp_path / "none") == frame_files(tmp_path / "named")
 
 
 @pytest.mark.parametrize("colormap", COLORMAPS)
@@ -443,15 +447,16 @@ def test_with_a_threshold_every_hidden_tile_is_exactly_black_whatever_the_colorm
         assert not got[:, [n for n in range(SHOWN_NOTES) if n not in (26, 27)]].any()  # notes with no value are hidden too
 
 
+@pytest.mark.skipif(not TRACEABLE, reason="no offered colormap has 256 different colours and no black")
 def test_a_fading_note_moves_gradually_along_the_colormap_and_turns_black_below_the_threshold(tmp_path):
     values = np.zeros((16, 88))
     values[:2, 24] = 1.0  # the note stops after two frames; a window of 8 keeps a trace of it for 8 frames
     smoothed = np.array(reference_smooth(values.tolist(), 0.8, 8))[:, 24]
     first_hidden = int(np.argmax(smoothed < 0.1))  # below 10% of the largest smoothed value (1.0)
     assert 5 < first_hidden < 15
-    write_frames(values, tmp_path, colormap="hot", smoothing=0.8, smoothing_window=8, threshold=10)
+    write_frames(values, tmp_path, colormap=TRACEABLE[0], smoothing=0.8, smoothing_window=8, threshold=10)
     got = written_colours(tmp_path, 16)[:, 24]
-    table = lookup_table("hot")
+    table = lookup_table(TRACEABLE[0])
     rows = [int(np.flatnonzero((table == c).all(axis=1))[0]) for c in got[:first_hidden]]
     assert all(a >= b for a, b in zip(rows, rows[1:]))  # fading: never back up the scale
     assert rows[0] > rows[-1]
@@ -471,7 +476,7 @@ def test_a_frame_whose_notes_are_all_hidden_is_entirely_black_and_its_neighbours
 def test_adding_silent_frames_at_the_end_changes_no_earlier_frame(tmp_path):
     longer = np.vstack([LEVEL_FRAMES, np.zeros((4, 88))])
     for window in (1, 5, 20):
-        kwargs = dict(colormap="cool", smoothing=0.5, smoothing_window=window, threshold=3)
+        kwargs = dict(colormap=SECOND, smoothing=0.5, smoothing_window=window, threshold=3)
         write_frames(LEVEL_FRAMES, tmp_path / f"short{window}", **kwargs)
         write_frames(longer, tmp_path / f"long{window}", **kwargs)
         short, long = frame_files(tmp_path / f"short{window}"), frame_files(tmp_path / f"long{window}")
@@ -488,24 +493,24 @@ def test_with_smoothing_zero_every_window_writes_the_same_files(tmp_path):
 
 def test_written_files_repeat_exactly(tmp_path):
     for name in ("a", "b"):
-        write_frames(LEVEL_FRAMES, tmp_path / name, colormap="summer", smoothing=0.4, smoothing_window=4, threshold=2)
+        write_frames(LEVEL_FRAMES, tmp_path / name, colormap=FIRST, smoothing=0.4, smoothing_window=4, threshold=2)
     assert frame_files(tmp_path / "a") == frame_files(tmp_path / "b")
 
 
 @pytest.mark.parametrize(
     "kwargs, message",
     [
-        ({"colormap": "Hot"}, "The colormap must be one of summer, autumn, hot, cool."),
-        ({"colormap": ""}, "The colormap must be one of summer, autumn, hot, cool."),
-        ({"colormap": None}, "The colormap must be one of summer, autumn, hot, cool."),
-        ({"colormap": 3}, "The colormap must be one of summer, autumn, hot, cool."),
-        ({"colormap": "viridis"}, "The colormap must be one of summer, autumn, hot, cool."),
+        ({"colormap": INVALID[0]}, MESSAGE),
+        ({"colormap": INVALID[-1]}, MESSAGE),
+        ({"colormap": None}, MESSAGE),
+        ({"colormap": 3}, MESSAGE),
+        ({"colormap": COLORMAPS[0].swapcase() + "x"}, MESSAGE),
         ({"threshold": 11}, "The threshold must be a number from 0 to 10."),
         ({"threshold": -1}, "The threshold must be a number from 0 to 10."),
         ({"smoothing": 0.9}, "The smoothing must be a number from 0.0 to 0.8."),
         ({"smoothing_window": 0}, "The smoothing window must be a whole number from 1 to 20."),
         ({"smoothing_window": 21}, "The smoothing window must be a whole number from 1 to 20."),
-        ({"image_type": "Tiles"}, "The image type must be one of tiles, blended."),
+        ({"image_type": "Tiles"}, f"The image type must be one of {', '.join(IMAGE_TYPES)}."),
         ({"image_type": "blended", "blend_width": 9}, "The blend width must be a number from 10 to 25."),
         ({"blend_width": float("nan")}, "The blend width must be a number from 10 to 25."),
     ],
@@ -616,8 +621,8 @@ def test_threaded_writing_gives_exactly_the_plain_blend_of_each_frames_tile_colo
     from app.services.image_types import blend_tile_colors
 
     many = np.vstack([LEVEL_FRAMES] * 6)  # 36 frames, so that several threads really work at once
-    write_frames(many, tmp_path / "tiles", colormap="cool", image_type="tiles", smoothing=0.3)
-    write_frames(many, tmp_path / "blended", colormap="cool", image_type="blended", blend_width=17, smoothing=0.3)
+    write_frames(many, tmp_path / "tiles", colormap=SECOND, image_type="tiles", smoothing=0.3)
+    write_frames(many, tmp_path / "blended", colormap=SECOND, image_type="blended", blend_width=17, smoothing=0.3)
     assert len(list((tmp_path / "blended").glob("*.png"))) == 36
     for i in range(36):
         name = f"frame_{i:06d}.png"

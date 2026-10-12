@@ -24,6 +24,7 @@ import {
   formatThresholdSummary,
   validateFile,
   validateFrameRate,
+  blendWidthApplies,
   validateBlendWidth,
   validateImageType,
   validateSmoothing,
@@ -159,22 +160,33 @@ describe("smoothing window", () => {
 });
 
 describe("image type", () => {
-  it("offers Tiles then Blended tiles and starts at tiles", () => {
+  const values = IMAGE_TYPES.map((t) => t.value as string);
+
+  it("offers Tiles, Blended tiles and Contour in that order and starts at tiles", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["tiles", "Tiles"],
       ["blended", "Blended tiles"],
+      ["contour", "Contour"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
     expect(imageTypeLabel("tiles")).toBe("Tiles");
     expect(imageTypeLabel("blended")).toBe("Blended tiles");
+    expect(imageTypeLabel("contour")).toBe("Contour");
   });
 
-  it.each(["tiles", "blended"])("accepts %j", (v) => {
+  it.each(values)("accepts %j", (v) => {
     expect(validateImageType(v)).toBeNull();
   });
 
-  it.each(["", "Tiles", " blended", "gradient", "tiles,blended"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended.");
+  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "gradient", "tiles,blended"])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour.");
+  });
+
+  it("applies the blend width to Blended tiles only", () => {
+    expect(blendWidthApplies("blended")).toBe(true);
+    expect(blendWidthApplies("tiles")).toBe(false);
+    expect(blendWidthApplies("contour")).toBe(false);
+    expect(blendWidthApplies("")).toBe(false);
   });
 });
 
@@ -201,24 +213,35 @@ describe("blend width", () => {
   });
 });
 
+// Nothing here names a colormap: the list can be changed by hand. (That each name is a valid matplotlib colormap, and
+// that this list matches the backend's, is checked by backend/tests/test_colormaps.py.)
 describe("colormap", () => {
-  it("offers Summer, Autumn, Hot and Cool in that order and starts at hot", () => {
-    expect(COLORMAPS.map((c) => [c.value, c.label])).toEqual([
-      ["summer", "Summer"],
-      ["autumn", "Autumn"],
-      ["hot", "Hot"],
-      ["cool", "Cool"],
-    ]);
-    expect(DEFAULT_COLORMAP).toBe("hot");
-    expect(colormapLabel("hot")).toBe("Hot");
-    expect(colormapLabel("cool")).toBe("Cool");
+  const values = COLORMAPS.map((c) => c.value as string);
+  const message = `The colormap must be one of ${values.join(", ")}.`;
+  const rejected = ["", " ", "no_such_colormap", "1"]
+    .concat(values.flatMap((v) => [v.toUpperCase(), v.toLowerCase(), ` ${v}`, `${v} `, `${v}_r`, `${v},`]))
+    .filter((v) => !values.includes(v));
+
+  it("offers at least one colormap, each with a distinct value and a label, and starts at one of them", () => {
+    expect(values.length).toBeGreaterThan(0);
+    expect(new Set(values).size).toBe(values.length);
+    expect(COLORMAPS.every((c) => (c.value as string) !== "" && (c.label as string) !== "")).toBe(true);
+    expect(values).toContain(DEFAULT_COLORMAP);
   });
 
-  it.each(["summer", "autumn", "hot", "cool"])("accepts %j", (v) => {
+  it.each(COLORMAPS.map((c) => [c.value, c.label]))("shows %j as %j", (value, label) => {
+    expect(colormapLabel(value)).toBe(label);
+  });
+
+  it("shows an unknown value as it is", () => {
+    expect(colormapLabel("no_such_colormap")).toBe("no_such_colormap");
+  });
+
+  it.each(values)("accepts %j", (v) => {
     expect(validateColormap(v)).toBeNull();
   });
 
-  it.each(["", "Hot", "HOT", " hot", "viridis", "hot_r", "gray"])("rejects %j", (v) => {
-    expect(validateColormap(v)).toBe("The colormap must be one of summer, autumn, hot, cool.");
+  it.each(rejected)("rejects %j with the offered choices", (v) => {
+    expect(validateColormap(v)).toBe(message);
   });
 });

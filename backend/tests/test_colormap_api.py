@@ -1,11 +1,15 @@
-"""The colormap through the job endpoint: the optional ``colormap`` field (``summer``, ``autumn``, ``hot`` or ``cool``),
-its refusals, the response, the removed fields that are now ignored, and the colors in the served frames.
+"""The colormap through the job endpoint: the optional ``colormap`` field (any name in ``COLORMAPS``), its refusals, the
+response, the removed fields that are now ignored, and the colors in the served frames.
+
+No colormap is named here: the list can be changed by hand (see ``colormap_names.py``).
 """
 
 import numpy as np
 import pytest
 
-from app.services.colormaps import COLORMAPS, lookup_table
+from app.services.colormaps import COLORMAPS, DEFAULT_COLORMAP, lookup_table
+
+from .colormap_names import DECODABLE, FIRST, INVALID, MESSAGE, SECOND, WITHOUT_BLACK
 
 from .test_jobs_api import (  # noqa: F401
     SR,
@@ -20,7 +24,6 @@ from .test_jobs_api import (  # noqa: F401
     wav_bytes,
 )
 
-MESSAGE = "The colormap must be one of summer, autumn, hot, cool."
 REMOVED = ("energy", "brightness", "hue_step", "saturation_step", "brightness_step")
 
 
@@ -46,18 +49,16 @@ def test_the_offered_colormaps_are_accepted_and_echoed(client, name):
     assert r.json()["colormap"] == name
 
 
-def test_without_the_field_the_colormap_is_hot_and_the_frames_equal_those_sent_with_hot(client):
+def test_without_the_field_the_colormap_is_the_default_and_the_frames_equal_those_sent_with_it(client):
     data = chord_wav(2)
     missing = post_colormap(client, data).json()
-    hot = post_colormap(client, data, colormap="hot").json()
-    assert missing["colormap"] == "hot" and hot["colormap"] == "hot"
+    named = post_colormap(client, data, colormap=DEFAULT_COLORMAP).json()
+    assert missing["colormap"] == DEFAULT_COLORMAP and named["colormap"] == DEFAULT_COLORMAP
     for i in range(missing["frame_count"]):
-        assert frame_bytes(client, missing, i) == frame_bytes(client, hot, i)
+        assert frame_bytes(client, missing, i) == frame_bytes(client, named, i)
 
 
-@pytest.mark.parametrize(
-    "text", ["", " ", "Hot", "HOT", " hot", "hot ", "viridis", "hot_r", "gray", "1", "summer,autumn", "hue"]
-)
+@pytest.mark.parametrize("text", INVALID)
 def test_any_other_colormap_is_refused_with_the_choices(client, text):
     before = leftovers()
     r = post_colormap(client, tiny(), colormap=text)
@@ -115,27 +116,41 @@ def test_every_tile_of_every_served_frame_is_the_table_colour_of_its_own_strengt
         assert (frame_rgb(client, job, i) == expected[i]).all(), (name, i)
 
 
-def test_the_strongest_tile_of_the_file_has_the_last_colour(client):
-    job = post_colormap(client, chord_wav(2), colormap="cool").json()
-    last = lookup_table("cool")[255]
+@pytest.mark.parametrize("name", COLORMAPS)
+def test_the_strongest_tile_of_the_file_has_the_last_colour(client, name):
+    job = post_colormap(client, chord_wav(2), colormap=name).json()
+    last = lookup_table(name)[255]
     assert any((frame_rgb(client, job, i) == last).all(axis=1).any() for i in range(job["frame_count"]))
 
 
 def test_changing_the_colormap_changes_the_colours_and_not_which_tiles_are_strong(client):
+    # a colour can be turned back into its table row only for tables whose 256 rows are all different colours
+    if len(DECODABLE) < 2:
+        pytest.skip("fewer than two offered colormaps have 256 different colours")
+    first, second = DECODABLE[0], DECODABLE[1]
     data = chord_wav(2)
-    hot = post_colormap(client, data, colormap="hot").json()
-    cool = post_colormap(client, data, colormap="cool").json()
-    assert frame_bytes(client, hot, 5) != frame_bytes(client, cool, 5)
-    a, b = lookup_table("hot"), lookup_table("cool")
-    for i in range(hot["frame_count"]):
-        rows_a = [int(np.flatnonzero((a == c).all(axis=1))[0]) for c in frame_rgb(client, hot, i)]
-        rows_b = [int(np.flatnonzero((b == c).all(axis=1))[0]) for c in frame_rgb(client, cool, i)]
+    a_job = post_colormap(client, data, colormap=first).json()
+    b_job = post_colormap(client, data, colormap=second).json()
+    assert frame_bytes(client, a_job, 5) != frame_bytes(client, b_job, 5)
+    a, b = lookup_table(first), lookup_table(second)
+    for i in range(a_job["frame_count"]):
+        rows_a = [int(np.flatnonzero((a == c).all(axis=1))[0]) for c in frame_rgb(client, a_job, i)]
+        rows_b = [int(np.flatnonzero((b == c).all(axis=1))[0]) for c in frame_rgb(client, b_job, i)]
         assert rows_a == rows_b  # the same positions on the scale, whatever the scale
+
+
+def test_two_colormaps_give_different_pictures_of_the_same_sound(client):
+    if FIRST == SECOND:
+        pytest.skip("only one colormap is offered")
+    data = chord_wav(2)
+    a_job = post_colormap(client, data, colormap=FIRST).json()
+    b_job = post_colormap(client, data, colormap=SECOND).json()
+    assert any(frame_bytes(client, a_job, i) != frame_bytes(client, b_job, i) for i in range(a_job["frame_count"]))
 
 
 def test_a_steady_tone_has_one_colour_in_every_frame_while_it_sounds(client):
     audio = note_tone(36, 3.0)
-    job = post_colormap(client, wav_bytes(audio, audio), colormap="summer").json()
+    job = post_colormap(client, wav_bytes(audio, audio), colormap=SECOND).json()
     inside = [frame_rgb(client, job, i)[36] for i in range(4, job["frame_count"] - 4)]
     assert all((c == inside[0]).all() for c in inside)  # steady: it does not blink
 
@@ -143,9 +158,9 @@ def test_a_steady_tone_has_one_colour_in_every_frame_while_it_sounds(client):
 def test_a_note_keeps_its_colour_when_a_quieter_note_is_added(client):
     one = note_tone(36, 3.0) * 0.5
     both = (note_tone(36, 3.0) + 0.2 * note_tone(48, 3.0)) * 0.5  # the same loud note and a quieter one
-    a = post_colormap(client, wav_bytes(one, one), colormap="hot").json()
-    b = post_colormap(client, wav_bytes(both, both), colormap="hot").json()
-    last = lookup_table("hot")[255]
+    a = post_colormap(client, wav_bytes(one, one), colormap=DEFAULT_COLORMAP).json()
+    b = post_colormap(client, wav_bytes(both, both), colormap=DEFAULT_COLORMAP).json()
+    last = lookup_table(DEFAULT_COLORMAP)[255]
     for i in (8, 12, 16):  # frames well inside the tones
         assert (frame_rgb(client, a, i)[36] == last).all()  # the loudest note of the file: the last colour
         assert (frame_rgb(client, b, i)[36] == last).all()  # still the loudest note, unchanged by the added one
@@ -155,8 +170,8 @@ def test_a_note_keeps_its_colour_when_a_quieter_note_is_added(client):
 
 def test_the_same_request_twice_gives_identical_frames(client):
     data = chord_wav(2)
-    a = post_colormap(client, data, colormap="autumn", smoothing="0.4").json()
-    b = post_colormap(client, data, colormap="autumn", smoothing="0.4").json()
+    a = post_colormap(client, data, colormap=FIRST, smoothing="0.4").json()
+    b = post_colormap(client, data, colormap=FIRST, smoothing="0.4").json()
     for i in range(0, a["frame_count"], 3):
         assert frame_bytes(client, a, i) == frame_bytes(client, b, i)
 
@@ -185,7 +200,8 @@ def test_with_a_threshold_every_served_tile_is_black_or_a_colour_of_the_table(cl
             colour = tuple(int(v) for v in colour)
             assert colour == (0, 0, 0) or colour in table, (name, i, colour)
             black += colour == (0, 0, 0) and colour not in table
-    assert black > 0  # some notes really were hidden
+    if name in WITHOUT_BLACK:  # in a table that has black itself, a hidden tile cannot be told from a black entry
+        assert black > 0  # some notes really were hidden
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
@@ -198,7 +214,7 @@ def test_a_silent_file_has_the_first_colour_of_the_colormap_in_every_tile(client
             assert (frame_rgb(client, job, i) == first).all(), (name, fields, i)
 
 
-def test_the_pictures_have_the_same_size_count_and_format_for_all_four_colormaps(client):
+def test_the_pictures_have_the_same_size_count_and_format_for_all_the_colormaps(client):
     import io
 
     from PIL import Image

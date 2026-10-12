@@ -11,7 +11,8 @@ depends only on how strong the tile's own note is: its smoothed value as a share
 file, on a square-root scale (see ``colormaps``). Smoothing mixes each frame with a few earlier ones (see
 ``smooth_frames``) before the color is worked out. A threshold can hide faint notes: a note below it has a black tile (see
 ``hidden_notes``). The finished tile colors are written as the flat ``tiles`` picture or as ``blended`` tiles whose colors
-fade into each other (see ``image_types``).
+fade into each other (see ``image_types``). The third kind, ``contour``, does not use tile colors: the smoothed values
+themselves are drawn as a filled contour map (see ``contour``).
 """
 
 import math
@@ -24,6 +25,7 @@ import numpy as np
 from PIL import Image
 
 from .colormaps import DEFAULT_COLORMAP, check_colormap, colorize
+from .contour import write_contour_frames
 from .image_types import DEFAULT_BLEND_WIDTH, DEFAULT_IMAGE_TYPE, check_blend_width, check_image_type, make_blender
 from .note_analysis import NOTE_COUNT, AnalysisResult
 
@@ -213,10 +215,15 @@ def write_frames(
     ``threshold`` (0 to 10, default 0 = off) is a percentage of the largest note value in the file (after smoothing): a
     note below it gets a black tile in that frame (``hidden_notes``), whatever the colormap is.
 
-    ``image_type`` is ``tiles`` (the default: flat tiles, written as palette PNGs) or ``blended`` (the same finished tile
+    ``image_type`` is ``tiles`` (the default: flat tiles, written as palette PNGs), ``contour`` (see below) or ``blended`` (the same finished tile
     colors, but the colors of neighbouring tiles fade into each other across every shared edge; true-color PNGs).
     ``blend_width`` (10 to 25, default 25) is how far that fade reaches on each side of an edge, as a percentage of the
     tile width; it has no effect for ``tiles``. See ``image_types``.
+
+    ``image_type="contour"`` draws the smoothed note values of the 84 drawn notes (those the threshold hides as 0) as a
+    filled contour map in the ``colormap`` instead of tiles, with matplotlib (see ``contour``): the contour levels are
+    chosen by matplotlib, and the color scale is *linear* from 0 to the largest smoothed value in the whole file (the
+    tiles use the square root of the strength). ``blend_width`` has no effect for it either.
 
     Every argument is checked before anything is written.
     """
@@ -226,6 +233,12 @@ def write_frames(
     image_type = check_image_type(image_type)
     blend_width = check_blend_width(blend_width)
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
+    if image_type == "contour":
+        values = smoothed[:, :SHOWN_NOTES].copy()
+        values[hidden_notes(smoothed, threshold)] = 0
+        peak = float(smoothed.max()) if smoothed.size else 0.0
+        write_contour_frames(values, peak, colormap, directory, GRID_COLUMNS, GRID_ROWS, IMAGE_WIDTH, IMAGE_HEIGHT)
+        return
     colours = colorize(smoothed, colormap, SHOWN_NOTES)
     colours[hidden_notes(smoothed, threshold)] = 0
     directory.mkdir(parents=True, exist_ok=True)

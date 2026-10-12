@@ -2,6 +2,8 @@ import { createSSRApp } from "vue";
 import { renderToString } from "vue/server-renderer";
 import { describe, expect, it } from "vitest";
 import SettingsForm from "./SettingsForm.vue";
+import formSource from "./SettingsForm.vue?raw";
+import { COLORMAPS, DEFAULT_COLORMAP } from "../utilities/validation";
 
 async function render(busy = false): Promise<string> {
   const app = createSSRApp(SettingsForm, { busy, file: null, sampleRate: 44100 });
@@ -73,9 +75,9 @@ describe("the smoothing window field", () => {
 describe("the image type controls", () => {
   const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
 
-  it("offer Tiles and Blended tiles in a dropdown that starts at Tiles", async () => {
+  it("offer Tiles, Blended tiles and Contour in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -110,11 +112,12 @@ describe("the image type controls", () => {
 });
 
 describe("the colormap dropdown", () => {
-  it("offers Summer, Autumn, Hot and Cool in that order, starts at Hot, and has a label and an info button", async () => {
+  it("offers every colormap of the list in order, starts at the default, and has a label and an info button", async () => {
     const html = await render();
-    expect(options(html, "colormap")).toEqual(["Summer", "Autumn", "Hot", "Cool"]);
+    expect(options(html, "colormap")).toEqual(COLORMAPS.map((c) => c.label));
     const select = html.match(new RegExp(`<select id="colormap"[^>]*>([^]*?)</select>`));
-    expect(select![1]).toMatch(/<option value="hot"[^>]*selected/);
+    expect(select![1]).toMatch(new RegExp(`<option value="${DEFAULT_COLORMAP}"[^>]*selected`));
+    for (const c of COLORMAPS) expect(select![1]).toContain(`<option value="${c.value}"`);
     expect(html).toContain(">Colormap</label>");
     expect(html).toContain('aria-label="About colormap"');
   });
@@ -138,5 +141,16 @@ describe("the colormap dropdown", () => {
     for (const label of ["Brightness", "Saturation", "Hue steps", "Saturation steps", "Brightness steps"]) {
       expect(html).not.toContain(`>${label}</label>`);
     }
+  });
+});
+
+describe("the blend width slider's rule", () => {
+  // The server-side render can only show the form at its starting image type (Tiles), so the rule for the other types is
+  // tested as the helper `blendWidthApplies` (validation.test.ts); this guards that the slider really uses it, so that it
+  // is enabled for Blended tiles only and disabled for Contour as well as Tiles.
+  it("is bound to blendWidthApplies, not to a comparison with one image type", () => {
+    const input = formSource.match(/<input\s+id="blend-width"[\s\S]*?\/>/)?.[0] ?? "";
+    expect(input).toContain("!blendWidthApplies(imageType)");
+    expect(input).not.toMatch(/imageType\s*===\s*'tiles'/);
   });
 });

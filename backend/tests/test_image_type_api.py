@@ -1,4 +1,4 @@
-"""The image type and the blend width through the job endpoint: the optional ``image_type`` (``tiles`` or ``blended``) and
+"""The image type and the blend width through the job endpoint: the optional ``image_type`` (any name in ``IMAGE_TYPES``) and
 ``blend_width`` (10 to 25) fields, their refusals, the response, and the frames that are served.
 """
 
@@ -8,9 +8,12 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from app.services.image_types import IMAGE_TYPES
+
+from .colormap_names import SECOND
 from .test_jobs_api import chord_wav, client, frame_rgb, leftovers, wav_bytes  # noqa: F401
 
-TYPE_MESSAGE = "The image type must be one of tiles, blended."
+TYPE_MESSAGE = f"The image type must be one of {', '.join(IMAGE_TYPES)}."
 WIDTH_MESSAGE = "The blend width must be a number from 10 to 25."
 
 
@@ -29,7 +32,7 @@ def tiny():
     return wav_bytes(np.zeros(22050))
 
 
-@pytest.mark.parametrize("name", ["tiles", "blended"])
+@pytest.mark.parametrize("name", IMAGE_TYPES)
 def test_the_offered_image_types_are_accepted_and_echoed(client, name):
     r = post_type(client, tiny(), image_type=name)
     assert r.status_code == 200, r.text
@@ -45,7 +48,9 @@ def test_without_the_field_the_image_type_is_tiles_and_the_frames_equal_those_se
         assert frame_bytes(client, missing, i) == frame_bytes(client, tiles, i)
 
 
-@pytest.mark.parametrize("text", ["", " ", "Tiles", "BLENDED", "Blended", " tiles", "blended ", "gradient", "1", "tiles,blended"])
+@pytest.mark.parametrize(
+    "text", ["", " ", "Tiles", "BLENDED", "Blended", "Contour", " tiles", "blended ", "contours", "gradient", "1", "tiles,blended"]
+)
 def test_any_other_image_type_is_refused_with_the_choices(client, text):
     before = leftovers()
     r = post_type(client, tiny(), image_type=text)
@@ -139,7 +144,7 @@ def test_served_pictures_have_the_right_format_size_and_headers(client):
 
 def test_the_middles_agree_with_tiles_for_a_combination_of_other_settings(client):
     data = chord_wav(2)
-    other = dict(smoothing="0.5", smoothing_window="3", threshold="5", colormap="cool")
+    other = dict(smoothing="0.5", smoothing_window="3", threshold="5", colormap=SECOND)
     tiles = post_type(client, data, image_type="tiles", **other).json()
     blended = post_type(client, data, image_type="blended", blend_width="12", **other).json()
     assert tiles["frame_count"] == blended["frame_count"]

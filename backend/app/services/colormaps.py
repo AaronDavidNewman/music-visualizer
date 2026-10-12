@@ -13,7 +13,7 @@ import functools
 
 import numpy as np
 
-COLORMAPS = ("summer", "autumn", "hot", "cool")
+COLORMAPS = ("summer", "autumn", "hot", "cool", "viridis", "Greys", "hsv")
 DEFAULT_COLORMAP = "hot"
 COLORMAP_STEPS = 256
 
@@ -29,13 +29,13 @@ def check_colormap(value) -> str:
 def lookup_table(name: str) -> np.ndarray:
     """The 8-bit colors of the colormap ``name``: a read-only ``uint8`` array of shape ``(256, 3)``.
 
-    Row ``i`` is matplotlib's own 8-bit color of the table entry ``i`` (the same conversion that draws an image), row 0
-    the first color of the scale and row 255 the last.
+    The scale is sampled at 256 evenly spaced positions, so the table spans the whole colormap whatever its own number of
+    entries is: row 0 is the first color of the scale and row 255 the last.
     """
     check_colormap(name)
     from matplotlib import colormaps  # imported here on purpose: see the module docstring
 
-    table = np.ascontiguousarray(colormaps[name](np.arange(COLORMAP_STEPS), bytes=True)[:, :3], dtype=np.uint8)
+    table = np.ascontiguousarray(colormaps[name](np.linspace(0, 1, COLORMAP_STEPS), bytes=True)[:, :3], dtype=np.uint8)
     table.setflags(write=False)
     return table
 

@@ -84,10 +84,14 @@ export function validateSmoothingWindow(value: string | number): string | null {
   return ok ? null : smoothingWindowMessage;
 }
 
-/** The kinds of picture: Tiles (flat tiles with hard edges, the default) and Blended tiles (colors fade across the tile edges). */
+/**
+ * The kinds of picture: Tiles (flat tiles with hard edges, the default), Blended tiles (colors fade across the tile
+ * edges) and Contour (the notes drawn as a filled contour map).
+ */
 export const IMAGE_TYPES = [
   { value: "tiles", label: "Tiles" },
   { value: "blended", label: "Blended tiles" },
+  { value: "contour", label: "Contour" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -101,6 +105,11 @@ export function imageTypeLabel(value: string): string {
 /** Returns an error message, or null when the image type is exactly one of the offered values. */
 export function validateImageType(value: string): string | null {
   return IMAGE_TYPES.some((t) => t.value === value) ? null : imageTypeMessage;
+}
+
+/** Whether the blend width does anything for this image type: only Blended tiles fade across the tile edges. */
+export function blendWidthApplies(imageType: string): boolean {
+  return imageType === "blended";
 }
 
 /** The blend width: how far the fade between tiles reaches on each side of an edge, as a percentage of the tile width. */
@@ -132,6 +141,9 @@ export const COLORMAPS = [
   { value: "autumn", label: "Autumn" },
   { value: "hot", label: "Hot" },
   { value: "cool", label: "Cool" },
+  { value: "viridis", label: "Viridis"},
+  { value: "Greys", label: "Grayscale"},
+  { value: "hsv", label: "HSV"}
 ] as const;
 export const DEFAULT_COLORMAP = "hot";
 

@@ -14,6 +14,9 @@ separately, and a pixel is the mix of up to four tiles with the products of the 
 meet is 25% each). Compared with a straight ramp over the same distance, the edge itself stays sharper and the tails are soft. The outer border of the picture has no inner edge and is not blended, and the end of a row
 does not blend with the start of the next row, because they are not side by side in the picture.
 
+A third kind, ``contour``, is not tile colors at all: the grid of note values is drawn as a filled contour map. It is drawn by
+``contour.py``, because it needs matplotlib's drawing; this module stays pure numpy and only lists its name.
+
 This module knows nothing about the note analysis or the grid of the application: the tile geometry is passed in.
 """
 
@@ -22,7 +25,7 @@ import numbers
 
 import numpy as np
 
-IMAGE_TYPES = ("tiles", "blended")
+IMAGE_TYPES = ("tiles", "blended", "contour")
 DEFAULT_IMAGE_TYPE = "tiles"
 
 # The blend width is a percentage of the tile width: the reach of the fade on each side of an edge.

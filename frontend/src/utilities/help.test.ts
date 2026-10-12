@@ -51,12 +51,14 @@ describe("setting explanations", () => {
     expect(smoothingWindowHelp).toContain("no effect while Smoothing is 0");
   });
 
-  it("explains the two image types", () => {
+  it("explains the three image types", () => {
     expect(imageTypeHelp).toContain("Tiles:");
     expect(imageTypeHelp).toContain("flat");
     expect(imageTypeHelp).toContain("hard edges");
     expect(imageTypeHelp).toContain("Blended tiles:");
     expect(imageTypeHelp).toContain("fade into each other");
+    expect(imageTypeHelp).toContain("Contour:");
+    expect(imageTypeHelp).toContain("contour map");
   });
 
   it("explains the blend width: the reach on each side of an edge, as a share of a tile, the range, and where it applies", () => {

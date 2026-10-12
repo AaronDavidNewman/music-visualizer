@@ -9,7 +9,7 @@ from scipy.io import wavfile
 
 from app.config import settings
 from app.main import app
-from app.services.colormaps import lookup_table
+from app.services.colormaps import DEFAULT_COLORMAP, lookup_table
 
 SR = 44100
 
@@ -59,14 +59,14 @@ def frame_rgb(client, job, index):
     return np.array([arr[(n // 12) * 24 + 12, (n % 12) * 21 + 10] for n in range(84)])
 
 
-HOT_ROWS = {tuple(row): i for i, row in enumerate(lookup_table("hot").tolist())}
+DEFAULT_ROWS = {tuple(row): i for i, row in enumerate(lookup_table(DEFAULT_COLORMAP).tolist())}
 
 
 def frame_levels(client, job, index):
     """The row (0 to 255) in the ``hot`` table (the default colormap) of each of the 84 tiles of a served frame, decoded
     from the tile's centre pixel by exact lookup (every row of the table is a different colour); -1 for a colour that is
     not in the table, such as the black of a tile that the threshold hides."""
-    return np.array([HOT_ROWS.get(tuple(int(v) for v in c), -1) for c in frame_rgb(client, job, index)])
+    return np.array([DEFAULT_ROWS.get(tuple(int(v) for v in c), -1) for c in frame_rgb(client, job, index)])
 
 
 def test_submission_creates_frames_in_separate_dirs(client):
