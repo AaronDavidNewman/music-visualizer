@@ -154,3 +154,36 @@ describe("the blend width slider's rule", () => {
     expect(input).not.toMatch(/imageType\s*===\s*'tiles'/);
   });
 });
+
+describe("the resolution slider", () => {
+  const slider = (html: string) => html.match(/<input id="resolution"[^>]*>/)?.[0] ?? "";
+
+  it("is a slider from 1 to 5 in steps of 1 starting at 1, with its readout, label and info button", async () => {
+    const html = await render();
+    const tag = slider(html);
+    expect(tag).toContain('type="range"');
+    expect(tag).toContain('min="1"');
+    expect(tag).toContain('max="5"');
+    expect(tag).toContain('step="1"');
+    expect(tag).toContain('value="1"');
+    expect(html).toMatch(/<output[^>]*for="resolution"[^>]*>1\u00d7<\/output>/);
+    expect(html).toContain(">Resolution</label>");
+    expect(html).toContain('aria-label="About resolution"');
+  });
+
+  it("is enabled when no job runs and disabled while one runs", async () => {
+    expect(slider(await render(false))).not.toContain("disabled");
+    expect(slider(await render(true))).toContain("disabled");
+  });
+
+  it("does not depend on the image type: its rule is not bound to the image type", () => {
+    const input = formSource.match(/<input\s+id="resolution"[\s\S]*?\/>/)?.[0] ?? "";
+    expect(input).toContain(':disabled="busy"');
+    expect(input).not.toContain("imageType");
+  });
+
+  it("comes after the Blend width field", async () => {
+    const html = await render();
+    expect(html.indexOf('for="resolution"')).toBeGreaterThan(html.indexOf('for="blend-width"'));
+  });
+});

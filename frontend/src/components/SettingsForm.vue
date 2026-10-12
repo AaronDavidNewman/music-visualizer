@@ -6,17 +6,20 @@ import {
   DEFAULT_COLORMAP,
   DEFAULT_BLEND_WIDTH,
   DEFAULT_IMAGE_TYPE,
+  DEFAULT_RESOLUTION,
   DEFAULT_SMOOTHING,
   DEFAULT_SMOOTHING_WINDOW,
   DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
   IMAGE_TYPES,
+  RESOLUTION_RANGE,
   SMOOTHING_RANGE,
   SMOOTHING_WINDOW_RANGE,
   THRESHOLD_RANGE,
   WINDOW_SIZES,
   blendWidthApplies,
   formatBlendWidth,
+  formatResolution,
   formatSmoothing,
   formatThreshold,
   validateBlendWidth,
@@ -24,6 +27,7 @@ import {
   validateFile,
   validateFrameRate,
   validateImageType,
+  validateResolution,
   validateSmoothing,
   validateSmoothingWindow,
   validateThreshold,
@@ -43,6 +47,7 @@ import {
   colormapHelp,
   frameRateHelp,
   imageTypeHelp,
+  resolutionHelp,
   smoothingHelp,
   smoothingWindowHelp,
   spacingHelp,
@@ -63,6 +68,7 @@ const smoothingWindowText = ref(String(DEFAULT_SMOOTHING_WINDOW));
 const threshold = ref<number>(DEFAULT_THRESHOLD);
 const imageType = ref<string>(DEFAULT_IMAGE_TYPE);
 const blendWidth = ref<number>(DEFAULT_BLEND_WIDTH);
+const resolution = ref<number>(DEFAULT_RESOLUTION);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
 function defaultSpacingText(sampleRate: number, frameRate: string, size: number): string | null {
@@ -87,6 +93,7 @@ const thresholdError = computed(() => validateThreshold(threshold.value));
 const imageTypeError = computed(() => validateImageType(imageType.value));
 const blendWidthError = computed(() => validateBlendWidth(blendWidth.value));
 const colormapError = computed(() => validateColormap(colormap.value));
+const resolutionError = computed(() => validateResolution(resolution.value));
 const canSubmit = computed(
   () =>
     !fileError.value &&
@@ -98,7 +105,8 @@ const canSubmit = computed(
     !thresholdError.value &&
     !imageTypeError.value &&
     !blendWidthError.value &&
-    !colormapError.value,
+    !colormapError.value &&
+    !resolutionError.value,
 );
 
 const belowMinimum = computed(
@@ -124,6 +132,7 @@ function onSubmit() {
     imageType: imageType.value,
     blendWidth: blendWidth.value,
     colormap: colormap.value,
+    resolution: resolution.value,
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -268,6 +277,26 @@ function onSubmit() {
         <output class="slider-value slider-value-wide" for="blend-width">{{ formatBlendWidth(blendWidth) }}</output>
       </span>
       <small v-if="blendWidthError" class="error">{{ blendWidthError }}</small>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label for="resolution">Resolution</label>
+        <InfoPopover label="resolution" :text="resolutionHelp" />
+      </div>
+      <span class="slider-row">
+        <input
+          id="resolution"
+          v-model.number="resolution"
+          type="range"
+          :min="RESOLUTION_RANGE.min"
+          :max="RESOLUTION_RANGE.max"
+          :step="RESOLUTION_RANGE.step"
+          :disabled="busy"
+        />
+        <output class="slider-value slider-value-wide" for="resolution">{{ formatResolution(resolution) }}</output>
+      </span>
+      <small v-if="resolutionError" class="error">{{ resolutionError }}</small>
     </div>
 
     <button type="submit" :disabled="!canSubmit || busy">{{ busy ? "Working…" : "Create frames" }}</button>

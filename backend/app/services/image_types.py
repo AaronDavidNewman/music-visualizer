@@ -1,6 +1,7 @@
 """The kinds of picture a frame can be drawn as, and the blend that makes the ``blended`` kind.
 
-``tiles`` is the picture of flat 21 x 24 pixel tiles. ``blended`` has the same grid of finished tile colors, but the colors
+``tiles`` is the picture of flat tiles (21 x 24 pixels for the original 12 x 7 grid; a finer grid, see ``resolution``, has
+smaller tiles whose edges are at the nearest whole pixel). ``blended`` has the same grid of finished tile colors, but the colors
 of neighbouring tiles fade into each other across every edge the tiles share: a Gaussian feather (a Gaussian blur of the
 sharp edge, kept inside a feather mask) that reaches the *blend width* (a percentage of the tile width) on each side of
 the edge, the same distance in pixels in both directions. At the default width the feather mask is about 10 pixels across.
@@ -68,18 +69,30 @@ def feather_weight(distance: np.ndarray, reach: float) -> np.ndarray:
     return np.clip((cumulative - tail) / (1.0 - 2.0 * tail), 0.5, 1.0)
 
 
-def axis_weights(size: int, tile: int, count: int, reach: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def tile_edges(count: int, size: int) -> np.ndarray:
+    """The pixel positions of the ``count + 1`` tile edges across ``size`` pixels: the nearest whole pixels to an even split.
+
+    When ``size`` is a multiple of ``count`` every tile is the same width (the edges are the multiples of ``size / count``);
+    otherwise tiles differ by at most one pixel.
+    """
+    return np.rint(np.linspace(0, size, count + 1)).astype(np.int64)
+
+
+def axis_weights_for_edges(edges: np.ndarray, reach: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """For every pixel along one axis: its own tile, the tile it blends with, and its own tile's weight.
 
-    ``size`` pixels in ``count`` tiles of ``tile`` pixels; ``reach`` is the blend width in pixels. A pixel closer than
-    ``reach`` to an *inner* edge (measured from its center) has the neighbour across that edge and the own weight from
-    ``feather_weight``; every other pixel is its own neighbour with the weight 1. The first tile has no edge on
-    its outer side and the last tile none on its outer side, so nothing is blended there.
+    ``edges`` are the pixel positions of the tile edges (``count + 1`` of them, the first 0 and the last the size of the
+    axis); ``reach`` is the blend width in pixels. A pixel closer than ``reach`` to an *inner* edge (measured from its
+    center) has the neighbour across that edge and the own weight from ``feather_weight``; every other pixel is its own
+    neighbour with the weight 1. The first tile has no edge on its outer side and the last tile none on its outer side,
+    so nothing is blended there.
     """
+    edges = np.asarray(edges)
+    size, count = int(edges[-1]), len(edges) - 1
     position = np.arange(size) + 0.5
-    own = np.arange(size) // tile
-    from_start = position - own * tile  # distance to the edge at the start of the tile
-    from_end = (own + 1) * tile - position  # distance to the edge at the end of the tile
+    own = np.searchsorted(edges, np.arange(size), side="right") - 1
+    from_start = position - edges[own]  # distance to the edge at the start of the tile
+    from_end = edges[own + 1] - position  # distance to the edge at the end of the tile
     neighbour = own.copy()
     weight = np.ones(size)
     near_start = (own > 0) & (from_start < reach)
@@ -91,19 +104,26 @@ def axis_weights(size: int, tile: int, count: int, reach: float) -> tuple[np.nda
     return own, neighbour, weight
 
 
-def make_blender(blend_width: float, columns: int, rows: int, tile_width: int, tile_height: int):
-    """A function that turns the finished tile colors of a frame into the blended picture.
+def axis_weights(size: int, tile: int, count: int, reach: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """``axis_weights_for_edges`` for ``count`` tiles of ``tile`` pixels each (``size == count * tile``)."""
+    return axis_weights_for_edges(np.arange(count + 1) * tile, reach)
+
+
+def make_grid_blender(blend_width: float, columns: int, rows: int, width: int, height: int):
+    """A function that turns the finished tile colors of a frame into the blended picture, for any grid size.
 
     The returned function takes ``uint8`` colors of shape ``(rows * columns, 3)`` (tile ``(r, c)`` at index
-    ``columns * r + c``) and returns a ``uint8`` picture of shape ``(rows * tile_height, columns * tile_width, 3)``.
-    The reach is ``blend_width`` percent of ``tile_width``, in pixels, for both directions. The index and weight arrays
-    depend only on the blend width, so they are worked out once here, not for every frame. The arithmetic is done in two
-    passes (columns of the tile grid first, then rows) in ``float32``; pixels with the weight 1 are exact.
+    ``columns * r + c``) and returns a ``uint8`` picture of shape ``(height, width, 3)``. The tile edges are the nearest
+    whole pixels to an even split (see ``tile_edges``). The reach is ``blend_width`` percent of the mean tile width
+    ``width / columns``, in pixels, for both directions, so a finer grid (smaller tiles) has a proportionally shorter
+    fade. The index and weight arrays depend only on the blend width and the geometry, so they are worked out once here,
+    not for every frame. The arithmetic is done in two passes (columns of the tile grid first, then rows) in
+    ``float32``; pixels with the weight 1 are exact.
     """
-    width = check_blend_width(blend_width)
-    reach = width / 100.0 * tile_width
-    col, col_other, col_weight = axis_weights(columns * tile_width, tile_width, columns, reach)
-    row, row_other, row_weight = axis_weights(rows * tile_height, tile_height, rows, reach)
+    percent = check_blend_width(blend_width)
+    reach = percent / 100.0 * (width / columns)
+    col, col_other, col_weight = axis_weights_for_edges(tile_edges(columns, width), reach)
+    row, row_other, row_weight = axis_weights_for_edges(tile_edges(rows, height), reach)
     ah = col_weight.astype(np.float32)[None, :, None]
     ah_other = (1.0 - col_weight).astype(np.float32)[None, :, None]
     av = row_weight.astype(np.float32)[:, None, None]
@@ -116,6 +136,12 @@ def make_blender(blend_width: float, columns: int, rows: int, tile_width: int, t
         return np.rint(picture).astype(np.uint8)
 
     return blend
+
+
+def make_blender(blend_width: float, columns: int, rows: int, tile_width: int, tile_height: int):
+    """``make_grid_blender`` for tiles of ``tile_width`` x ``tile_height`` pixels: a picture of ``rows * tile_height``
+    by ``columns * tile_width`` pixels. The reach is ``blend_width`` percent of ``tile_width``."""
+    return make_grid_blender(blend_width, columns, rows, columns * tile_width, rows * tile_height)
 
 
 def blend_tile_colors(

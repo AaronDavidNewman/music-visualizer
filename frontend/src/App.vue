@@ -5,7 +5,13 @@ import FilePicker from "./components/FilePicker.vue";
 import SettingsForm from "./components/SettingsForm.vue";
 import { submitJob, type JobResult, type JobSettings } from "./api";
 import { DEFAULT_SAMPLE_RATE, formatSpacing } from "./utilities/spacing";
-import { colormapLabel, formatBlendWidthSummary, formatThresholdSummary, imageTypeLabel } from "./utilities/validation";
+import {
+  colormapLabel,
+  formatBlendWidthSummary,
+  formatResolution,
+  formatThresholdSummary,
+  imageTypeLabel,
+} from "./utilities/validation";
 
 type Status = "idle" | "busy" | "done" | "error";
 
@@ -54,6 +60,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li>Smoothing window: {{ result.smoothing_window }}</li>
             <li>Threshold: {{ formatThresholdSummary(result.threshold) }}</li>
             <li>Image type: {{ imageTypeLabel(result.image_type) }}</li>
+            <li>Resolution: {{ formatResolution(result.resolution) }}</li>
             <li v-if="result.image_type === 'blended'">Blend width: {{ formatBlendWidthSummary(result.blend_width) }}</li>
             <li>Window spacing: {{ formatSpacing(result.window_spacing) }}</li>
             <li>Step: {{ Number(result.step_samples.toFixed(2)) }} samples</li>

@@ -4,8 +4,9 @@ Each frame is the grid of one value per drawn note (rows are octaves, columns ar
 coordinates ``np.linspace(0, top, columns)`` by ``np.linspace(0, top, rows)``, where ``top`` is the largest value of *that
 frame* (worked out again for every frame), with the colormap the job selected and the
 axis decorations off, and saved with ``pyplot.savefig``. Nothing about the *levels* is decided here: matplotlib chooses
-them for the data of each frame. The *color scale* is fixed instead, from 0 to ``peak`` (the largest value in the whole
-file) for every frame, so a given value has the same color in every frame whatever levels matplotlib picked.
+them for the data of each frame. The *color scale* runs from 0 to ``top`` too (``vmin=0, vmax=top``), so the loudest note
+of every frame is at the end of the colormap; ``peak`` (the largest value in the whole file) is only used for a frame that
+has no contour to draw, below.
 
 A frame whose values are all the same (a quiet moment, a silent file, every note hidden) has no contour to draw and
 ``contourf`` draws a degenerate picture for it, so it is written as one flat color: the colormap's color at that value on
@@ -83,7 +84,7 @@ def write_contour_frames(
                 top = float(frame.max())
                 x = np.linspace(0, top, columns)
                 y = np.linspace(0, top, rows)
-                # no `levels`: matplotlib chooses them. vmin and vmax fix the color scale (0 to the file's peak) for every frame.
+                # no `levels`: matplotlib chooses them. vmin and vmax are 0 and this frame's largest value (the scale follows the frame).
                 axes.contourf(x, y, frame.reshape(rows, columns)[::-1], cmap=colormap, vmin=0, vmax=top)
                 pyplot.savefig(path)
         finally:

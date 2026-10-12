@@ -246,6 +246,35 @@ def test_bad_input_is_refused(bad):
         colorize(bad, DEFAULT_COLORMAP, SHOWN)
 
 
+@pytest.mark.parametrize("name", COLORMAPS)
+def test_a_given_peak_is_the_same_as_a_column_that_holds_it(name):
+    # the peak of the whole file passed in, for an array that does not hold the note that has it
+    values = np.random.default_rng(5).random((6, 84)) * 0.7
+    with_column = np.hstack([values, np.full((6, 4), 0.0)])
+    with_column[2, 85] = 1.0
+    assert (colorize(values, name, 84, peak=1.0) == colorize(with_column, name, 84)).all()
+
+
+def test_the_default_peak_is_the_largest_value_of_the_input():
+    values = np.random.default_rng(6).random((4, 88))
+    assert (colorize(values, DEFAULT_COLORMAP, 84, peak=float(values.max())) == colorize(values, DEFAULT_COLORMAP, 84)).all()
+    assert (colorize(values, DEFAULT_COLORMAP, 84, peak=None) == colorize(values, DEFAULT_COLORMAP, 84)).all()
+
+
+def test_a_value_above_a_given_peak_gets_the_last_color_and_a_zero_peak_the_first():
+    values = np.array([[0.0, 0.5, 1.0, 2.0]])
+    got = colorize(values, DEFAULT_COLORMAP, 4, peak=1.0)
+    table = lookup_table(DEFAULT_COLORMAP)
+    assert (got[0, 2] == table[255]).all() and (got[0, 3] == table[255]).all() and (got[0, 0] == table[0]).all()
+    assert (colorize(values, DEFAULT_COLORMAP, 4, peak=0.0) == table[0]).all()
+
+
+@pytest.mark.parametrize("bad", [-1.0, float("nan"), float("inf"), True, "1", [1.0]])
+def test_a_bad_peak_is_refused(bad):
+    with pytest.raises(ValueError):
+        colorize(np.ones((2, 84)), DEFAULT_COLORMAP, 84, peak=bad)
+
+
 def test_a_bad_colormap_name_is_refused():
     with pytest.raises(ValueError, match=re.escape(MESSAGE)):
         colorize(np.ones((2, 88)), INVALID[0], SHOWN)

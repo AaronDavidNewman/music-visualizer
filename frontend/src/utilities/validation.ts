@@ -158,3 +158,25 @@ export function colormapLabel(value: string): string {
 export function validateColormap(value: string): string | null {
   return COLORMAPS.some((c) => c.value === value) ? null : colormapMessage;
 }
+
+/** The original grid of a frame: 12 columns (the notes of an octave) by 7 rows (the octaves). */
+export const GRID_COLUMNS = 12;
+export const GRID_ROWS = 7;
+
+/** The resolution: how many times finer than the original grid the picture is drawn (a whole number). */
+export const RESOLUTION_RANGE = { min: 1, max: 5, step: 1 } as const;
+export const DEFAULT_RESOLUTION = RESOLUTION_RANGE.min;
+
+const resolutionMessage = `The resolution must be a whole number from ${RESOLUTION_RANGE.min} to ${RESOLUTION_RANGE.max}.`;
+
+/** Returns an error message, or null when the resolution is a whole number from 1 to 5. */
+export function validateResolution(value: string | number): string | null {
+  const n = parseNumber(value);
+  const ok = Number.isInteger(n) && n >= RESOLUTION_RANGE.min && n <= RESOLUTION_RANGE.max;
+  return ok ? null : resolutionMessage;
+}
+
+/** The readout beside the slider and the result summary item: "1\u00d7", or the multiple and its grid, "3\u00d7 (36 \u00d7 21)". */
+export function formatResolution(value: number): string {
+  return value === 1 ? "1\u00d7" : `${value}\u00d7 (${GRID_COLUMNS * value} \u00d7 ${GRID_ROWS * value})`;
+}

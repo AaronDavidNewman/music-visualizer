@@ -32,6 +32,7 @@ from ..services.image_types import (
     MIN_BLEND_WIDTH,
 )
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
+from ..services.resolution import DEFAULT_RESOLUTION, MAX_RESOLUTION, MIN_RESOLUTION
 from ..services.window_spacing import default_spacing, resolve_step
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -145,6 +146,21 @@ def _parse_blend_width(text: str | None, sent: bool) -> int | float:
     return int(value) if value.is_integer() else value
 
 
+def _parse_resolution(text: str | None, sent: bool) -> int:
+    """The requested resolution. Not sent means the default (1); anything sent must be a whole number 1..5."""
+    if text is None and not sent:
+        return DEFAULT_RESOLUTION
+    text = text or ""
+    message = f"The resolution must be a whole number from {MIN_RESOLUTION} to {MAX_RESOLUTION}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not value.is_integer() or not MIN_RESOLUTION <= value <= MAX_RESOLUTION:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
 def _parse_smoothing_window(text: str | None, sent: bool) -> int:
     """The requested smoothing window. Not sent means the default; anything sent must be a whole number 1..20."""
     if text is None and not sent:
@@ -214,6 +230,7 @@ def create_job(
     image_type: str | None = Form(None),
     blend_width: str | None = Form(None),
     colormap: str | None = Form(None),
+    resolution: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -225,6 +242,7 @@ def create_job(
     image_type_value = _parse_image_type(image_type, "image_type" in sent)
     blend_width_value = _parse_blend_width(blend_width, "blend_width" in sent)
     colormap_value = _parse_colormap(colormap, "colormap" in sent)
+    resolution_value = _parse_resolution(resolution, "resolution" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -265,7 +283,8 @@ def create_job(
         result = analyze_channels(left, right, file_rate, window, step=step)
         # write_frames smooths the note values (each frame is mixed with the earlier frames of the window), colors every
         # tile from the colormap at its own note's strength, blacks the tiles of notes below the threshold, and writes
-        # the finished tile colors as the chosen image type
+        # the finished tile colors as the chosen image type; a resolution above 1 first interpolates the grid of smoothed
+        # note values to a finer one
         write_frames(
             average_frames(result, fps, frames),
             frames_dir,
@@ -275,6 +294,7 @@ def create_job(
             threshold=threshold_value,
             image_type=image_type_value,
             blend_width=blend_width_value,
+            resolution=resolution_value,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -301,6 +321,7 @@ def create_job(
         "image_type": image_type_value,
         "blend_width": blend_width_value,
         "colormap": colormap_value,
+        "resolution": resolution_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

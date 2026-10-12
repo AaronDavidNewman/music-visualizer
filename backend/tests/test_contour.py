@@ -106,16 +106,17 @@ def test_a_grid_point_has_the_colour_of_its_value_on_the_scale_from_zero_to_the_
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
-def test_the_scale_is_fixed_for_the_whole_file_not_stretched_to_each_frame(tmp_path, name):
-    # frame 0 only reaches half of the file's peak (which sounds in frame 1): its loudest note must be at the middle of the
-    # scale, not at the end of it as it would be if every frame were scaled to its own range
+def test_the_color_scale_runs_from_zero_to_the_largest_value_of_each_frame(tmp_path, name):
+    # the scale follows the frame being drawn (the committed behaviour of 49bab02: vmax is the frame's own largest value),
+    # so the loudest note of every frame is at the end of the scale whatever the file's peak is
     frames = notes({30: 0.5, 5: 0.25}, {30: 0.5, 5: 0.25, 60: 1.0}, {60: 0.25})
     files = contour(frames, tmp_path, name)
-    for index in (0, 1):
-        assert near_scale(at_note(read(files[index]), 30), name, 0.5), (name, index)
-    assert near_scale(at_note(read(files[1]), 60), name, 1.0), name
-    assert near_scale(at_note(read(files[2]), 60), name, 0.25), name  # the same peak note, quieter: further down the scale
-    assert near_scale(at_note(read(files[0]), 5), name, 0.25), name
+    assert near_scale(at_note(read(files[0]), 30), name, 1.0), name  # frame 0: its top is 0.5
+    assert near_scale(at_note(read(files[0]), 5), name, 0.5), name
+    assert near_scale(at_note(read(files[1]), 60), name, 1.0), name  # frame 1: its top is 1.0
+    assert near_scale(at_note(read(files[1]), 30), name, 0.5), name
+    assert near_scale(at_note(read(files[1]), 5), name, 0.25), name
+    assert near_scale(at_note(read(files[2]), 60), name, 1.0), name  # frame 2: its top is 0.25
 
 
 def test_a_quieter_file_is_not_brighter_than_a_louder_one_for_the_same_note(tmp_path):
@@ -129,12 +130,13 @@ def test_the_four_undrawn_notes_count_for_the_peak_but_are_not_in_the_grid(tmp_p
     # the only loud note is note 85, which is not drawn: every drawn note is far below the peak, a flat first-colour picture
     picture = read(contour(notes({85: 1.0, 10: 0.0}), tmp_path)[0])
     assert (picture[..., :3] == lookup_table(DEFAULT_COLORMAP)[0]).all()
-    # and a drawn note at a tenth of that peak is near the start of the scale, not at its end
+    # a note that is only in the grid counts for the scale of its own frame, whatever the undrawn note is
     picture = read(contour(notes({85: 1.0, 10: 0.1, 20: 0.2}), tmp_path / "b")[0])
-    assert near_scale(at_note(picture, 20), DEFAULT_COLORMAP, 0.2)
+    assert near_scale(at_note(picture, 20), DEFAULT_COLORMAP, 1.0)
+    assert near_scale(at_note(picture, 10), DEFAULT_COLORMAP, 0.5)
 
 
-def test_the_coordinates_run_from_zero_to_the_largest_value_of_the_current_frame_and_are_worked_out_every_frame(
+def test_the_coordinates_and_the_color_scale_run_from_zero_to_the_largest_value_of_the_current_frame(
     tmp_path, monkeypatch
 ):
     from matplotlib.axes import Axes
@@ -147,14 +149,14 @@ def test_the_coordinates_run_from_zero_to_the_largest_value_of_the_current_frame
         return original(self, x, y, z, *args, **kwargs)
 
     monkeypatch.setattr(Axes, "contourf", spy)
-    # three frames with three different largest values; the file's peak (1.0) is in the second
+    # three frames with three different largest values, each worked out again for its own frame
     contour(notes({10: 0.4, 50: 0.2}, {10: 1.0, 50: 0.2}, {10: 0.25}), tmp_path)
     assert len(seen) == 3
     for (x, y, kwargs), top in zip(seen, (0.4, 1.0, 0.25)):
         assert len(x) == 12 and len(y) == 7  # one X per column and one Y per row
         assert x[0] == y[0] == 0 and x[-1] == y[-1] == pytest.approx(top)
         assert (np.diff(x) > 0).all() and (np.diff(y) > 0).all()
-        assert kwargs["vmin"] == 0 and kwargs["vmax"] == pytest.approx(1.0)  # the colour scale is still the file's
+        assert kwargs["vmin"] == 0 and kwargs["vmax"] == pytest.approx(top)  # and so is the colour scale
 
 
 # --- the other settings -----------------------------------------------------------------------------------------------

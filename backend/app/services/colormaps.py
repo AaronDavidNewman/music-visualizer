@@ -10,6 +10,8 @@ server starts and the tests that do not draw run without paying for it.
 """
 
 import functools
+import math
+import numbers
 
 import numpy as np
 
@@ -40,7 +42,7 @@ def lookup_table(name: str) -> np.ndarray:
     return table
 
 
-def colorize(smoothed, colormap: str, shown: int) -> np.ndarray:
+def colorize(smoothed, colormap: str, shown: int, peak: float | None = None) -> np.ndarray:
     """The color of every drawn tile in every frame: a ``uint8`` array of shape ``(frames, shown, 3)``.
 
     ``smoothed`` has one row per frame and one column per note (88), after smoothing. ``peak`` is the largest value
@@ -48,6 +50,10 @@ def colorize(smoothed, colormap: str, shown: int) -> np.ndarray:
     scale is ``sqrt(value / peak)`` and the color is the table entry ``rint(position * 255)``: a note with no strength
     has the first color, the note with the largest value the last, and a stronger note never has an earlier one. When no
     note has any strength every tile has the first color. The input is not modified.
+
+    ``peak`` is the reference value for the scale; leave it out to use the largest value of ``smoothed``. A caller whose
+    array does not hold every note (for instance a finer grid made by interpolation, which has no undrawn notes) passes
+    the peak of the whole file; a value above it gets the last color.
     """
     table = lookup_table(colormap)
     smoothed = np.asarray(smoothed, dtype=np.float64)
@@ -55,7 +61,10 @@ def colorize(smoothed, colormap: str, shown: int) -> np.ndarray:
         raise ValueError(f"At least {shown} note values per frame are needed (got shape {smoothed.shape}).")
     if smoothed.size and smoothed.min() < 0:
         raise ValueError("The note values must be 0 or more.")
-    peak = float(smoothed.max()) if smoothed.size else 0.0
-    share = smoothed[:, :shown] / peak if peak > 0 else np.zeros((smoothed.shape[0], shown))
+    if peak is None:
+        peak = float(smoothed.max()) if smoothed.size else 0.0
+    elif isinstance(peak, bool) or not isinstance(peak, numbers.Real) or not math.isfinite(peak) or peak < 0:
+        raise ValueError("The peak must be a finite number, 0 or more.")
+    share = np.minimum(smoothed[:, :shown] / peak, 1.0) if peak > 0 else np.zeros((smoothed.shape[0], shown))
     index = np.rint(np.sqrt(share) * (COLORMAP_STEPS - 1)).astype(np.intp)
     return table[index]

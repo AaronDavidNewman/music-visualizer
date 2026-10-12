@@ -4,7 +4,8 @@ Frame ``f`` covers ``[f / frame_rate, (f + 1) / frame_rate)`` seconds. It is the
 the windows that start inside that period, or, if none does, the most recent window that
 started before the period (which is the window covering its start when windows are consecutive).
 Each frame becomes a 12 x 7 grid of coloured tiles (one row per octave, one column per note name,
-252 x 168 pixels, 3:2).
+252 x 168 pixels, 3:2); a higher resolution (1 to 5) first interpolates the grid to 12 r x 7 r values, so the
+same picture size has more and smaller tiles (see ``resolution``).
 
 A tile's color is the color of a matplotlib colormap (``summer``, ``autumn``, ``hot`` or ``cool``) at a position that
 depends only on how strong the tile's own note is: its smoothed value as a share of the largest smoothed value in the
@@ -26,8 +27,16 @@ from PIL import Image
 
 from .colormaps import DEFAULT_COLORMAP, check_colormap, colorize
 from .contour import write_contour_frames
-from .image_types import DEFAULT_BLEND_WIDTH, DEFAULT_IMAGE_TYPE, check_blend_width, check_image_type, make_blender
+from .image_types import (
+    DEFAULT_BLEND_WIDTH,
+    DEFAULT_IMAGE_TYPE,
+    check_blend_width,
+    check_image_type,
+    make_grid_blender,
+    tile_edges,
+)
 from .note_analysis import NOTE_COUNT, AnalysisResult
+from .resolution import DEFAULT_RESOLUTION, check_resolution, interpolate_grid
 
 # 12 columns (the notes of an octave) by 7 rows (octaves) of tiles 21 wide by 24 tall: tile width is
 # 87.5% of its height, so the 252 x 168 image is exactly 3:2, since (12 * 0.875) / 7 = 1.5.
@@ -145,6 +154,16 @@ def _check_threshold(threshold) -> float:
         raise ValueError(f"The threshold must be a number from {MIN_THRESHOLD} to {MAX_THRESHOLD}.")
     return float(threshold)
 
+def hidden_below(values: np.ndarray, peak: float, threshold: float = DEFAULT_THRESHOLD) -> np.ndarray:
+    """Which values are too faint to show: a boolean array of the shape of ``values`` (any grid, drawn values).
+
+    A value is hidden when it is *strictly* below ``threshold`` percent of ``peak`` (the largest note value of the whole
+    file); one exactly at the threshold is shown. With threshold 0, or when ``peak`` is 0, nothing is hidden.
+    """
+    threshold = _check_threshold(threshold)
+    return np.asarray(values, dtype=np.float64) < threshold / 100.0 * float(peak)
+
+
 def hidden_notes(smoothed: np.ndarray, threshold: float = DEFAULT_THRESHOLD) -> np.ndarray:
     """Which drawn notes are too faint to show: a boolean array of shape ``(frames, 84)``.
 
@@ -160,19 +179,21 @@ def hidden_notes(smoothed: np.ndarray, threshold: float = DEFAULT_THRESHOLD) -> 
     if smoothed.ndim != 2 or smoothed.shape[1] < SHOWN_NOTES:
         raise ValueError(f"At least {SHOWN_NOTES} note values per frame are needed (got shape {smoothed.shape}).")
     peak = float(smoothed.max()) if smoothed.size else 0.0
-    return smoothed[:, :SHOWN_NOTES] < threshold / 100.0 * peak
+    return hidden_below(smoothed[:, :SHOWN_NOTES], peak, threshold)
 
-# The number of the tile each pixel belongs to. A frame has at most 84 flat colours, so it is saved as an
-# indexed-colour PNG: this index image never changes and only the 84-entry palette differs per frame.
-_TILE_INDEX_BYTES = (
-    np.repeat(
-        np.repeat(np.arange(SHOWN_NOTES, dtype=np.uint8).reshape(GRID_ROWS, GRID_COLUMNS), TILE_HEIGHT, axis=0),
-        TILE_WIDTH,
-        axis=1,
-    )
-    .astype(np.uint8)
-    .tobytes()
-)
+# The number of the tile each pixel belongs to, for a grid of ``columns`` x ``rows`` tiles in the whole picture: the tile
+# edges are the nearest whole pixels to an even split, so for the original 12 x 7 grid every tile is 21 x 24 pixels and a
+# finer grid has smaller tiles that differ by at most one pixel.
+def _tile_index(columns: int, rows: int) -> np.ndarray:
+    column_of = np.repeat(np.arange(columns), np.diff(tile_edges(columns, IMAGE_WIDTH)))
+    row_of = np.repeat(np.arange(rows), np.diff(tile_edges(rows, IMAGE_HEIGHT)))
+    return row_of[:, None] * columns + column_of[None, :]
+
+
+# A frame of the original grid has at most 84 flat colours, so it is saved as an indexed-colour PNG: this index image never
+# changes and only the 84-entry palette differs per frame. A finer grid can have more colours than a palette holds (256).
+_PALETTE_TILES = 256
+_TILE_INDEX_BYTES = _tile_index(GRID_COLUMNS, GRID_ROWS).astype(np.uint8).tobytes()
 
 def _palette_frame(colours: np.ndarray) -> Image.Image:
     """The frame as an indexed-colour image whose palette is the 84 tile colours (decodes to exactly ``render_frame``)."""
@@ -201,6 +222,7 @@ def write_frames(
     threshold: float = DEFAULT_THRESHOLD,
     image_type: str = DEFAULT_IMAGE_TYPE,
     blend_width: float = DEFAULT_BLEND_WIDTH,
+    resolution: int = DEFAULT_RESOLUTION,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -218,9 +240,17 @@ def write_frames(
     ``image_type`` is ``tiles`` (the default: flat tiles, written as palette PNGs), ``contour`` (see below) or ``blended`` (the same finished tile
     colors, but the colors of neighbouring tiles fade into each other across every shared edge; true-color PNGs).
     ``blend_width`` (10 to 25, default 25) is how far that fade reaches on each side of an edge, as a percentage of the
-    tile width; it has no effect for ``tiles``. See ``image_types``.
+    tile width (the mean width of a tile at the chosen resolution); it has no effect for ``tiles``. See ``image_types``.
 
-    ``image_type="contour"`` draws the smoothed note values of the 84 drawn notes (those the threshold hides as 0) as a
+    ``resolution`` (a whole number from 1 to 5, default 1) makes the grid that every frame is drawn from finer: the 7 x 12
+    grid of the smoothed values of the drawn notes is interpolated to 7r x 12r values (``interpolate_grid``: ``np.linspace``
+    positions and ``np.interp``, corners kept, no value outside the original range) *after* the smoothing, and the
+    threshold and the colors are worked out on those values. The picture keeps its size, so tiles get smaller; the scale of
+    the colors and the threshold's reference are the largest value of the whole file before the interpolation. Frames of
+    the original grid (1) are written exactly as without the setting.
+
+    ``image_type="contour"`` draws the grid of values (the 84 drawn notes, or the finer interpolated grid; the values the
+    threshold hides are 0) as a
     filled contour map in the ``colormap`` instead of tiles, with matplotlib (see ``contour``): the contour levels are
     chosen by matplotlib, and the color scale is *linear* from 0 to the largest smoothed value in the whole file (the
     tiles use the square root of the strength). ``blend_width`` has no effect for it either.
@@ -232,27 +262,35 @@ def write_frames(
     _check_smoothing_window(smoothing_window)
     image_type = check_image_type(image_type)
     blend_width = check_blend_width(blend_width)
+    resolution = check_resolution(resolution)
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
+    peak = float(smoothed.max()) if smoothed.size else 0.0
+    columns, rows = GRID_COLUMNS * resolution, GRID_ROWS * resolution
+    values = interpolate_grid(smoothed[:, :SHOWN_NOTES], GRID_COLUMNS, GRID_ROWS, resolution)
+    hidden = hidden_below(values, peak, threshold)
     if image_type == "contour":
-        values = smoothed[:, :SHOWN_NOTES].copy()
-        values[hidden_notes(smoothed, threshold)] = 0
-        peak = float(smoothed.max()) if smoothed.size else 0.0
-        write_contour_frames(values, peak, colormap, directory, GRID_COLUMNS, GRID_ROWS, IMAGE_WIDTH, IMAGE_HEIGHT)
+        values[hidden] = 0
+        write_contour_frames(values, peak, colormap, directory, columns, rows, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
-    colours = colorize(smoothed, colormap, SHOWN_NOTES)
-    colours[hidden_notes(smoothed, threshold)] = 0
+    colours = colorize(values, colormap, columns * rows, peak)
+    colours[hidden] = 0
     directory.mkdir(parents=True, exist_ok=True)
     blend = pool = None
     futures = []
+    index = _tile_index(columns, rows)
     if image_type == "blended":
-        blend = make_blender(blend_width, GRID_COLUMNS, GRID_ROWS, TILE_WIDTH, TILE_HEIGHT)
+        blend = make_grid_blender(blend_width, columns, rows, IMAGE_WIDTH, IMAGE_HEIGHT)
         pool = ThreadPoolExecutor(max_workers=_BLEND_WORKERS)
     try:
         for i in range(colours.shape[0]):
             path = directory / f"frame_{i:06d}.png"
-            if blend is None:
+            if blend is None and columns * rows <= _PALETTE_TILES:
                 # Level 6 makes these files about a third of the size of level 1 for roughly 0.2 s more per 10,000 frames.
                 _palette_frame(colours[i]).save(path, compress_level=6)
+            elif blend is None:
+                # a finer grid has more colors than a palette holds: a true-color picture (level 6: about 45% smaller
+                # than level 1 for under 0.15 ms more per frame)
+                Image.fromarray(colours[i][index], "RGB").save(path, compress_level=6)
             else:
                 futures.append(pool.submit(_save_blended, blend, colours[i], path))
         for future in futures:

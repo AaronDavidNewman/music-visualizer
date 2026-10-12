@@ -22,14 +22,14 @@ No stored data is added. These are the values that exist while a job is created,
 | `Z[t]` | `values[t].reshape(7, 12)`, so note `n` is at row `n // 12`, column `n % 12`; drawn as `Z[t][::-1]` so that row 0 (the lowest octave) is at the top of the picture |
 | `top[t]` | `values[t].max()`, the largest value of frame `t` (the drawn notes, hidden ones as 0); worked out again for every frame |
 | `X`, `Y` | `np.linspace(0, top[t], 12)` and `np.linspace(0, top[t], 7)`, per frame. With the axes off and X and Y scaled together this changes no pixel; the color scale below is what fixes the colors |
-| Color scale | `vmin = 0`, `vmax = peak`, the same for every frame; linear in the value |
+| Color scale | `vmin = 0`, `vmax = top[t]`, the frame's own largest value (changed by the user on 2026-10-12; it was `peak`, the same for every frame); linear in the value |
 | Levels | chosen by matplotlib for each frame; not stored and not known to the application |
 | Colormap | the job's colormap name, used as matplotlib's `cmap` |
 
 ## Rules
 
 - A frame in which `Z` has the same value everywhere (including all zero, and every frame when `peak` is 0) is a **flat picture** of one color: the colormap's color at `value / peak` on the scale, the first color for 0. It is made with Pillow, not `contourf`. (A frame with all notes hidden is such a frame.)
-- Otherwise the frame is `contourf(X, Y, Z[::-1], cmap=colormap, vmin=0, vmax=peak)` on an axes that fills a 252 × 168 pixel figure with the axis decorations off, saved by `pyplot.savefig` as `frame_NNNNNN.png`.
+- Otherwise the frame is `contourf(X, Y, Z[::-1], cmap=colormap, vmin=0, vmax=top[t])` on an axes that fills a 252 × 168 pixel figure with the axis decorations off, saved by `pyplot.savefig` as `frame_NNNNNN.png`.
 - The frame count, the file names and the timing are the same as for the other types (FR-011): the file name is `frame_` plus the six-digit index.
 - Smoothing (`smooth_frames`), its window and the threshold (`hidden_notes`) are the existing functions, called before the choice of the image type, with the same arguments, so the notes that are hidden are the same in every type.
 - The drawing of a job holds one process-wide lock (the `pyplot` state is global).

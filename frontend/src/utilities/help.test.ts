@@ -4,6 +4,7 @@ import {
   colormapHelp,
   frameRateHelp,
   imageTypeHelp,
+  resolutionHelp,
   smoothingHelp,
   smoothingWindowHelp,
   spacingHelp,
@@ -74,5 +75,16 @@ describe("setting explanations", () => {
     expect(colormapHelp).toContain("Autumn: red to yellow");
     expect(colormapHelp).toContain("Hot: dark red");
     expect(colormapHelp).toContain("Cool: cyan to magenta");
+  });
+});
+
+describe("resolution explanation", () => {
+  it("explains the interpolation, the original grid, the highest value and the smaller tiles", () => {
+    expect(resolutionHelp).toContain("interpolat");
+    expect(resolutionHelp).toContain("12 \u00d7 7");
+    expect(resolutionHelp).toContain("5\u00d7");
+    expect(resolutionHelp).toContain("60 \u00d7 35");
+    expect(resolutionHelp).toContain("smaller tiles");
+    expect(resolutionHelp).toContain("contour");
   });
 });

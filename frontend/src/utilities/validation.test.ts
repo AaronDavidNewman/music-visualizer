@@ -25,6 +25,10 @@ import {
   validateFile,
   validateFrameRate,
   blendWidthApplies,
+  DEFAULT_RESOLUTION,
+  RESOLUTION_RANGE,
+  formatResolution,
+  validateResolution,
   validateBlendWidth,
   validateImageType,
   validateSmoothing,
@@ -243,5 +247,33 @@ describe("colormap", () => {
 
   it.each(rejected)("rejects %j with the offered choices", (v) => {
     expect(validateColormap(v)).toBe(message);
+  });
+});
+
+describe("resolution", () => {
+  it("ranges from 1 to 5 in whole steps and starts at 1", () => {
+    expect(RESOLUTION_RANGE).toEqual({ min: 1, max: 5, step: 1 });
+    expect(DEFAULT_RESOLUTION).toBe(1);
+  });
+
+  it.each([1, 2, 3, 4, 5, "1", "5", " 3 ", 3.0])("accepts %j", (v) => {
+    expect(validateResolution(v)).toBeNull();
+  });
+
+  it.each([0, 6, -1, 2.5, "", "  ", "abc", "NaN", "Infinity", "1e9", "3x", NaN, Infinity])("rejects %j", (v) => {
+    expect(validateResolution(v)).toBe("The resolution must be a whole number from 1 to 5.");
+  });
+
+  it("shows the multiple, and the grid it gives above 1", () => {
+    expect(formatResolution(1)).toBe("1\u00d7");
+    expect(formatResolution(2)).toBe("2\u00d7 (24 \u00d7 14)");
+    expect(formatResolution(3)).toBe("3\u00d7 (36 \u00d7 21)");
+    expect(formatResolution(5)).toBe("5\u00d7 (60 \u00d7 35)");
+  });
+
+  it("gives a grid of 12 times and 7 times the resolution for every offered value", () => {
+    for (let r = RESOLUTION_RANGE.min; r <= RESOLUTION_RANGE.max; r += RESOLUTION_RANGE.step) {
+      if (r > 1) expect(formatResolution(r)).toContain(`(${12 * r} \u00d7 ${7 * r})`);
+    }
   });
 });

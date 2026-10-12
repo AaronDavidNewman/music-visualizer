@@ -11,10 +11,13 @@ from app.services.image_types import (
     IMAGE_TYPES,
     MAX_BLEND_WIDTH,
     MIN_BLEND_WIDTH,
+    axis_weights_for_edges,
     blend_tile_colors,
     check_blend_width,
     check_image_type,
     make_blender,
+    make_grid_blender,
+    tile_edges,
 )
 
 COLUMNS, ROWS, TW, TH = 12, 7, 21, 24
@@ -284,3 +287,99 @@ def test_the_feather_is_crisper_than_a_straight_ramp_over_the_same_distance():
     assert got[y, x - 4, 0] <= 1
     # but the whole feather really reaches 5 pixels: the first pixel beyond that is exactly the tile's color
     assert got[y, x + 5, 0] == 255 and got[y, x - 6, 0] == 0
+
+
+# --- the blender on any grid (feature 016: finer grids have smaller tiles whose edges are at the nearest pixel) ---------------
+
+GRID_RESOLUTIONS = [1, 2, 3, 4, 5]
+WIDTH, HEIGHT = 252, 168
+
+
+def pixel_tiles(columns, rows):
+    """The tile (row, column) of every pixel, worked out independently of the code under test."""
+    x = np.searchsorted(np.rint(np.linspace(0, WIDTH, columns + 1)), np.arange(WIDTH), side="right") - 1
+    y = np.searchsorted(np.rint(np.linspace(0, HEIGHT, rows + 1)), np.arange(HEIGHT), side="right") - 1
+    return np.broadcast_to(y[:, None], (HEIGHT, WIDTH)), np.broadcast_to(x[None, :], (HEIGHT, WIDTH))
+
+
+def far_from_inner_edges(columns, rows, blend_width):
+    reach = blend_width / 100.0 * (WIDTH / columns)
+    ex, ey = np.rint(np.linspace(0, WIDTH, columns + 1))[1:-1], np.rint(np.linspace(0, HEIGHT, rows + 1))[1:-1]
+    fx = np.abs((np.arange(WIDTH) + 0.5)[:, None] - ex[None, :]).min(axis=1) > reach
+    fy = np.abs((np.arange(HEIGHT) + 0.5)[:, None] - ey[None, :]).min(axis=1) > reach
+    return fy[:, None] & fx[None, :]
+
+
+def test_tile_edges_are_the_multiples_of_the_tile_size_when_it_divides_and_within_a_pixel_of_even_otherwise():
+    assert tile_edges(12, 252).tolist() == [21 * i for i in range(13)]
+    assert tile_edges(7, 168).tolist() == [24 * i for i in range(8)]
+    for r in GRID_RESOLUTIONS:
+        for count, size in ((12 * r, WIDTH), (7 * r, HEIGHT)):
+            e = tile_edges(count, size)
+            assert e[0] == 0 and e[-1] == size and len(e) == count + 1
+            assert (np.abs(e - np.linspace(0, size, count + 1)) <= 0.5).all()
+            assert np.diff(e).max() - np.diff(e).min() <= 1 and (np.diff(e) > 0).all()
+
+
+@pytest.mark.parametrize("blend_width", [10, 17.5, 25])
+def test_the_grid_blender_of_the_original_geometry_is_the_make_blender_picture(blend_width):
+    colors = np.random.default_rng(1).integers(0, 256, size=(84, 3), dtype=np.uint8)
+    assert (make_grid_blender(blend_width, 12, 7, 252, 168)(colors) == make_blender(blend_width, 12, 7, 21, 24)(colors)).all()
+
+
+def test_axis_weights_for_uniform_edges_are_those_of_equal_tiles():
+    from app.services.image_types import axis_weights
+
+    for a, b in zip(axis_weights_for_edges(np.arange(13) * 21, 5.25), axis_weights(252, 21, 12, 5.25)):
+        assert np.array_equal(a, b)
+
+
+@pytest.mark.parametrize("r", GRID_RESOLUTIONS)
+@pytest.mark.parametrize("blend_width", [10, 25])
+def test_pixels_farther_than_the_reach_from_every_inner_edge_have_exactly_their_tiles_color(r, blend_width):
+    columns, rows = 12 * r, 7 * r
+    colors = np.random.default_rng(r).integers(0, 256, size=(rows * columns, 3), dtype=np.uint8)
+    picture = make_grid_blender(blend_width, columns, rows, WIDTH, HEIGHT)(colors)
+    ty, tx = pixel_tiles(columns, rows)
+    expected = colors[ty * columns + tx]
+    far = far_from_inner_edges(columns, rows, blend_width)
+    assert picture.shape == (HEIGHT, WIDTH, 3) and picture.dtype == np.uint8
+    assert far.any() and (picture[far] == expected[far]).all()
+
+
+@pytest.mark.parametrize("r", GRID_RESOLUTIONS)
+def test_one_lit_tile_lights_only_that_tile_and_the_tiles_touching_it_never_across_the_end_of_a_row(r):
+    columns, rows = 12 * r, 7 * r
+    ty, tx = pixel_tiles(columns, rows)
+    blend = make_grid_blender(25, columns, rows, WIDTH, HEIGHT)
+    for row, col in ((0, 0), (0, columns - 1), (rows - 1, 0), (rows - 1, columns - 1), (rows // 2, columns // 2), (2, columns - 1)):
+        colors = np.zeros((rows * columns, 3), dtype=np.uint8)
+        colors[row * columns + col] = 255
+        lit = blend(colors).any(axis=2)
+        assert lit.any()
+        assert (np.abs(ty[lit] - row) <= 1).all() and (np.abs(tx[lit] - col) <= 1).all(), (r, row, col)
+
+
+@pytest.mark.parametrize("r", GRID_RESOLUTIONS)
+def test_the_fades_from_the_two_sides_of_the_smallest_tile_never_meet(r):
+    columns, rows = 12 * r, 7 * r
+    for edges, count, size in ((tile_edges(columns, WIDTH), columns, WIDTH), (tile_edges(rows, HEIGHT), rows, HEIGHT)):
+        reach = 25 / 100.0 * (WIDTH / columns)
+        own, neighbour, weight = axis_weights_for_edges(edges, reach)
+        assert (np.abs(neighbour - own) <= 1).all()
+        assert (weight >= 0.5).all() and (weight <= 1.0).all()  # a pixel never prefers the tile across the edge
+        tile_width = np.diff(edges).min()
+        assert 2 * reach < tile_width  # so no pixel is near both of its tile's edges
+
+
+@pytest.mark.parametrize("r", GRID_RESOLUTIONS)
+def test_a_flat_color_stays_flat_and_two_colors_stay_between_them(r):
+    columns, rows = 12 * r, 7 * r
+    blend = make_grid_blender(25, columns, rows, WIDTH, HEIGHT)
+    flat = np.tile(np.array([[37, 190, 91]], dtype=np.uint8), (rows * columns, 1))
+    assert (np.abs(blend(flat).astype(int) - flat[0]) <= 1).all()
+    two = np.zeros((rows * columns, 3), dtype=np.uint8)
+    two[::2] = 200
+    two[1::2] = 50
+    picture = blend(two)
+    assert picture.min() >= 50 and picture.max() <= 200

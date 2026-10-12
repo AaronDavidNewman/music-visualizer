@@ -30,3 +30,6 @@ export function spacingHelp(stepHint: string): string {
   const base = "Distance between the starts of windows, as a multiple of the window size.";
   return stepHint ? `${base} ${stepHint}` : base;
 }
+
+export const resolutionHelp =
+  "How fine the picture is. 1\u00d7 is the original grid of 12 \u00d7 7 values, one for each note. Higher values, up to 5\u00d7 (60 \u00d7 35), make new values between the notes by interpolating, so the picture has more and smaller tiles (or finer contour steps) in the same size. The threshold and the colors then apply to those new values.";

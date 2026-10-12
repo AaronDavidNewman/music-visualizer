@@ -101,7 +101,7 @@ def test_the_response_has_the_colormap_and_none_of_the_removed_settings(client):
         assert key not in job
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
-        "smoothing", "smoothing_window", "threshold", "image_type", "blend_width", "colormap", "window_spacing",
+        "smoothing", "smoothing_window", "threshold", "image_type", "blend_width", "colormap", "resolution", "window_spacing",
         "step_samples", "window_count", "spacing_raised", "frame_url_template",
     }  # fmt: skip
 

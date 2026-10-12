@@ -13,6 +13,7 @@ from app.services.frame_rendering import (
     TILE_WIDTH,
     average_frames,
     frame_count,
+    hidden_below,
     hidden_notes,
     smooth_frames,
     write_frames,
@@ -644,3 +645,30 @@ def test_an_error_in_a_worker_is_raised_and_no_threads_are_left_running(tmp_path
     with pytest.raises(RuntimeError, match="disk full"):
         write_frames(LEVEL_FRAMES, tmp_path, image_type="blended")
     assert threading.active_count() == before  # the pool was shut down
+
+
+# --- the threshold on any grid of drawn values ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("threshold", [0, 1, 2.5, 5, 10])
+def test_hidden_below_equals_hidden_notes_on_the_drawn_notes(threshold):
+    rng = np.random.default_rng(11)
+    values = rng.random((12, NOTE_COUNT)) ** 3
+    peak = float(values.max())
+    assert (hidden_below(values[:, :SHOWN_NOTES], peak, threshold) == hidden_notes(values, threshold)).all()
+
+
+def test_hidden_below_is_strict_and_works_on_any_shape():
+    assert hidden_below(np.array([0.05, 0.1, 0.2, 1.0]), 1.0, 10).tolist() == [True, False, False, False]  # 0.1 is at 10%
+    assert hidden_below(np.array([[0.05, 0.5], [0.0, 1.0]]), 1.0, 10).tolist() == [[True, False], [True, False]]
+    grid = np.random.default_rng(12).random((3, 336))
+    assert hidden_below(grid, 1.0, 5).shape == grid.shape
+
+
+def test_hidden_below_hides_nothing_without_a_threshold_or_for_a_silent_file():
+    values = np.random.default_rng(13).random((4, 50))
+    assert not hidden_below(values, 1.0, 0).any()
+    assert not hidden_below(np.zeros((3, 8)), 0.0, 10).any()
+    with pytest.raises(ValueError):
+        hidden_below(values, 1.0, 11)
+

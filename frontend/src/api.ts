@@ -17,6 +17,8 @@ export interface JobResult {
   blend_width: number;
   /** The colormap used: one of the names in COLORMAPS (utilities/validation.ts). */
   colormap: string;
+  /** How many times finer than the original 12 \u00d7 7 grid the picture is drawn (1 to 5). */
+  resolution: number;
   window_spacing: number;
   step_samples: number;
   window_count: number;
@@ -40,6 +42,8 @@ export interface JobSettings {
   blendWidth: number;
   /** One of the names in COLORMAPS (utilities/validation.ts). */
   colormap: string;
+  /** 1 to 5: a whole number. */
+  resolution: number;
 }
 
 /** Uploads the file and waits for the frames to be created. Rejects with a message fit to show the user. */
@@ -55,6 +59,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("image_type", settings.imageType);
   body.append("blend_width", String(settings.blendWidth));
   body.append("colormap", settings.colormap);
+  body.append("resolution", String(settings.resolution));
 
   let res: Response;
   try {
