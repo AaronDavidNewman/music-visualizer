@@ -11,6 +11,7 @@ The existing optional field `image_type` accepts a fourth value, `circles`, and 
 | `image_type` | text | `tiles` | Exactly `tiles`, `blended`, `contour` or `circles` (lowercase, no spaces). Anything else, including an empty value: refused. |
 | `circle_unit` | text | `4` | A whole number from 1 to 10 (`4` and `4.0` accepted). Empty, not a number, fractional, out of range or not finite: refused. |
 | `circle_size` | text | `25` | A whole number from 25 to 50 (the circumference of a circle in pixels). Same rules. |
+| `circle_resize` | text | `false` | `true`, `false`, `1` or `0`, any case, surrounding spaces ignored. Anything else, including empty: refused (`The circle resize must be true or false.`). When true, a circle's radius is scaled from 1 (faintest, never smaller than the size) to 3 (loudest) by its note's strength. |
 | `circle_memory` | text | `300` | A whole number from 100 to 500. Same rules. |
 | `circle_notes` | text | `8` | A whole number from 5 to 12. Same rules. |
 
@@ -20,6 +21,7 @@ Refusals: HTTP 400, before any audio is read or any job is created:
 { "detail": "The image type must be one of tiles, blended, contour, circles." }
 { "detail": "The circle unit must be a whole number from 1 to 10." }
 { "detail": "The circle size must be a whole number from 25 to 50." }
+{ "detail": "The circle resize must be true or false." }
 { "detail": "The circle memory must be a whole number from 100 to 500." }
 { "detail": "The number of circle notes must be a whole number from 5 to 12." }
 ```
@@ -29,7 +31,7 @@ The four circle fields are validated whatever the image type is, and have no eff
 Success response (200): four fields are added, the values used:
 
 ```json
-{ "image_type": "circles", "circle_unit": 4, "circle_size": 25, "circle_memory": 300, "circle_notes": 8 }
+{ "image_type": "circles", "circle_unit": 4, "circle_size": 25, "circle_resize": false, "circle_memory": 300, "circle_notes": 8 }
 ```
 
 All other response fields are unchanged; the frame count, the `frame_url_template` and the frame size (252 × 168 PNG) are the same as for the other image types. For `tiles`, `blended` and `contour` the frames are exactly those made before this feature.

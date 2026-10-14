@@ -26,6 +26,7 @@ from .test_circles import (
     A4,
     steady,
     SIZE_MESSAGE,
+    RESIZE_MESSAGE,
     C4,
     F3,
     F5,
@@ -233,6 +234,78 @@ def test_a_note_at_the_same_volume_is_drawn_again_on_the_same_place_and_the_olde
     assert tuple(rgb(files[-1])[min(int(y), H - 1), min(int(x), W - 1)]) == tuple(lookup_table(colormap)[255])
 
 
+def radius_of(box):
+    return (box[2] - box[0]) / 2
+
+
+def test_the_resize_scales_each_radius_by_the_strength_of_its_note_from_one_to_three_times(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    size = 37
+    base = size / (2 * math.pi)
+    shares = (1e-9, 0.25, 1.0)  # about no energy, a quarter, the loudest note of the file
+    write(notes({C4: shares[0], A4: shares[1], F5: shares[2]}), tmp_path, circle_size=size, circle_resize=True)
+    assert len(discs.calls) == 3  # weakest first
+    for (box, _), share in zip(discs.calls, shares):
+        color = int(np.rint(math.sqrt(share) * 255))
+        assert radius_of(box) == pytest.approx(base * (1.0 + 2.0 * color / 255), abs=1e-9)
+    assert radius_of(discs.calls[0][0]) == pytest.approx(base * 1.0, abs=1e-9)  # no energy: the size that was asked for, not smaller
+    assert radius_of(discs.calls[2][0]) == pytest.approx(base * 3.0, abs=1e-9)
+
+
+def test_with_the_resize_off_or_not_given_every_circle_has_the_radius_of_the_size(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    base = 44 / (2 * math.pi)
+    frames = notes({C4: 1e-9, A4: 0.25, F5: 1.0})
+    write(frames, tmp_path / "a", circle_size=44)
+    write(frames, tmp_path / "b", circle_size=44, circle_resize=False)
+    assert len(discs.calls) == 6
+    assert all(radius_of(box) == pytest.approx(base, abs=1e-9) for box, _ in discs.calls)
+
+
+def test_the_resize_changes_only_the_sizes_not_the_places_the_colors_or_the_opacities(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    frames = np.random.default_rng(12).random((15, 88)) ** 2
+    write(frames, tmp_path / "off", circle_notes=6, circle_memory=100)
+    count = len(discs.calls)
+    write(frames, tmp_path / "on", circle_notes=6, circle_memory=100, circle_resize=True)
+    off, on = discs.calls[:count], discs.calls[count:]
+    assert len(off) == len(on) > 0
+    assert np.allclose(np.array([centre(b) for b, _ in off]), np.array([centre(b) for b, _ in on]), atol=1e-9)
+    assert [f for _, f in off] == [f for _, f in on]
+    assert [radius_of(b) for b, _ in off] != [radius_of(b) for b, _ in on]
+
+
+def test_no_circle_is_smaller_than_the_size_or_larger_than_three_times_it_whatever_the_music(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    size = 44
+    base = size / (2 * math.pi)
+    write(np.random.default_rng(21).random((20, 88)) ** 3, tmp_path, circle_size=size, circle_resize=True, circle_notes=12)
+    radii = [radius_of(box) for box, _ in discs.calls]
+    assert len(radii) > 0 and min(radii) >= base - 1e-9 and max(radii) <= 3 * base + 1e-9
+    assert max(radii) > 1.5 * base  # and the loud ones really are larger
+
+
+def test_a_circle_keeps_the_size_it_was_given_when_it_was_put_down_while_later_circles_are_other_sizes(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    write(notes({F5: 1.0}, {F3: 0.04}), tmp_path, circle_resize=True)
+    first, second = discs.by_frame([1, 2])
+    assert radius_of(first[0][0]) == radius_of(second[0][0])  # the first circle is drawn the same in the next frame
+    assert radius_of(second[1][0]) < radius_of(second[0][0])  # and the quieter new one is smaller
+
+
+def test_the_loudest_circle_covers_about_nine_times_the_area_when_resized(tmp_path):
+    colormap = COLORMAPS[0]
+    table = lookup_table(colormap)
+    background, colour = np.array(table[128], dtype=float), np.array(table[255], dtype=float)
+    channel = int(np.abs(colour - background).argmax())
+
+    def covered(resize):
+        picture = rgb(write(notes({A4: 1.0}), tmp_path / str(resize), colormap=colormap, circle_size=37, circle_resize=resize)[0]).astype(float)
+        return ((picture[:, :, channel] - background[channel]) / (colour[channel] - background[channel])).sum()
+
+    assert covered(True) == pytest.approx(9 * covered(False), rel=0.08)  # three times the radius
+
+
 def test_the_opacity_of_a_circle_falls_with_its_age_until_it_is_barely_visible(tmp_path, monkeypatch):
     discs = Discs(monkeypatch)
     frames = 130
@@ -364,6 +437,10 @@ def test_circles_is_the_fourth_image_type():
         ({"circle_size": 51}, SIZE_MESSAGE),
         ({"circle_size": 30.5}, SIZE_MESSAGE),
         ({"circle_size": "30"}, SIZE_MESSAGE),
+        ({"circle_resize": 1}, RESIZE_MESSAGE),
+        ({"circle_resize": "true"}, RESIZE_MESSAGE),
+        ({"circle_resize": None}, RESIZE_MESSAGE),
+        ({"circle_resize": 1.0}, RESIZE_MESSAGE),
     ],
 )
 def test_a_bad_circle_setting_is_refused_before_anything_is_written_for_every_image_type(tmp_path, image_type, kwargs, message):

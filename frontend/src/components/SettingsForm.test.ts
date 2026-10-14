@@ -259,7 +259,7 @@ describe("the interpolate slider", () => {
 describe("the circles controls", () => {
   it("are not shown at the starting image type (Tiles)", async () => {
     const html = await render();
-    for (const id of ["circle-unit", "circle-size", "circle-memory", "circle-notes"]) expect(html).not.toContain(`id="${id}"`);
+    for (const id of ["circle-unit", "circle-size", "circle-resize", "circle-memory", "circle-notes"]) expect(html).not.toContain(`id="${id}"`);
   });
 
   it("are four sliders shown only while Circles is chosen, with readouts and info buttons", () => {
@@ -274,6 +274,18 @@ describe("the circles controls", () => {
     expect(formSource).toContain('label="circle size"');
     expect(formSource).toContain('label="circle memory"');
     expect(formSource).toContain('label="circles per frame"');
+  });
+
+  it("have a checkbox for the resize by volume, off at the start, inside the circles block and disabled while a job runs", () => {
+    const input = formSource.match(/<input\s+id="circle-resize"[^>]*\/>/)?.[0] ?? "";
+    expect(input).toContain('type="checkbox"');
+    expect(input).toContain('v-model="circleResize"');
+    expect(input).toContain(':disabled="busy"');
+    expect(formSource).toContain('<label for="circle-resize">Resize by volume</label>');
+    expect(formSource).toContain('label="resize by volume"');
+    expect(formSource).toContain("ref<boolean>(DEFAULT_CIRCLE_RESIZE)");
+    expect(formSource).toContain("circleResize: circleResize.value");
+    expect(formSource.indexOf('id="circle-resize"')).toBeGreaterThan(formSource.indexOf("v-if=\"imageType === 'circles'\""));
   });
 
   it("make the five grid controls disabled while Circles is chosen", () => {

@@ -10,6 +10,11 @@ import pytest
 
 from app.services.circles import (
     DEFAULT_CIRCLE_MEMORY,
+    DEFAULT_CIRCLE_RESIZE,
+    MAX_RESIZE_FACTOR,
+    MIN_RESIZE_FACTOR,
+    check_circle_resize,
+    resize_factor,
     DEFAULT_CIRCLE_SIZE,
     MAX_CIRCLE_SIZE,
     MIN_CIRCLE_SIZE,
@@ -38,6 +43,7 @@ UNIT_MESSAGE = "The circle unit must be a whole number from 1 to 10."
 MEMORY_MESSAGE = "The circle memory must be a whole number from 100 to 500."
 NOTES_MESSAGE = "The number of circle notes must be a whole number from 5 to 12."
 SIZE_MESSAGE = "The circle size must be a whole number from 25 to 50."
+RESIZE_MESSAGE = "The circle resize must be true or false."
 
 F5, F3, A4, C4 = 44, 20, 36, 27  # indices of the drawn notes (0 is A1, 55 Hz)
 
@@ -85,6 +91,7 @@ def test_constants():
     assert (MIN_CIRCLE_MEMORY, MAX_CIRCLE_MEMORY, DEFAULT_CIRCLE_MEMORY) == (100, 500, 300)
     assert (MIN_CIRCLE_NOTES, MAX_CIRCLE_NOTES, DEFAULT_CIRCLE_NOTES) == (5, 12, 8)
     assert (MIN_CIRCLE_SIZE, MAX_CIRCLE_SIZE, DEFAULT_CIRCLE_SIZE) == (25, 50, 25)
+    assert (MIN_RESIZE_FACTOR, MAX_RESIZE_FACTOR, DEFAULT_CIRCLE_RESIZE) == (1.0, 3.0, False)
     assert MIDDLE_COLOR_ROW == 128  # the table entry at the middle of the scale (0.5 of 255 rounds to 128)
 
 
@@ -125,6 +132,35 @@ def test_the_opacity_falls_in_a_straight_line_from_opaque_to_barely_visible_just
         assert alpha == round(255 * (memory - age) / memory)  # the formula, worked out here
         assert 0 < alpha <= 255
     assert alphas[memory // 2] == round(255 * 0.5)  # half way back, about half opaque
+
+
+# --- resizing by volume -------------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("good", [True, False, np.True_, np.False_])
+def test_the_resize_is_a_boolean_and_is_returned_as_one(good):
+    assert check_circle_resize(good) is bool(good)
+
+
+@pytest.mark.parametrize("bad", [1, 0, 1.0, "true", "false", "", None, [], 2, np.int64(1)])
+def test_anything_that_is_not_a_boolean_is_refused(bad):
+    with pytest.raises(ValueError) as error:
+        check_circle_resize(bad)
+    assert str(error.value) == RESIZE_MESSAGE
+
+
+def test_the_radius_factor_goes_in_a_straight_line_from_one_at_no_energy_to_three_at_the_maximum():
+    assert resize_factor(0) == 1.0 and resize_factor(255) == 3.0
+    assert resize_factor(255 / 2) == pytest.approx(2.0)  # half way along the colors is a factor of two
+    for c in range(256):
+        assert resize_factor(c) == pytest.approx(1.0 + 2.0 * c / 255)
+        assert resize_factor(c) >= 1.0  # never smaller than the size that was asked for
+    factors = [resize_factor(c) for c in range(256)]
+    assert factors == sorted(factors) and len(set(factors)) == 256
+
+
+def test_with_the_resize_off_every_circle_has_a_factor_of_one():
+    assert {resize_factor(c, False) for c in range(256)} == {1.0}
 
 
 # --- the move of a note ---------------------------------------------------------------------------------------------------------

@@ -46,6 +46,9 @@ export const circleUnitHelp =
 export const circleSizeHelp =
   "25 to 50 pixels. How large a circle is drawn, as the length of its circumference (the distance around it): 25 is a small dot about 8 pixels across, 50 is about 16 pixels across. It does not change how far circles move. Only used by Circles.";
 
+export const circleResizeHelp =
+  "Off by default. When on, the size of each circle also follows the energy of its note: the radius goes from the chosen size for the faintest note to three times it for the loudest note of the whole file, in a straight line along the same scale as the colors, so no circle is smaller than the size. A circle keeps the size it was given when it was put down. Only used by Circles.";
+
 export const circleMemoryHelp =
   "100 to 500 circles. How many of the most recent circles stay in the picture; when it is full the oldest is dropped. A larger memory leaves a longer trail. The newest circle is drawn solid and older ones fade with their age, so the oldest, just before it is dropped, is barely visible. The background is the middle color of the color map. Only used by Circles.";
 

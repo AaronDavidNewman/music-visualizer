@@ -94,7 +94,7 @@ def test_the_response_has_the_usual_keys_and_the_number_of_notes(client):
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
         "smoothing", "smoothing_window", "threshold", "image_type", "blend_width", "colormap", "resolution", "note_count",
-        "interpolate", "circle_unit", "circle_memory", "circle_notes", "circle_size", "window_spacing", "step_samples", "window_count", "spacing_raised", "frame_url_template",
+        "interpolate", "circle_unit", "circle_memory", "circle_notes", "circle_size", "circle_resize", "window_spacing", "step_samples", "window_count", "spacing_raised", "frame_url_template",
     }  # fmt: skip
     for key in REMOVED:
         assert key not in job

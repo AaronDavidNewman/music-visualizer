@@ -7,6 +7,7 @@ import {
   DEFAULT_BLEND_WIDTH,
   DEFAULT_CIRCLE_MEMORY,
   DEFAULT_CIRCLE_NOTES,
+  DEFAULT_CIRCLE_RESIZE,
   DEFAULT_CIRCLE_SIZE,
   DEFAULT_CIRCLE_UNIT,
   DEFAULT_IMAGE_TYPE,
@@ -34,6 +35,7 @@ import {
   formatBlendWidth,
   formatCircleMemory,
   formatCircleNotes,
+  formatCircleResize,
   formatCircleSize,
   formatCircleUnit,
   formatInterpolate,
@@ -73,6 +75,7 @@ import {
   frameRateHelp,
   circleMemoryHelp,
   circleNotesHelp,
+  circleResizeHelp,
   circleSizeHelp,
   circleUnitHelp,
   imageTypeHelp,
@@ -106,6 +109,7 @@ const circleUnit = ref<number>(DEFAULT_CIRCLE_UNIT);
 const circleMemory = ref<number>(DEFAULT_CIRCLE_MEMORY);
 const circleNotes = ref<number>(DEFAULT_CIRCLE_NOTES);
 const circleSize = ref<number>(DEFAULT_CIRCLE_SIZE);
+const circleResize = ref<boolean>(DEFAULT_CIRCLE_RESIZE);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
 function defaultSpacingText(sampleRate: number, frameRate: string, size: number): string | null {
@@ -188,6 +192,7 @@ function onSubmit() {
     circleMemory: circleMemory.value,
     circleNotes: circleNotes.value,
     circleSize: circleSize.value,
+    circleResize: circleResize.value,
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -393,6 +398,17 @@ function onSubmit() {
           <output class="slider-value slider-value-wide" for="circle-size">{{ formatCircleSize(circleSize) }}</output>
         </span>
         <small v-if="circleSizeError" class="error">{{ circleSizeError }}</small>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="circle-resize">Resize by volume</label>
+          <InfoPopover label="resize by volume" :text="circleResizeHelp" />
+        </div>
+        <span class="slider-row">
+          <input id="circle-resize" v-model="circleResize" type="checkbox" :disabled="busy" />
+          <output class="slider-value slider-value-wide" for="circle-resize">{{ formatCircleResize(circleResize) }}</output>
+        </span>
       </div>
 
       <div class="field">

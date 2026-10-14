@@ -25,6 +25,9 @@ put down most recently (the picture *remembers* them).
   *opacity that falls with its age*: the newest circle is opaque, and a circle ``age`` places back in the memory (0 for the
   newest) has the opacity ``(memory - age) / memory``, so the oldest circle, just before it leaves the memory, is barely
   visible. The step of a circle (``unit``) and its size are separate settings.
+* **Resize by volume** (off by default): the radius of each circle is multiplied by a factor that grows in a straight line
+  with the note's strength on the color scale (the color index ``c`` of 0 to 255), from 1 for the faintest to 3 for the
+  strongest note of the file: ``1 + 2 * c / 255``, so no circle is smaller than ``size``. Off, every circle has the radius of ``size``.
 
 A frame depends on the frames before it, so frames are made in order. This module knows nothing about the note analysis or
 the other kinds of picture, only that a frame has 84 note values ordered from A1 (55 Hz).
@@ -63,6 +66,11 @@ DEFAULT_CIRCLE_SIZE = 25
 
 # the background is the middle color of the colormap: this row of its 256-entry table (0.5 of the way along its scale)
 MIDDLE_COLOR_ROW = 128
+
+# resize by volume: the radius factor goes from the first to the second along the strength of the note (energy 0 to the maximum)
+MIN_RESIZE_FACTOR = 1.0
+MAX_RESIZE_FACTOR = 3.0
+DEFAULT_CIRCLE_RESIZE = False
 
 # smooth edges: a picture is drawn this many times larger in each direction and then shrunk by averaging, so an edge pixel gets the
 # share of it that a circle covers (and a circle can sit between pixels) instead of the stair-steps of a hard-edged disc
@@ -112,6 +120,21 @@ def check_circle_size(value) -> int:
     return _check_whole(
         value, MIN_CIRCLE_SIZE, MAX_CIRCLE_SIZE, f"The circle size must be a whole number from {MIN_CIRCLE_SIZE} to {MAX_CIRCLE_SIZE}."
     )
+
+
+def check_circle_resize(value) -> bool:
+    """Return ``value`` as a ``bool`` when it is one (``True``/``False``, also NumPy's); anything else is refused."""
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    raise ValueError("The circle resize must be true or false.")
+
+
+def resize_factor(color: int, resize: bool = True) -> float:
+    """The factor of a circle's radius for a note of color index ``color`` (0 to 255): 1 at 0 up to 3 at 255 in a straight line;
+    1 when ``resize`` is off."""
+    if not resize:
+        return 1.0
+    return MIN_RESIZE_FACTOR + (MAX_RESIZE_FACTOR - MIN_RESIZE_FACTOR) * color / 255
 
 
 def circle_radius(size: int) -> float:
@@ -198,6 +221,7 @@ def write_circle_frames(
     size: int = DEFAULT_CIRCLE_SIZE,
     width: int = 252,
     height: int = 168,
+    resize: bool = DEFAULT_CIRCLE_RESIZE,
 ) -> None:
     """Save one RGB PNG per row of ``values`` as ``frame_000000.png`` and up: the memory of circles after that frame.
 
@@ -208,6 +232,7 @@ def write_circle_frames(
     unit = check_circle_unit(unit)
     memory = check_circle_memory(memory)
     size = check_circle_size(size)
+    resize = check_circle_resize(resize)
     plan = plan_circles(values, peak, notes, unit, memory, width, height)  # checks the shape of the values at the first frame
     values = np.asarray(values)
     if values.ndim != 2 or values.shape[1] != _NOTES:
@@ -225,8 +250,9 @@ def write_circle_frames(
             draw = ImageDraw.Draw(large, "RGBA")  # a fill with an alpha is blended into the picture
             newest = len(remembered) - 1
             for place, (x, y, color) in enumerate(remembered):
+                r = radius * resize_factor(color, resize)
                 draw.ellipse(
-                    [(x - radius) * scale, (y - radius) * scale, (x + radius) * scale - 1, (y + radius) * scale - 1],  # the box includes its last pixel
+                    [(x - r) * scale, (y - r) * scale, (x + r) * scale - 1, (y + r) * scale - 1],  # the box includes its last pixel
                     fill=(*colors[color], circle_opacity(newest - place, memory)),
                 )
             image = large.reduce(scale)  # the average of each scale x scale block

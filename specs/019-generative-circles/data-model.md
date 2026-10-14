@@ -13,6 +13,8 @@ No stored data is added. These are the values that exist while a job is created,
 
 > **Amended 2026-10-14**: the place of the circle of rank r is the previous place of the rank moved by the note's step, **unless** the note index and the color index are the same as those of the last note of that rank (kept across silent frames, none before the first circle), in which case the place is not changed.
 
+> **Amended 2026-10-14**: a fifth circle setting, `circle_resize`, a boolean (`true`, `false`, `1`, `0`, any case; default `false`; refused with `The circle resize must be true or false.`), reported as a boolean in every response; when on, a circle's radius is `size / (2 pi)` times `1 + 2 c / 255` (c the color index; 1 to 3).
+
 ## The four circle settings
 
 | Setting | Field | Range | Default | Refusal |

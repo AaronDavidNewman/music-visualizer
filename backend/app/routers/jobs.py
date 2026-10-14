@@ -27,6 +27,7 @@ from ..services.frame_rendering import (
 from ..services.circles import (
     DEFAULT_CIRCLE_MEMORY,
     DEFAULT_CIRCLE_NOTES,
+    DEFAULT_CIRCLE_RESIZE,
     DEFAULT_CIRCLE_SIZE,
     DEFAULT_CIRCLE_UNIT,
     MAX_CIRCLE_MEMORY,
@@ -222,6 +223,18 @@ def _parse_circle_size(text: str | None, sent: bool) -> int:
     return int(value)
 
 
+def _parse_circle_resize(text: str | None, sent: bool) -> bool:
+    """Whether the circles are resized by volume. Not sent means off; anything sent must be true, false, 1 or 0 (any case)."""
+    if text is None and not sent:
+        return DEFAULT_CIRCLE_RESIZE
+    word = (text or "").strip().lower()
+    if word in ("true", "1"):
+        return True
+    if word in ("false", "0"):
+        return False
+    raise HTTPException(status_code=400, detail="The circle resize must be true or false.")
+
+
 def _parse_interpolate(text: str | None, sent: bool) -> int:
     """The requested interpolate value. Not sent means 1 (every frame drawn); anything sent must be a whole number 1..5."""
     if text is None and not sent:
@@ -343,6 +356,7 @@ def create_job(
     circle_memory: str | None = Form(None),
     circle_notes: str | None = Form(None),
     circle_size: str | None = Form(None),
+    circle_resize: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -361,6 +375,7 @@ def create_job(
     circle_memory_value = _parse_circle_memory(circle_memory, "circle_memory" in sent)
     circle_notes_value = _parse_circle_notes(circle_notes, "circle_notes" in sent)
     circle_size_value = _parse_circle_size(circle_size, "circle_size" in sent)
+    circle_resize_value = _parse_circle_resize(circle_resize, "circle_resize" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -421,6 +436,7 @@ def create_job(
             circle_memory=circle_memory_value,
             circle_notes=circle_notes_value,
             circle_size=circle_size_value,
+            circle_resize=circle_resize_value,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -454,6 +470,7 @@ def create_job(
         "circle_memory": circle_memory_value,
         "circle_notes": circle_notes_value,
         "circle_size": circle_size_value,
+        "circle_resize": circle_resize_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

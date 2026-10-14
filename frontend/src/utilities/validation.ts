@@ -228,6 +228,7 @@ export const CIRCLE_UNIT_RANGE = { min: 1, max: 10, step: 1 } as const;
 export const DEFAULT_CIRCLE_UNIT = 4;
 export const CIRCLE_SIZE_RANGE = { min: 25, max: 50, step: 1 } as const;
 export const DEFAULT_CIRCLE_SIZE = 25;
+export const DEFAULT_CIRCLE_RESIZE = false;
 export const CIRCLE_MEMORY_RANGE = { min: 100, max: 500, step: 10 } as const;
 export const DEFAULT_CIRCLE_MEMORY = 300;
 export const CIRCLE_NOTES_RANGE = { min: 5, max: 12, step: 1 } as const;
@@ -269,6 +270,9 @@ export function formatCircleUnit(value: number): string {
 }
 export function formatCircleSize(value: number): string {
   return `${value} px around`;
+}
+export function formatCircleResize(value: boolean): string {
+  return value ? "On" : "Off";
 }
 export function formatCircleMemory(value: number): string {
   return `${value} circles`;

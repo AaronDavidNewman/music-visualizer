@@ -36,10 +36,12 @@ import {
   CIRCLE_NOTES_RANGE,
   CIRCLE_UNIT_RANGE,
   DEFAULT_CIRCLE_MEMORY,
+  DEFAULT_CIRCLE_RESIZE,
   DEFAULT_CIRCLE_SIZE,
   DEFAULT_CIRCLE_NOTES,
   DEFAULT_CIRCLE_UNIT,
   formatCircleMemory,
+  formatCircleResize,
   formatCircleSize,
   formatCircleNotes,
   formatCircleUnit,
@@ -358,6 +360,7 @@ describe("circles settings", () => {
     expect(CIRCLE_NOTES_RANGE).toMatchObject({ min: 5, max: 12, step: 1 });
     expect(CIRCLE_SIZE_RANGE).toMatchObject({ min: 25, max: 50, step: 1 });
     expect([DEFAULT_CIRCLE_UNIT, DEFAULT_CIRCLE_MEMORY, DEFAULT_CIRCLE_NOTES, DEFAULT_CIRCLE_SIZE]).toEqual([4, 300, 8, 25]);
+    expect(DEFAULT_CIRCLE_RESIZE).toBe(false);
   });
 
   it.each([
@@ -373,6 +376,8 @@ describe("circles settings", () => {
   it("shows the unit in pixels, the memory in circles and the notes per frame", () => {
     expect(formatCircleUnit(4)).toBe("4 px");
     expect(formatCircleSize(25)).toBe("25 px around");
+    expect(formatCircleResize(false)).toBe("Off");
+    expect(formatCircleResize(true)).toBe("On");
     expect(formatCircleMemory(300)).toBe("300 circles");
     expect(formatCircleNotes(8)).toBe("8 notes");
   });

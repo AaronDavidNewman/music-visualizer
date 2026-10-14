@@ -10,6 +10,7 @@ import {
   formatBlendWidthSummary,
   formatCircleMemory,
   formatCircleNotes,
+  formatCircleResize,
   formatCircleSize,
   formatCircleUnit,
   gridSettingsApply,
@@ -72,6 +73,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <template v-if="result.image_type === 'circles'">
               <li>Circle unit: {{ formatCircleUnit(result.circle_unit) }}</li>
               <li>Circle size: {{ formatCircleSize(result.circle_size) }}</li>
+              <li>Resize by volume: {{ formatCircleResize(result.circle_resize) }}</li>
               <li>Circle memory: {{ formatCircleMemory(result.circle_memory) }}</li>
               <li>Circles per frame: {{ formatCircleNotes(result.circle_notes) }}</li>
             </template>

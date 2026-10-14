@@ -15,7 +15,7 @@ from PIL import Image
 from app.services.colormaps import COLORMAPS, lookup_table
 from app.services.image_types import IMAGE_TYPES
 
-from .test_circles import MEMORY_MESSAGE, NOTES_MESSAGE, SIZE_MESSAGE, UNIT_MESSAGE
+from .test_circles import MEMORY_MESSAGE, NOTES_MESSAGE, RESIZE_MESSAGE, SIZE_MESSAGE, UNIT_MESSAGE
 from .test_jobs_api import (  # noqa: F401
     SR,
     chord_wav,
@@ -75,6 +75,20 @@ def test_the_three_settings_are_echoed_as_whole_numbers(client, fields, expected
     assert all(isinstance(job[k], int) for k in ("circle_unit", "circle_memory", "circle_notes", "circle_size"))
 
 
+def test_the_resize_is_off_by_default_and_is_echoed_as_a_boolean(client):
+    job = post(client, tiny()).json()
+    assert job["circle_resize"] is False
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [("true", True), ("True", True), ("TRUE", True), (" true ", True), ("1", True), ("false", False), ("False", False), (" FALSE ", False), ("0", False)],
+)
+def test_the_resize_accepts_true_false_one_and_zero_in_any_case(client, text, expected):
+    job = post(client, tiny(), circle_resize=text).json()
+    assert job["circle_resize"] is expected
+
+
 def test_the_frames_are_252_by_168_pngs_and_their_count_equals_that_of_tiles(client):
     data = chord_wav(2)
     circles = post(client, data).json()
@@ -111,6 +125,7 @@ def test_any_other_image_type_is_refused_with_the_four_names(client, text):
         ("circle_memory", ["", " ", "0", "99", "501", "250.5", "abc", "nan", "inf", "1e9", "-100"], MEMORY_MESSAGE),
         ("circle_notes", ["", " ", "0", "4", "13", "7.5", "abc", "nan", "inf", "1e9", "-5"], NOTES_MESSAGE),
         ("circle_size", ["", " ", "0", "24", "51", "30.5", "abc", "nan", "inf", "1e9", "-30"], SIZE_MESSAGE),
+        ("circle_resize", ["", " ", "yes", "no", "on", "off", "2", "-1", "tru", "truee", "nan", "t", "0.0"], RESIZE_MESSAGE),
     ],
 )
 def test_a_circle_setting_that_is_not_allowed_is_refused_before_a_job_is_created_for_every_image_type(
@@ -125,7 +140,7 @@ def test_a_circle_setting_that_is_not_allowed_is_refused_before_a_job_is_created
 
 
 def test_the_settings_are_checked_before_the_file_is_read(client):
-    for fields, message in (({"circle_unit": "99"}, UNIT_MESSAGE), ({"circle_memory": "1"}, MEMORY_MESSAGE), ({"circle_notes": "1"}, NOTES_MESSAGE), ({"circle_size": "1"}, SIZE_MESSAGE)):
+    for fields, message in (({"circle_unit": "99"}, UNIT_MESSAGE), ({"circle_memory": "1"}, MEMORY_MESSAGE), ({"circle_notes": "1"}, NOTES_MESSAGE), ({"circle_size": "1"}, SIZE_MESSAGE), ({"circle_resize": "maybe"}, RESIZE_MESSAGE)):
         r = client.post(
             "/api/jobs",
             files={"file": ("song.wav", b"this is not audio", "audio/wav")},
@@ -140,8 +155,8 @@ def test_the_response_has_the_usual_keys_and_the_four_circle_keys(client):
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
         "smoothing", "smoothing_window", "threshold", "image_type", "blend_width", "colormap", "resolution", "note_count",
-        "interpolate", "circle_unit", "circle_memory", "circle_notes", "circle_size", "window_spacing", "step_samples",
-        "window_count", "spacing_raised", "frame_url_template",
+        "interpolate", "circle_unit", "circle_memory", "circle_notes", "circle_size", "circle_resize", "window_spacing",
+        "step_samples", "window_count", "spacing_raised", "frame_url_template",
     }  # fmt: skip
     for key in REMOVED:
         assert key not in job
@@ -166,7 +181,7 @@ def test_the_settings_that_do_not_apply_to_circles_are_accepted_and_ignored(clie
 def test_the_circle_settings_do_not_change_the_other_image_types(client, image_type):
     data = chord_wav(2)
     plain = post(client, data, image_type=image_type).json()
-    other = post(client, data, image_type=image_type, circle_unit="10", circle_memory="500", circle_notes="12", circle_size="50").json()
+    other = post(client, data, image_type=image_type, circle_unit="10", circle_memory="500", circle_notes="12", circle_size="50", circle_resize="true").json()
     for i in range(0, plain["frame_count"], 3):
         assert frame_bytes(client, plain, i) == frame_bytes(client, other, i)
 
@@ -215,6 +230,17 @@ def test_each_setting_that_is_sent_changes_the_frames(client, field, low, high):
     last = a["frame_count"] - 1
     assert (a[field], b[field]) == (int(low), int(high))
     assert frame_bytes(client, a, last) != frame_bytes(client, b, last), field
+
+
+def test_the_resize_changes_the_frames_and_off_is_the_same_as_not_sent(client):
+    data = chord_wav(3)
+    plain = post(client, data).json()
+    off = post(client, data, circle_resize="false").json()
+    on = post(client, data, circle_resize="true").json()
+    last = plain["frame_count"] - 1
+    assert frame_bytes(client, plain, last) == frame_bytes(client, off, last)
+    assert frame_bytes(client, plain, last) != frame_bytes(client, on, last)
+    assert on["circle_resize"] is True
 
 
 def test_a_note_that_stays_at_one_volume_covers_less_than_one_that_keeps_changing(client):

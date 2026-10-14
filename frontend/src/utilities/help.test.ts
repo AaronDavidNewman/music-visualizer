@@ -6,6 +6,7 @@ import {
   imageTypeHelp,
   interpolateHelp,
   circleMemoryHelp,
+  circleResizeHelp,
   circleSizeHelp,
   circleNotesHelp,
   circleUnitHelp,
@@ -137,6 +138,10 @@ describe("circles explanations", () => {
     expect(circleSizeHelp).toContain("circumference");
     expect(circleUnitHelp).not.toContain("radius");
     expect(circleUnitHelp).toContain("stays in place");
+    expect(circleResizeHelp).toContain("three times");
+    expect(circleResizeHelp).toContain("no circle is smaller");
+    expect(circleResizeHelp).not.toContain("half");
+    expect(circleResizeHelp).toContain("Off by default");
     expect(circleMemoryHelp).toContain("fade");
     expect(circleMemoryHelp).toContain("middle color");
   });

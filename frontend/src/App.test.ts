@@ -18,6 +18,8 @@ describe("the result summary", () => {
     expect(circles).toContain("formatCircleUnit(result.circle_unit)");
     expect(circles).toContain("Circle size:");
     expect(circles).toContain("formatCircleSize(result.circle_size)");
+    expect(circles).toContain("Resize by volume:");
+    expect(circles).toContain("formatCircleResize(result.circle_resize)");
     expect(circles).toContain("Circle memory:");
     expect(circles).toContain("formatCircleMemory(result.circle_memory)");
     expect(circles).toContain("Circles per frame:");
