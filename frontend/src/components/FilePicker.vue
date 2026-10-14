@@ -45,6 +45,8 @@ const fileError = computed(() => validateFile(props.file));
   gap: 0.25rem;
 }
 .field span {
+  font-family: var(--label-font);
+  font-size: var(--label-size);
   font-weight: 600;
 }
 small {

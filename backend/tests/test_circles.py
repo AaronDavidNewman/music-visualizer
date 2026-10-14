@@ -15,13 +15,12 @@ from app.services.circles import (
     MIN_RESIZE_FACTOR,
     check_circle_resize,
     resize_factor,
-    DEFAULT_CIRCLE_SIZE,
-    MAX_CIRCLE_SIZE,
-    MIN_CIRCLE_SIZE,
+    DEFAULT_CIRCLE_RADIUS,
+    MAX_CIRCLE_RADIUS,
+    MIN_CIRCLE_RADIUS,
     MIDDLE_COLOR_ROW,
-    check_circle_size,
+    check_circle_radius,
     circle_opacity,
-    circle_radius,
     DEFAULT_CIRCLE_NOTES,
     DEFAULT_CIRCLE_UNIT,
     MAX_CIRCLE_MEMORY,
@@ -39,10 +38,10 @@ from app.services.circles import (
 )
 
 W, H = 252, 168
-UNIT_MESSAGE = "The circle unit must be a whole number from 1 to 10."
+UNIT_MESSAGE = "The circle movement must be a whole number from 1 to 10."
 MEMORY_MESSAGE = "The circle memory must be a whole number from 100 to 500."
 NOTES_MESSAGE = "The number of circle notes must be a whole number from 5 to 12."
-SIZE_MESSAGE = "The circle size must be a whole number from 25 to 50."
+RADIUS_MESSAGE = "The circle radius must be a whole number from 4 to 8."
 RESIZE_MESSAGE = "The circle resize must be true or false."
 
 F5, F3, A4, C4 = 44, 20, 36, 27  # indices of the drawn notes (0 is A1, 55 Hz)
@@ -90,7 +89,7 @@ def test_constants():
     assert (MIN_CIRCLE_UNIT, MAX_CIRCLE_UNIT, DEFAULT_CIRCLE_UNIT) == (1, 10, 4)
     assert (MIN_CIRCLE_MEMORY, MAX_CIRCLE_MEMORY, DEFAULT_CIRCLE_MEMORY) == (100, 500, 300)
     assert (MIN_CIRCLE_NOTES, MAX_CIRCLE_NOTES, DEFAULT_CIRCLE_NOTES) == (5, 12, 8)
-    assert (MIN_CIRCLE_SIZE, MAX_CIRCLE_SIZE, DEFAULT_CIRCLE_SIZE) == (25, 50, 25)
+    assert (MIN_CIRCLE_RADIUS, MAX_CIRCLE_RADIUS, DEFAULT_CIRCLE_RADIUS) == (4, 8, 4)
     assert (MIN_RESIZE_FACTOR, MAX_RESIZE_FACTOR, DEFAULT_CIRCLE_RESIZE) == (1.0, 3.0, False)
     assert MIDDLE_COLOR_ROW == 128  # the table entry at the middle of the scale (0.5 of 255 rounds to 128)
 
@@ -101,7 +100,7 @@ def test_constants():
         (check_circle_unit, [1, 4, 10, np.int64(7), 4.0], [0, 11, -1, 2.5, 10.0001], UNIT_MESSAGE),
         (check_circle_memory, [100, 300, 500, np.int64(250), 300.0], [0, 99, 501, 250.5, 1000], MEMORY_MESSAGE),
         (check_circle_notes, [5, 8, 12, np.int64(6), 8.0], [0, 4, 13, 7.5, 100], NOTES_MESSAGE),
-        (check_circle_size, [25, 37, 50, np.int64(40), 30.0], [0, 24, 51, 30.5, 100], SIZE_MESSAGE),
+        (check_circle_radius, [4, 6, 8, np.int64(5), 7.0], [0, 3, 9, 4.5, 100, -4], RADIUS_MESSAGE),
     ],
 )
 def test_each_setting_accepts_the_whole_numbers_in_its_range_and_refuses_the_rest(check, good, bad, message):
@@ -113,13 +112,14 @@ def test_each_setting_accepts_the_whole_numbers_in_its_range_and_refuses_the_res
         assert str(error.value) == message
 
 
-# --- the size and the opacity of a circle ----------------------------------------------------------------------------------------
+# --- the radius and the opacity of a circle ----------------------------------------------------------------------------------------
 
 
-def test_the_size_is_the_circumference_in_pixels_from_about_the_old_default_circle_to_about_fifty():
-    assert circle_radius(25) == pytest.approx(25 / (2 * math.pi)) and circle_radius(25) == pytest.approx(3.98, abs=0.01)  # about the old unit-4 circle
-    assert circle_radius(50) == pytest.approx(7.96, abs=0.01)
-    assert 2 * math.pi * circle_radius(37) == pytest.approx(37)
+def test_the_radius_range_covers_the_sizes_of_the_old_circumference_setting_as_whole_pixels():
+    # the old setting was a circumference of 25 to 50 pixels (default 25): a radius of 3.98 to 7.96 pixels (default 3.98)
+    old_low, old_high, old_default = 25 / (2 * math.pi), 50 / (2 * math.pi), 25 / (2 * math.pi)
+    assert abs(MIN_CIRCLE_RADIUS - old_low) < 0.05 and abs(MAX_CIRCLE_RADIUS - old_high) < 0.05
+    assert abs(DEFAULT_CIRCLE_RADIUS - old_default) < 0.05  # the default circle looks the same as before
 
 
 @pytest.mark.parametrize("memory", [100, 300, 500])

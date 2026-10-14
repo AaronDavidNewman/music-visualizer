@@ -12,7 +12,7 @@ from app.services.resolution import (
 )
 
 COLUMNS, ROWS = 12, 7
-MESSAGE = "The resolution must be a whole number from 1 to 5."
+MESSAGE = "The oversampling must be a whole number from 1 to 5."
 RESOLUTIONS = [1, 2, 3, 4, 5]
 
 

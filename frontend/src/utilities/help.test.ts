@@ -7,7 +7,7 @@ import {
   interpolateHelp,
   circleMemoryHelp,
   circleResizeHelp,
-  circleSizeHelp,
+  circleRadiusHelp,
   circleNotesHelp,
   circleUnitHelp,
   noteCountHelp,
@@ -134,9 +134,14 @@ describe("circles explanations", () => {
   });
 
   it("explains the size as the circumference, apart from the step, and the fading of old circles", () => {
-    expect(circleSizeHelp).toContain("25 to 50");
-    expect(circleSizeHelp).toContain("circumference");
-    expect(circleUnitHelp).not.toContain("radius");
+    expect(circleRadiusHelp).toContain("4 to 8");
+    expect(circleRadiusHelp).toContain("radius");
+    expect(circleRadiusHelp).not.toContain("circumference");
+    expect(circleUnitHelp).toContain("Movement");
+    expect(circleUnitHelp).not.toMatch(/\bUnit\b/);
+    expect(resolutionHelp).toContain("Oversampling");
+    expect(resolutionHelp).not.toMatch(/\bResolution\b/);
+    expect(circleNotesHelp).toContain("Notes");
     expect(circleUnitHelp).toContain("stays in place");
     expect(circleResizeHelp).toContain("three times");
     expect(circleResizeHelp).toContain("no circle is smaller");

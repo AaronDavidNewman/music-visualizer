@@ -11,7 +11,7 @@ import {
   formatCircleMemory,
   formatCircleNotes,
   formatCircleResize,
-  formatCircleSize,
+  formatCircleRadius,
   formatCircleUnit,
   gridSettingsApply,
   formatNoteCountSummary,
@@ -69,13 +69,13 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li v-if="gridSettingsApply(result.image_type)">Notes: {{ formatNoteCountSummary(result.note_count) }}</li>
             <li v-if="gridSettingsApply(result.image_type)">Interpolate: {{ result.interpolate }}</li>
             <li>Image type: {{ imageTypeLabel(result.image_type) }}</li>
-            <li v-if="gridSettingsApply(result.image_type)">Resolution: {{ formatResolution(result.resolution) }}</li>
+            <li v-if="gridSettingsApply(result.image_type)">Oversampling: {{ formatResolution(result.resolution) }}</li>
             <template v-if="result.image_type === 'circles'">
-              <li>Circle unit: {{ formatCircleUnit(result.circle_unit) }}</li>
-              <li>Circle size: {{ formatCircleSize(result.circle_size) }}</li>
+              <li>Movement: {{ formatCircleUnit(result.circle_unit) }}</li>
+              <li>Radius: {{ formatCircleRadius(result.circle_radius) }}</li>
               <li>Resize by volume: {{ formatCircleResize(result.circle_resize) }}</li>
-              <li>Circle memory: {{ formatCircleMemory(result.circle_memory) }}</li>
-              <li>Circles per frame: {{ formatCircleNotes(result.circle_notes) }}</li>
+              <li>Memory: {{ formatCircleMemory(result.circle_memory) }}</li>
+              <li>Notes: {{ formatCircleNotes(result.circle_notes) }}</li>
             </template>
             <li v-if="result.image_type === 'blended'">Blend width: {{ formatBlendWidthSummary(result.blend_width) }}</li>
             <li>Window spacing: {{ formatSpacing(result.window_spacing) }}</li>
@@ -96,6 +96,11 @@ async function onSubmit(chosen: File, settings: JobSettings) {
 </template>
 
 <style>
+/* the font and size of the form labels and group titles */
+:root {
+  --label-font: "Roboto Slab", Georgia, serif;
+  --label-size: 0.9rem;
+}
 body {
   font-family: system-ui, sans-serif;
   margin: 0;

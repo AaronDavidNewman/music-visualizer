@@ -25,7 +25,7 @@ export interface JobResult {
   interpolate: number;
   /** The Circles image type: the unit in pixels, the memory in circles and the notes per frame. */
   circle_unit: number;
-  circle_size: number;
+  circle_radius: number;
   circle_resize: boolean;
   circle_memory: number;
   circle_notes: number;
@@ -60,7 +60,7 @@ export interface JobSettings {
   interpolate: number;
   /** Only used by Circles: 1 to 10 pixels, 100 to 500 circles, 5 to 12 notes per frame. */
   circleUnit: number;
-  circleSize: number;
+  circleRadius: number;
   circleResize: boolean;
   circleMemory: number;
   circleNotes: number;
@@ -83,7 +83,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("note_count", String(settings.noteCount));
   body.append("interpolate", String(settings.interpolate));
   body.append("circle_unit", String(settings.circleUnit));
-  body.append("circle_size", String(settings.circleSize));
+  body.append("circle_radius", String(settings.circleRadius));
   body.append("circle_resize", String(settings.circleResize));
   body.append("circle_memory", String(settings.circleMemory));
   body.append("circle_notes", String(settings.circleNotes));

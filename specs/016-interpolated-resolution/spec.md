@@ -1,5 +1,7 @@
 # Feature Specification: Interpolated Resolution
 
+> **Amended 2026-10-14 (feature 020, grouped settings).** The **Resolution** control is now called **Oversampling** on the page, in its info text, in its validation message (`The oversampling must be a whole number from 1 to 5.`, on the client and the server) and in the result summary, and it sits in the **Image smoothing** group with Interpolate, which is not shown for Circles. The request field is still `resolution` and nothing about the interpolation changed. Where this document says Resolution (the control, the slider, the message), read Oversampling; see `specs/020-grouped-settings-ui/`.
+
 **Feature Branch**: `016-interpolated-resolution` (no git branch created; spec directory name only)
 
 **Created**: 2026-10-12

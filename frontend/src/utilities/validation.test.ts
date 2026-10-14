@@ -32,22 +32,22 @@ import {
   formatNoteCountSummary,
   validateNoteCount,
   CIRCLE_MEMORY_RANGE,
-  CIRCLE_SIZE_RANGE,
+  CIRCLE_RADIUS_RANGE,
   CIRCLE_NOTES_RANGE,
   CIRCLE_UNIT_RANGE,
   DEFAULT_CIRCLE_MEMORY,
   DEFAULT_CIRCLE_RESIZE,
-  DEFAULT_CIRCLE_SIZE,
+  DEFAULT_CIRCLE_RADIUS,
   DEFAULT_CIRCLE_NOTES,
   DEFAULT_CIRCLE_UNIT,
   formatCircleMemory,
   formatCircleResize,
-  formatCircleSize,
+  formatCircleRadius,
   formatCircleNotes,
   formatCircleUnit,
   gridSettingsApply,
   validateCircleMemory,
-  validateCircleSize,
+  validateCircleRadius,
   validateCircleNotes,
   validateCircleUnit,
   DEFAULT_INTERPOLATE,
@@ -161,12 +161,12 @@ describe("threshold", () => {
     expect(validateThreshold(v)).toBe("The threshold must be a number from 0 to 10.");
   });
 
-  it("shows Off at the left end and the percentage of the loudest note otherwise", () => {
+  it("shows Off at the left end and just the percentage otherwise (the info text says of what)", () => {
     expect(formatThreshold(0)).toBe("Off");
-    expect(formatThreshold(1)).toBe("1% of the loudest note");
-    expect(formatThreshold(10)).toBe("10% of the loudest note");
-    expect(formatThreshold(2.5)).toBe("2.5% of the loudest note");
-    expect(formatThreshold(0.1 + 0.2)).toBe("0.3% of the loudest note");
+    expect(formatThreshold(1)).toBe("1%");
+    expect(formatThreshold(10)).toBe("10%");
+    expect(formatThreshold(2.5)).toBe("2.5%");
+    expect(formatThreshold(0.1 + 0.2)).toBe("0.3%");
   });
 
   it("shows Off or the percentage in the result summary", () => {
@@ -292,7 +292,7 @@ describe("resolution", () => {
   });
 
   it.each([0, 6, -1, 2.5, "", "  ", "abc", "NaN", "Infinity", "1e9", "3x", NaN, Infinity])("rejects %j", (v) => {
-    expect(validateResolution(v)).toBe("The resolution must be a whole number from 1 to 5.");
+    expect(validateResolution(v)).toBe("The oversampling must be a whole number from 1 to 5.");
   });
 
   it("shows the multiple, and the grid it gives above 1", () => {
@@ -347,25 +347,30 @@ describe("interpolate", () => {
   });
 
   it("says how many frames are drawn", () => {
-    expect(formatInterpolate(1)).toBe("1 (every frame drawn)");
-    expect(formatInterpolate(3)).toBe("3 (one frame in 3 drawn)");
-    expect(formatInterpolate(5)).toBe("5 (one frame in 5 drawn)");
+    expect(formatInterpolate(1).trim()).toBe("1");
+    expect(formatInterpolate(3)).toBe("(1/3 frames)");
+    expect(formatInterpolate(5)).toBe("(1/5 frames)");
   });
 });
 
 describe("circles settings", () => {
+  it("has no circumference setting any more (the size became the radius)", async () => {
+    const all = (await import("./validation")) as Record<string, unknown>;
+    for (const old of ["CIRCLE_SIZE_RANGE", "DEFAULT_CIRCLE_SIZE", "validateCircleSize", "formatCircleSize"]) expect(old in all, old).toBe(false);
+  });
+
   it("has the ranges and defaults of the spec", () => {
     expect(CIRCLE_UNIT_RANGE).toMatchObject({ min: 1, max: 10, step: 1 });
     expect(CIRCLE_MEMORY_RANGE).toMatchObject({ min: 100, max: 500 });
     expect(CIRCLE_NOTES_RANGE).toMatchObject({ min: 5, max: 12, step: 1 });
-    expect(CIRCLE_SIZE_RANGE).toMatchObject({ min: 25, max: 50, step: 1 });
-    expect([DEFAULT_CIRCLE_UNIT, DEFAULT_CIRCLE_MEMORY, DEFAULT_CIRCLE_NOTES, DEFAULT_CIRCLE_SIZE]).toEqual([4, 300, 8, 25]);
+    expect(CIRCLE_RADIUS_RANGE).toMatchObject({ min: 4, max: 8, step: 1 });
+    expect([DEFAULT_CIRCLE_UNIT, DEFAULT_CIRCLE_MEMORY, DEFAULT_CIRCLE_NOTES, DEFAULT_CIRCLE_RADIUS]).toEqual([4, 300, 8, 4]);
     expect(DEFAULT_CIRCLE_RESIZE).toBe(false);
   });
 
   it.each([
-    ["unit", validateCircleUnit, [1, 4, 10, "7", " 5 ", 3.0], [0, 11, -1, 2.5, "", "  ", "abc", "NaN", "Infinity", "1e9", NaN, Infinity], "The circle unit must be a whole number from 1 to 10."],
-    ["size", validateCircleSize, [25, 37, 50, "40", " 30 ", 44.0], [0, 24, 51, 30.5, "", "  ", "abc", "NaN", "Infinity", "1e9", NaN, Infinity], "The circle size must be a whole number from 25 to 50."],
+    ["movement", validateCircleUnit, [1, 4, 10, "7", " 5 ", 3.0], [0, 11, -1, 2.5, "", "  ", "abc", "NaN", "Infinity", "1e9", NaN, Infinity], "The circle movement must be a whole number from 1 to 10."],
+    ["radius", validateCircleRadius, [4, 6, 8, "5", " 7 ", 6.0], [0, 3, 9, 4.5, "", "  ", "abc", "NaN", "Infinity", "1e9", NaN, Infinity], "The circle radius must be a whole number from 4 to 8."],
     ["memory", validateCircleMemory, [100, 300, 500, "250", " 400 ", 200.0], [0, 99, 501, 250.5, "", "abc", "NaN", "Infinity", "1e9", NaN, Infinity], "The circle memory must be a whole number from 100 to 500."],
     ["notes", validateCircleNotes, [5, 8, 12, "6", " 9 ", 7.0], [0, 4, 13, 7.5, "", "abc", "NaN", "Infinity", "1e9", NaN, Infinity], "The number of circle notes must be a whole number from 5 to 12."],
   ] as const)("the %s validator accepts the whole numbers of its range and refuses the rest with the server's message", (_name, check, good, bad, message) => {
@@ -375,7 +380,7 @@ describe("circles settings", () => {
 
   it("shows the unit in pixels, the memory in circles and the notes per frame", () => {
     expect(formatCircleUnit(4)).toBe("4 px");
-    expect(formatCircleSize(25)).toBe("25 px around");
+    expect(formatCircleRadius(4)).toBe("4 px");
     expect(formatCircleResize(false)).toBe("Off");
     expect(formatCircleResize(true)).toBe("On");
     expect(formatCircleMemory(300)).toBe("300 circles");

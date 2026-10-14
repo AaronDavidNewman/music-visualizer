@@ -28,15 +28,15 @@ from ..services.circles import (
     DEFAULT_CIRCLE_MEMORY,
     DEFAULT_CIRCLE_NOTES,
     DEFAULT_CIRCLE_RESIZE,
-    DEFAULT_CIRCLE_SIZE,
+    DEFAULT_CIRCLE_RADIUS,
     DEFAULT_CIRCLE_UNIT,
     MAX_CIRCLE_MEMORY,
     MAX_CIRCLE_NOTES,
-    MAX_CIRCLE_SIZE,
+    MAX_CIRCLE_RADIUS,
     MAX_CIRCLE_UNIT,
     MIN_CIRCLE_MEMORY,
     MIN_CIRCLE_NOTES,
-    MIN_CIRCLE_SIZE,
+    MIN_CIRCLE_RADIUS,
     MIN_CIRCLE_UNIT,
 )
 from ..services.frame_interpolation import DEFAULT_INTERPOLATE, MAX_INTERPOLATE, MIN_INTERPOLATE
@@ -168,7 +168,7 @@ def _parse_circle_unit(text: str | None, sent: bool) -> int:
     if text is None and not sent:
         return DEFAULT_CIRCLE_UNIT
     text = text or ""
-    message = f"The circle unit must be a whole number from {MIN_CIRCLE_UNIT} to {MAX_CIRCLE_UNIT}."
+    message = f"The circle movement must be a whole number from {MIN_CIRCLE_UNIT} to {MAX_CIRCLE_UNIT}."
     try:
         value = float(text)
     except ValueError:
@@ -208,17 +208,17 @@ def _parse_circle_notes(text: str | None, sent: bool) -> int:
     return int(value)
 
 
-def _parse_circle_size(text: str | None, sent: bool) -> int:
-    """The requested circle size (its circumference in pixels). Not sent means the default; anything sent must be a whole number 25..50."""
+def _parse_circle_radius(text: str | None, sent: bool) -> int:
+    """The requested circle radius in pixels. Not sent means the default; anything sent must be a whole number 4..8."""
     if text is None and not sent:
-        return DEFAULT_CIRCLE_SIZE
+        return DEFAULT_CIRCLE_RADIUS
     text = text or ""
-    message = f"The circle size must be a whole number from {MIN_CIRCLE_SIZE} to {MAX_CIRCLE_SIZE}."
+    message = f"The circle radius must be a whole number from {MIN_CIRCLE_RADIUS} to {MAX_CIRCLE_RADIUS}."
     try:
         value = float(text)
     except ValueError:
         raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or not value.is_integer() or not MIN_CIRCLE_SIZE <= value <= MAX_CIRCLE_SIZE:
+    if not math.isfinite(value) or not value.is_integer() or not MIN_CIRCLE_RADIUS <= value <= MAX_CIRCLE_RADIUS:
         raise HTTPException(status_code=400, detail=message)
     return int(value)
 
@@ -270,7 +270,7 @@ def _parse_resolution(text: str | None, sent: bool) -> int:
     if text is None and not sent:
         return DEFAULT_RESOLUTION
     text = text or ""
-    message = f"The resolution must be a whole number from {MIN_RESOLUTION} to {MAX_RESOLUTION}."
+    message = f"The oversampling must be a whole number from {MIN_RESOLUTION} to {MAX_RESOLUTION}."
     try:
         value = float(text)
     except ValueError:
@@ -355,7 +355,7 @@ def create_job(
     circle_unit: str | None = Form(None),
     circle_memory: str | None = Form(None),
     circle_notes: str | None = Form(None),
-    circle_size: str | None = Form(None),
+    circle_radius: str | None = Form(None),
     circle_resize: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
@@ -374,7 +374,7 @@ def create_job(
     circle_unit_value = _parse_circle_unit(circle_unit, "circle_unit" in sent)
     circle_memory_value = _parse_circle_memory(circle_memory, "circle_memory" in sent)
     circle_notes_value = _parse_circle_notes(circle_notes, "circle_notes" in sent)
-    circle_size_value = _parse_circle_size(circle_size, "circle_size" in sent)
+    circle_radius_value = _parse_circle_radius(circle_radius, "circle_radius" in sent)
     circle_resize_value = _parse_circle_resize(circle_resize, "circle_resize" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
@@ -435,7 +435,7 @@ def create_job(
             circle_unit=circle_unit_value,
             circle_memory=circle_memory_value,
             circle_notes=circle_notes_value,
-            circle_size=circle_size_value,
+            circle_radius=circle_radius_value,
             circle_resize=circle_resize_value,
         )
     except HTTPException:
@@ -469,7 +469,7 @@ def create_job(
         "circle_unit": circle_unit_value,
         "circle_memory": circle_memory_value,
         "circle_notes": circle_notes_value,
-        "circle_size": circle_size_value,
+        "circle_radius": circle_radius_value,
         "circle_resize": circle_resize_value,
         "window_spacing": spacing,
         "step_samples": step,

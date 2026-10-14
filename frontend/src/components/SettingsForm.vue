@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import {
   BLEND_WIDTH_RANGE,
   COLORMAPS,
@@ -8,7 +8,7 @@ import {
   DEFAULT_CIRCLE_MEMORY,
   DEFAULT_CIRCLE_NOTES,
   DEFAULT_CIRCLE_RESIZE,
-  DEFAULT_CIRCLE_SIZE,
+  DEFAULT_CIRCLE_RADIUS,
   DEFAULT_CIRCLE_UNIT,
   DEFAULT_IMAGE_TYPE,
   DEFAULT_INTERPOLATE,
@@ -20,7 +20,7 @@ import {
   DEFAULT_WINDOW_SIZE,
   CIRCLE_MEMORY_RANGE,
   CIRCLE_NOTES_RANGE,
-  CIRCLE_SIZE_RANGE,
+  CIRCLE_RADIUS_RANGE,
   CIRCLE_UNIT_RANGE,
   IMAGE_TYPES,
   INTERPOLATE_RANGE,
@@ -30,13 +30,11 @@ import {
   SMOOTHING_WINDOW_RANGE,
   THRESHOLD_RANGE,
   WINDOW_SIZES,
-  blendWidthApplies,
-  gridSettingsApply,
   formatBlendWidth,
   formatCircleMemory,
   formatCircleNotes,
   formatCircleResize,
-  formatCircleSize,
+  formatCircleRadius,
   formatCircleUnit,
   formatInterpolate,
   formatNoteCount,
@@ -49,7 +47,7 @@ import {
   validateFrameRate,
   validateCircleMemory,
   validateCircleNotes,
-  validateCircleSize,
+  validateCircleRadius,
   validateCircleUnit,
   validateImageType,
   validateInterpolate,
@@ -76,7 +74,7 @@ import {
   circleMemoryHelp,
   circleNotesHelp,
   circleResizeHelp,
-  circleSizeHelp,
+  circleRadiusHelp,
   circleUnitHelp,
   imageTypeHelp,
   interpolateHelp,
@@ -89,9 +87,11 @@ import {
   windowSizeHelp,
 } from "../utilities/help";
 import InfoPopover from "./InfoPopover.vue";
+import SettingsGroup from "./SettingsGroup.vue";
+import { controlsIn, groupTitle, groupsFor, isOpen, setOpen, type OpenState } from "../utilities/groups";
 import type { JobSettings } from "../api";
 
-const props = defineProps<{ busy: boolean; file: File | null; sampleRate: number }>();
+const props = defineProps<{ busy: boolean; file: File | null; sampleRate: number; initialImageType?: string }>();
 const emit = defineEmits<{ submit: [file: File, settings: JobSettings] }>();
 
 const windowSize = ref<number>(DEFAULT_WINDOW_SIZE);
@@ -100,7 +100,7 @@ const colormap = ref<string>(DEFAULT_COLORMAP);
 const smoothing = ref<number>(DEFAULT_SMOOTHING);
 const smoothingWindowText = ref(String(DEFAULT_SMOOTHING_WINDOW));
 const threshold = ref<number>(DEFAULT_THRESHOLD);
-const imageType = ref<string>(DEFAULT_IMAGE_TYPE);
+const imageType = ref<string>(props.initialImageType ?? DEFAULT_IMAGE_TYPE);
 const blendWidth = ref<number>(DEFAULT_BLEND_WIDTH);
 const resolution = ref<number>(DEFAULT_RESOLUTION);
 const noteCount = ref<number>(DEFAULT_NOTE_COUNT);
@@ -108,7 +108,7 @@ const interpolate = ref<number>(DEFAULT_INTERPOLATE);
 const circleUnit = ref<number>(DEFAULT_CIRCLE_UNIT);
 const circleMemory = ref<number>(DEFAULT_CIRCLE_MEMORY);
 const circleNotes = ref<number>(DEFAULT_CIRCLE_NOTES);
-const circleSize = ref<number>(DEFAULT_CIRCLE_SIZE);
+const circleRadius = ref<number>(DEFAULT_CIRCLE_RADIUS);
 const circleResize = ref<boolean>(DEFAULT_CIRCLE_RESIZE);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
@@ -140,7 +140,7 @@ const interpolateError = computed(() => validateInterpolate(interpolate.value));
 const circleUnitError = computed(() => validateCircleUnit(circleUnit.value));
 const circleMemoryError = computed(() => validateCircleMemory(circleMemory.value));
 const circleNotesError = computed(() => validateCircleNotes(circleNotes.value));
-const circleSizeError = computed(() => validateCircleSize(circleSize.value));
+const circleRadiusError = computed(() => validateCircleRadius(circleRadius.value));
 const canSubmit = computed(
   () =>
     !fileError.value &&
@@ -159,8 +159,41 @@ const canSubmit = computed(
     !circleUnitError.value &&
     !circleMemoryError.value &&
     !circleNotesError.value &&
-    !circleSizeError.value,
+    !circleRadiusError.value,
 );
+
+// The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
+// shown. Every value stays in its ref, so it is kept when a group is folded or the type is changed, and is still sent.
+const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles"];
+const shownGroups = computed(() => groupsFor(imageType.value));
+const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
+const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
+function inTypeGroup(control: string): boolean {
+  return typeGroup.value !== undefined && controlsIn(typeGroup.value).includes(control);
+}
+
+// Which groups are open: every group starts open; the state is only kept in memory.
+const openState = reactive<Record<string, boolean>>({});
+function onToggle(id: string, open: boolean) {
+  Object.assign(openState, setOpen(openState as OpenState, id, open));
+}
+
+// A group is flagged "needs attention" when one of its controls has a value that is not allowed (the same errors that disable Create frames).
+const analysisProblem = computed(() => !!(windowError.value || frameRateError.value || spacingError.value));
+const colormapProblem = computed(() => !!colormapError.value);
+const imageTypeProblem = computed(() => !!imageTypeError.value);
+const typeGroupProblem = computed(
+  () =>
+    (inTypeGroup("threshold") && !!thresholdError.value) ||
+    (inTypeGroup("notes") && !!noteCountError.value) ||
+    (inTypeGroup("blend-width") && !!blendWidthError.value) ||
+    (inTypeGroup("circle-unit") && !!circleUnitError.value) ||
+    (inTypeGroup("circle-radius") && !!circleRadiusError.value) ||
+    (inTypeGroup("circle-memory") && !!circleMemoryError.value) ||
+    (inTypeGroup("circle-notes") && !!circleNotesError.value),
+);
+const dataSmoothingProblem = computed(() => !!(smoothingWindowError.value || smoothingError.value));
+const imageSmoothingProblem = computed(() => !!(resolutionError.value || interpolateError.value));
 
 const belowMinimum = computed(
   () => !spacingError.value && isBelowMinimum(Number(spacingText.value), windowSize.value),
@@ -191,7 +224,7 @@ function onSubmit() {
     circleUnit: circleUnit.value,
     circleMemory: circleMemory.value,
     circleNotes: circleNotes.value,
-    circleSize: circleSize.value,
+    circleRadius: circleRadius.value,
     circleResize: circleResize.value,
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
@@ -200,10 +233,16 @@ function onSubmit() {
 
 <template>
   <form class="settings" @submit.prevent="onSubmit">
-    <div class="field-row">
+    <SettingsGroup
+      id="analysis"
+      :title="groupTitle('analysis')"
+      :open="isOpen(openState, 'analysis')"
+      :problem="analysisProblem"
+      @toggle="onToggle('analysis', $event)"
+    >
       <div class="field">
         <div class="field-head">
-          <label for="window-size">Window size (samples)</label>
+          <label for="window-size">FFT Window size</label>
           <InfoPopover label="window size" :text="windowSizeHelp" />
         </div>
         <select id="window-size" v-model.number="windowSize" :disabled="busy">
@@ -214,7 +253,7 @@ function onSubmit() {
 
       <div class="field">
         <div class="field-head">
-          <label for="frame-rate">Frame rate (frames per second)</label>
+          <label for="frame-rate">Frame rate (FPS)</label>
           <InfoPopover label="frame rate" :text="frameRateHelp" />
         </div>
         <input id="frame-rate" v-model="frameRateText" type="number" step="any" inputmode="decimal" :disabled="busy" />
@@ -223,7 +262,7 @@ function onSubmit() {
 
       <div class="field">
         <div class="field-head">
-          <label for="window-spacing">Window spacing (× window size)</label>
+          <label for="window-spacing">Window spacing</label>
           <InfoPopover label="window spacing" :text="spacingHelp(stepHint)" />
         </div>
         <input
@@ -237,43 +276,222 @@ function onSubmit() {
         <small v-if="spacingError" class="error">{{ spacingError }}</small>
         <small v-else-if="belowMinimum" class="notice">{{ minimumMessage(windowSize) }}</small>
       </div>
-    </div>
+    </SettingsGroup>
 
-    <div class="field">
-      <div class="field-head">
-        <label for="colormap">Colormap</label>
-        <InfoPopover label="colormap" :text="colormapHelp" />
+    <SettingsGroup
+      id="colormap"
+      :title="groupTitle('colormap')"
+      :open="isOpen(openState, 'colormap')"
+      :problem="colormapProblem"
+      @toggle="onToggle('colormap', $event)"
+    >
+      <div class="field">
+        <div class="field-head">
+          <label for="colormap">Colormap</label>
+          <InfoPopover label="colormap" :text="colormapHelp" />
+        </div>
+        <select id="colormap" v-model="colormap" :disabled="busy">
+          <option v-for="map in COLORMAPS" :key="map.value" :value="map.value">{{ map.label }}</option>
+        </select>
+        <small v-if="colormapError" class="error">{{ colormapError }}</small>
       </div>
-      <select id="colormap" v-model="colormap" :disabled="busy">
-        <option v-for="map in COLORMAPS" :key="map.value" :value="map.value">{{ map.label }}</option>
-      </select>
-      <small v-if="colormapError" class="error">{{ colormapError }}</small>
-    </div>
+    </SettingsGroup>
 
-    <div class="field">
-      <div class="field-head">
-        <label for="smoothing-window">Smoothing window (frames)</label>
-        <InfoPopover label="smoothing window" :text="smoothingWindowHelp" />
+    <SettingsGroup
+      id="image-type"
+      :title="groupTitle('image-type')"
+      :open="isOpen(openState, 'image-type')"
+      :problem="imageTypeProblem"
+      @toggle="onToggle('image-type', $event)"
+    >
+      <div class="field">
+        <div class="field-head">
+          <label for="image-type">Image type</label>
+          <InfoPopover label="image type" :text="imageTypeHelp" />
+        </div>
+        <select id="image-type" v-model="imageType" :disabled="busy">
+          <option v-for="type in IMAGE_TYPES" :key="type.value" :value="type.value">{{ type.label }}</option>
+        </select>
+        <small v-if="imageTypeError" class="error">{{ imageTypeError }}</small>
       </div>
-      <input
-        id="smoothing-window"
-        v-model="smoothingWindowText"
-        type="number"
-        step="1"
-        :min="SMOOTHING_WINDOW_RANGE.min"
-        :max="SMOOTHING_WINDOW_RANGE.max"
-        inputmode="numeric"
-        :disabled="busy"
-      />
-      <small v-if="smoothingWindowError" class="error">{{ smoothingWindowError }}</small>
-    </div>
+    </SettingsGroup>
 
-    <div class="field">
-      <div class="field-head">
-        <label for="smoothing">Smoothing</label>
-        <InfoPopover label="smoothing" :text="smoothingHelp" />
+    <!-- the group of the chosen image type: Tiles, Contour, Blended Tiles or Circles; a control that the type does not use is not shown -->
+    <SettingsGroup
+      v-if="typeGroup"
+      :id="typeGroup"
+      :title="groupTitle(typeGroup)"
+      :open="isOpen(openState, typeGroup)"
+      :problem="typeGroupProblem"
+      @toggle="onToggle(typeGroup, $event)"
+    >
+      <div v-if="inTypeGroup('threshold')" class="field">
+        <div class="field-head">
+          <label for="threshold">Threshold</label>
+          <InfoPopover label="threshold" :text="thresholdHelp" />
+          <output class="slider-value" for="threshold">{{ formatThreshold(threshold) }}</output>
+        </div>
+        <input
+          id="threshold"
+          v-model.number="threshold"
+          type="range"
+          :min="THRESHOLD_RANGE.min"
+          :max="THRESHOLD_RANGE.max"
+          :step="THRESHOLD_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="thresholdError" class="error">{{ thresholdError }}</small>
       </div>
-      <span class="slider-row">
+
+      <div v-if="inTypeGroup('notes')" class="field">
+        <div class="field-head">
+          <label for="notes">Notes</label>
+          <InfoPopover label="notes" :text="noteCountHelp" />
+          <output class="slider-value" for="notes">{{ formatNoteCount(noteCount) }}</output>
+        </div>
+        <input
+          id="notes"
+          v-model.number="noteCount"
+          type="range"
+          :min="NOTE_COUNT_RANGE.min"
+          :max="NOTE_COUNT_RANGE.max"
+          :step="NOTE_COUNT_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="noteCountError" class="error">{{ noteCountError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('blend-width')" class="field">
+        <div class="field-head">
+          <label for="blend-width">Blend width</label>
+          <InfoPopover label="blend width" :text="blendWidthHelp" />
+          <output class="slider-value" for="blend-width">{{ formatBlendWidth(blendWidth) }}</output>
+        </div>
+        <input
+          id="blend-width"
+          v-model.number="blendWidth"
+          type="range"
+          :min="BLEND_WIDTH_RANGE.min"
+          :max="BLEND_WIDTH_RANGE.max"
+          :step="BLEND_WIDTH_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="blendWidthError" class="error">{{ blendWidthError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('circle-unit')" class="field">
+        <div class="field-head">
+          <label for="circle-unit">Movement</label>
+          <InfoPopover label="circle movement" :text="circleUnitHelp" />
+          <output class="slider-value" for="circle-unit">{{ formatCircleUnit(circleUnit) }}</output>
+        </div>
+        <input
+          id="circle-unit"
+          v-model.number="circleUnit"
+          type="range"
+          :min="CIRCLE_UNIT_RANGE.min"
+          :max="CIRCLE_UNIT_RANGE.max"
+          :step="CIRCLE_UNIT_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="circleUnitError" class="error">{{ circleUnitError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('circle-radius')" class="field">
+        <div class="field-head">
+          <label for="circle-radius">Radius</label>
+          <InfoPopover label="circle radius" :text="circleRadiusHelp" />
+          <output class="slider-value" for="circle-radius">{{ formatCircleRadius(circleRadius) }}</output>
+        </div>
+        <input
+          id="circle-radius"
+          v-model.number="circleRadius"
+          type="range"
+          :min="CIRCLE_RADIUS_RANGE.min"
+          :max="CIRCLE_RADIUS_RANGE.max"
+          :step="CIRCLE_RADIUS_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="circleRadiusError" class="error">{{ circleRadiusError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('circle-resize')" class="field">
+        <div class="field-head">
+          <label for="circle-resize">Resize by volume</label>
+          <InfoPopover label="resize by volume" :text="circleResizeHelp" />
+          <output class="slider-value" for="circle-resize">{{ formatCircleResize(circleResize) }}</output>
+        </div>
+        <input id="circle-resize" v-model="circleResize" type="checkbox" :disabled="busy" />
+      </div>
+
+      <div v-if="inTypeGroup('circle-memory')" class="field">
+        <div class="field-head">
+          <label for="circle-memory">Memory</label>
+          <InfoPopover label="circle memory" :text="circleMemoryHelp" />
+          <output class="slider-value" for="circle-memory">{{ formatCircleMemory(circleMemory) }}</output>
+        </div>
+        <input
+          id="circle-memory"
+          v-model.number="circleMemory"
+          type="range"
+          :min="CIRCLE_MEMORY_RANGE.min"
+          :max="CIRCLE_MEMORY_RANGE.max"
+          :step="CIRCLE_MEMORY_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="circleMemoryError" class="error">{{ circleMemoryError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('circle-notes')" class="field">
+        <div class="field-head">
+          <label for="circle-notes">Notes</label>
+          <InfoPopover label="circle notes" :text="circleNotesHelp" />
+          <output class="slider-value" for="circle-notes">{{ formatCircleNotes(circleNotes) }}</output>
+        </div>
+        <input
+          id="circle-notes"
+          v-model.number="circleNotes"
+          type="range"
+          :min="CIRCLE_NOTES_RANGE.min"
+          :max="CIRCLE_NOTES_RANGE.max"
+          :step="CIRCLE_NOTES_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="circleNotesError" class="error">{{ circleNotesError }}</small>
+      </div>
+    </SettingsGroup>
+
+    <SettingsGroup
+      id="data-smoothing"
+      :title="groupTitle('data-smoothing')"
+      :open="isOpen(openState, 'data-smoothing')"
+      :problem="dataSmoothingProblem"
+      @toggle="onToggle('data-smoothing', $event)"
+    >
+      <div class="field">
+        <div class="field-head">
+          <label for="smoothing-window">Smoothing window (frames)</label>
+          <InfoPopover label="smoothing window" :text="smoothingWindowHelp" />
+        </div>
+        <input
+          id="smoothing-window"
+          v-model="smoothingWindowText"
+          type="number"
+          step="1"
+          :min="SMOOTHING_WINDOW_RANGE.min"
+          :max="SMOOTHING_WINDOW_RANGE.max"
+          inputmode="numeric"
+          :disabled="busy"
+        />
+        <small v-if="smoothingWindowError" class="error">{{ smoothingWindowError }}</small>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="smoothing">Smoothing</label>
+          <InfoPopover label="smoothing" :text="smoothingHelp" />
+          <output class="slider-value" for="smoothing">{{ formatSmoothing(smoothing) }}</output>
+        </div>
         <input
           id="smoothing"
           v-model.number="smoothing"
@@ -283,181 +501,24 @@ function onSubmit() {
           :step="SMOOTHING_RANGE.step"
           :disabled="busy"
         />
-        <output class="slider-value" for="smoothing">{{ formatSmoothing(smoothing) }}</output>
-      </span>
-      <small v-if="smoothingError" class="error">{{ smoothingError }}</small>
-    </div>
-
-    <div class="field">
-      <div class="field-head">
-        <label for="threshold">Threshold</label>
-        <InfoPopover label="threshold" :text="thresholdHelp" />
+        <small v-if="smoothingError" class="error">{{ smoothingError }}</small>
       </div>
-      <span class="slider-row">
-        <input
-          id="threshold"
-          v-model.number="threshold"
-          type="range"
-          :min="THRESHOLD_RANGE.min"
-          :max="THRESHOLD_RANGE.max"
-          :step="THRESHOLD_RANGE.step"
-          :disabled="busy || !gridSettingsApply(imageType)"
-        />
-        <output class="slider-value slider-value-wide" for="threshold">{{ formatThreshold(threshold) }}</output>
-      </span>
-      <small v-if="thresholdError" class="error">{{ thresholdError }}</small>
-    </div>
+    </SettingsGroup>
 
-    <div class="field">
-      <div class="field-head">
-        <label for="notes">Notes</label>
-        <InfoPopover label="notes" :text="noteCountHelp" />
-      </div>
-      <span class="slider-row">
-        <input
-          id="notes"
-          v-model.number="noteCount"
-          type="range"
-          :min="NOTE_COUNT_RANGE.min"
-          :max="NOTE_COUNT_RANGE.max"
-          :step="NOTE_COUNT_RANGE.step"
-          :disabled="busy || !gridSettingsApply(imageType)"
-        />
-        <output class="slider-value slider-value-wide" for="notes">{{ formatNoteCount(noteCount) }}</output>
-      </span>
-      <small v-if="noteCountError" class="error">{{ noteCountError }}</small>
-    </div>
-
-    <div class="field">
-      <div class="field-head">
-        <label for="image-type">Image type</label>
-        <InfoPopover label="image type" :text="imageTypeHelp" />
-      </div>
-      <select id="image-type" v-model="imageType" :disabled="busy">
-        <option v-for="type in IMAGE_TYPES" :key="type.value" :value="type.value">{{ type.label }}</option>
-      </select>
-      <small v-if="imageTypeError" class="error">{{ imageTypeError }}</small>
-    </div>
-
-    <div class="field">
-      <div class="field-head">
-        <label for="blend-width">Blend width</label>
-        <InfoPopover label="blend width" :text="blendWidthHelp" />
-      </div>
-      <span class="slider-row">
-        <input
-          id="blend-width"
-          v-model.number="blendWidth"
-          type="range"
-          :min="BLEND_WIDTH_RANGE.min"
-          :max="BLEND_WIDTH_RANGE.max"
-          :step="BLEND_WIDTH_RANGE.step"
-          :disabled="busy || !blendWidthApplies(imageType)"
-        />
-        <output class="slider-value slider-value-wide" for="blend-width">{{ formatBlendWidth(blendWidth) }}</output>
-      </span>
-      <small v-if="blendWidthError" class="error">{{ blendWidthError }}</small>
-    </div>
-
-    <template v-if="imageType === 'circles'">
+    <SettingsGroup
+      v-if="showImageSmoothing"
+      id="image-smoothing"
+      :title="groupTitle('image-smoothing')"
+      :open="isOpen(openState, 'image-smoothing')"
+      :problem="imageSmoothingProblem"
+      @toggle="onToggle('image-smoothing', $event)"
+    >
       <div class="field">
         <div class="field-head">
-          <label for="circle-unit">Unit</label>
-          <InfoPopover label="circle unit" :text="circleUnitHelp" />
+          <label for="resolution">Oversampling</label>
+          <InfoPopover label="oversampling" :text="resolutionHelp" />
+          <output class="slider-value" for="resolution">{{ formatResolution(resolution) }}</output>
         </div>
-        <span class="slider-row">
-          <input
-            id="circle-unit"
-            v-model.number="circleUnit"
-            type="range"
-            :min="CIRCLE_UNIT_RANGE.min"
-            :max="CIRCLE_UNIT_RANGE.max"
-            :step="CIRCLE_UNIT_RANGE.step"
-            :disabled="busy"
-          />
-          <output class="slider-value slider-value-wide" for="circle-unit">{{ formatCircleUnit(circleUnit) }}</output>
-        </span>
-        <small v-if="circleUnitError" class="error">{{ circleUnitError }}</small>
-      </div>
-
-      <div class="field">
-        <div class="field-head">
-          <label for="circle-size">Size</label>
-          <InfoPopover label="circle size" :text="circleSizeHelp" />
-        </div>
-        <span class="slider-row">
-          <input
-            id="circle-size"
-            v-model.number="circleSize"
-            type="range"
-            :min="CIRCLE_SIZE_RANGE.min"
-            :max="CIRCLE_SIZE_RANGE.max"
-            :step="CIRCLE_SIZE_RANGE.step"
-            :disabled="busy"
-          />
-          <output class="slider-value slider-value-wide" for="circle-size">{{ formatCircleSize(circleSize) }}</output>
-        </span>
-        <small v-if="circleSizeError" class="error">{{ circleSizeError }}</small>
-      </div>
-
-      <div class="field">
-        <div class="field-head">
-          <label for="circle-resize">Resize by volume</label>
-          <InfoPopover label="resize by volume" :text="circleResizeHelp" />
-        </div>
-        <span class="slider-row">
-          <input id="circle-resize" v-model="circleResize" type="checkbox" :disabled="busy" />
-          <output class="slider-value slider-value-wide" for="circle-resize">{{ formatCircleResize(circleResize) }}</output>
-        </span>
-      </div>
-
-      <div class="field">
-        <div class="field-head">
-          <label for="circle-memory">Memory</label>
-          <InfoPopover label="circle memory" :text="circleMemoryHelp" />
-        </div>
-        <span class="slider-row">
-          <input
-            id="circle-memory"
-            v-model.number="circleMemory"
-            type="range"
-            :min="CIRCLE_MEMORY_RANGE.min"
-            :max="CIRCLE_MEMORY_RANGE.max"
-            :step="CIRCLE_MEMORY_RANGE.step"
-            :disabled="busy"
-          />
-          <output class="slider-value slider-value-wide" for="circle-memory">{{ formatCircleMemory(circleMemory) }}</output>
-        </span>
-        <small v-if="circleMemoryError" class="error">{{ circleMemoryError }}</small>
-      </div>
-
-      <div class="field">
-        <div class="field-head">
-          <label for="circle-notes">Circles per frame</label>
-          <InfoPopover label="circles per frame" :text="circleNotesHelp" />
-        </div>
-        <span class="slider-row">
-          <input
-            id="circle-notes"
-            v-model.number="circleNotes"
-            type="range"
-            :min="CIRCLE_NOTES_RANGE.min"
-            :max="CIRCLE_NOTES_RANGE.max"
-            :step="CIRCLE_NOTES_RANGE.step"
-            :disabled="busy"
-          />
-          <output class="slider-value slider-value-wide" for="circle-notes">{{ formatCircleNotes(circleNotes) }}</output>
-        </span>
-        <small v-if="circleNotesError" class="error">{{ circleNotesError }}</small>
-      </div>
-    </template>
-
-    <div class="field">
-      <div class="field-head">
-        <label for="resolution">Resolution</label>
-        <InfoPopover label="resolution" :text="resolutionHelp" />
-      </div>
-      <span class="slider-row">
         <input
           id="resolution"
           v-model.number="resolution"
@@ -465,19 +526,17 @@ function onSubmit() {
           :min="RESOLUTION_RANGE.min"
           :max="RESOLUTION_RANGE.max"
           :step="RESOLUTION_RANGE.step"
-          :disabled="busy || !gridSettingsApply(imageType)"
+          :disabled="busy"
         />
-        <output class="slider-value slider-value-wide" for="resolution">{{ formatResolution(resolution) }}</output>
-      </span>
-      <small v-if="resolutionError" class="error">{{ resolutionError }}</small>
-    </div>
-
-    <div class="field">
-      <div class="field-head">
-        <label for="interpolate">Interpolate</label>
-        <InfoPopover label="interpolate" :text="interpolateHelp" />
+        <small v-if="resolutionError" class="error">{{ resolutionError }}</small>
       </div>
-      <span class="slider-row">
+
+      <div class="field">
+        <div class="field-head">
+          <label for="interpolate">Interpolate</label>
+          <InfoPopover label="interpolate" :text="interpolateHelp" />
+          <output class="slider-value" for="interpolate">{{ formatInterpolate(interpolate) }}</output>
+        </div>
         <input
           id="interpolate"
           v-model.number="interpolate"
@@ -485,12 +544,11 @@ function onSubmit() {
           :min="INTERPOLATE_RANGE.min"
           :max="INTERPOLATE_RANGE.max"
           :step="INTERPOLATE_RANGE.step"
-          :disabled="busy || !gridSettingsApply(imageType)"
+          :disabled="busy"
         />
-        <output class="slider-value slider-value-wide" for="interpolate">{{ formatInterpolate(interpolate) }}</output>
-      </span>
-      <small v-if="interpolateError" class="error">{{ interpolateError }}</small>
-    </div>
+        <small v-if="interpolateError" class="error">{{ interpolateError }}</small>
+      </div>
+    </SettingsGroup>
 
     <button type="submit" :disabled="!canSubmit || busy">{{ busy ? "Working…" : "Create frames" }}</button>
   </form>
@@ -499,11 +557,6 @@ function onSubmit() {
 <style scoped>
 .settings {
   display: grid;
-  gap: 1rem;
-}
-.field-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
   gap: 0.75rem;
 }
 .field {
@@ -514,35 +567,36 @@ function onSubmit() {
 }
 .field-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 0.35rem;
+  gap: 0.2rem 0.35rem;
 }
 .field-head label {
-  font-weight: 600;
+  font-family: var(--label-font);
+  font-size: var(--label-size);
 }
-.field input:not([type="range"]),
+.field input:not([type="range"]):not([type="checkbox"]),
 .field select {
   width: 100%;
   box-sizing: border-box;
 }
+.field input[type="range"] {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+.field input[type="checkbox"] {
+  justify-self: start;
+}
 small {
   color: #555;
 }
-.slider-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.slider-row input {
-  flex: 1;
-}
+/* the readout of a slider sits in the label row, at the right, so that a half-width cell has all its width for the slider */
 .slider-value {
-  min-width: 3rem;
+  margin-left: auto;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-}
-.slider-value-wide {
-  min-width: 9rem;
+  text-align: right;
 }
 small.error {
   color: #b00020;

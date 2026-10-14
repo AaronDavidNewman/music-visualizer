@@ -21,13 +21,13 @@ put down most recently (the picture *remembers* them).
 * **The memory** is a circular buffer of the last ``memory`` (100 to 500) circles. Each frame adds its circles weakest
   first, so the strongest of a frame is drawn on top and dropped last, and the picture draws the whole buffer, oldest first.
 * **The look**: the background is the *middle color* of the selected colormap (the table entry at the middle of its scale),
-  and each circle is a disc of the size ``size`` (its circumference in pixels, 25 to 50) in its own color with an
+  and each circle is a disc of the radius ``radius`` (whole pixels, 4 to 8) in its own color with an
   *opacity that falls with its age*: the newest circle is opaque, and a circle ``age`` places back in the memory (0 for the
   newest) has the opacity ``(memory - age) / memory``, so the oldest circle, just before it leaves the memory, is barely
-  visible. The step of a circle (``unit``) and its size are separate settings.
+  visible. The step of a circle (``unit``, called Movement on the page) and its radius are separate settings.
 * **Resize by volume** (off by default): the radius of each circle is multiplied by a factor that grows in a straight line
   with the note's strength on the color scale (the color index ``c`` of 0 to 255), from 1 for the faintest to 3 for the
-  strongest note of the file: ``1 + 2 * c / 255``, so no circle is smaller than ``size``. Off, every circle has the radius of ``size``.
+  strongest note of the file: ``1 + 2 * c / 255``, so no circle is smaller than ``radius``. Off, every circle has the radius ``radius``.
 
 A frame depends on the frames before it, so frames are made in order. This module knows nothing about the note analysis or
 the other kinds of picture, only that a frame has 84 note values ordered from A1 (55 Hz).
@@ -58,11 +58,10 @@ MIN_CIRCLE_NOTES = 5
 MAX_CIRCLE_NOTES = 12
 DEFAULT_CIRCLE_NOTES = 8
 
-# the size of a circle is its circumference in pixels: from about the circle that the default unit used to give (4 pixels in radius)
-# to about 50 pixels around
-MIN_CIRCLE_SIZE = 25
-MAX_CIRCLE_SIZE = 50
-DEFAULT_CIRCLE_SIZE = 25
+# the radius of a circle in whole pixels (feature 020; before it the setting was the circumference, 25 to 50 pixels, a radius of 3.98 to 7.96)
+MIN_CIRCLE_RADIUS = 4
+MAX_CIRCLE_RADIUS = 8
+DEFAULT_CIRCLE_RADIUS = 4
 
 # the background is the middle color of the colormap: this row of its 256-entry table (0.5 of the way along its scale)
 MIDDLE_COLOR_ROW = 128
@@ -98,7 +97,7 @@ def _check_whole(value, low: int, high: int, message: str) -> int:
 
 def check_circle_unit(value) -> int:
     """Return ``value`` as an ``int`` when it is a whole number of pixels from 1 to 10."""
-    return _check_whole(value, MIN_CIRCLE_UNIT, MAX_CIRCLE_UNIT, f"The circle unit must be a whole number from {MIN_CIRCLE_UNIT} to {MAX_CIRCLE_UNIT}.")
+    return _check_whole(value, MIN_CIRCLE_UNIT, MAX_CIRCLE_UNIT, f"The circle movement must be a whole number from {MIN_CIRCLE_UNIT} to {MAX_CIRCLE_UNIT}.")
 
 
 def check_circle_memory(value) -> int:
@@ -115,10 +114,10 @@ def check_circle_notes(value) -> int:
     )
 
 
-def check_circle_size(value) -> int:
-    """Return ``value`` as an ``int`` when it is a whole number of pixels, the circumference of a circle, from 25 to 50."""
+def check_circle_radius(value) -> int:
+    """Return ``value`` as an ``int`` when it is a whole number of pixels, the radius of a circle, from 4 to 8."""
     return _check_whole(
-        value, MIN_CIRCLE_SIZE, MAX_CIRCLE_SIZE, f"The circle size must be a whole number from {MIN_CIRCLE_SIZE} to {MAX_CIRCLE_SIZE}."
+        value, MIN_CIRCLE_RADIUS, MAX_CIRCLE_RADIUS, f"The circle radius must be a whole number from {MIN_CIRCLE_RADIUS} to {MAX_CIRCLE_RADIUS}."
     )
 
 
@@ -135,11 +134,6 @@ def resize_factor(color: int, resize: bool = True) -> float:
     if not resize:
         return 1.0
     return MIN_RESIZE_FACTOR + (MAX_RESIZE_FACTOR - MIN_RESIZE_FACTOR) * color / 255
-
-
-def circle_radius(size: int) -> float:
-    """The radius in pixels of a circle whose circumference is ``size`` pixels."""
-    return size / (2 * math.pi)
 
 
 def circle_opacity(age: int, memory: int) -> int:
@@ -218,7 +212,7 @@ def write_circle_frames(
     notes: int,
     unit: int,
     memory: int,
-    size: int = DEFAULT_CIRCLE_SIZE,
+    radius: int = DEFAULT_CIRCLE_RADIUS,
     width: int = 252,
     height: int = 168,
     resize: bool = DEFAULT_CIRCLE_RESIZE,
@@ -231,7 +225,7 @@ def write_circle_frames(
     notes = check_circle_notes(notes)
     unit = check_circle_unit(unit)
     memory = check_circle_memory(memory)
-    size = check_circle_size(size)
+    radius = check_circle_radius(radius)
     resize = check_circle_resize(resize)
     plan = plan_circles(values, peak, notes, unit, memory, width, height)  # checks the shape of the values at the first frame
     values = np.asarray(values)
@@ -239,7 +233,6 @@ def write_circle_frames(
         raise ValueError(f"Each frame needs {_NOTES} note values (got shape {values.shape}).")
     colors = [tuple(int(v) for v in row) for row in lookup_table(colormap)]
     background = colors[MIDDLE_COLOR_ROW]
-    radius = circle_radius(size)
     scale = SUPERSAMPLE
     directory.mkdir(parents=True, exist_ok=True)
     pool = ThreadPoolExecutor(max_workers=_SAVE_WORKERS)

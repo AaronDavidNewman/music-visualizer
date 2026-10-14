@@ -33,12 +33,12 @@ from .circles import (
     DEFAULT_CIRCLE_MEMORY,
     DEFAULT_CIRCLE_NOTES,
     DEFAULT_CIRCLE_RESIZE,
-    DEFAULT_CIRCLE_SIZE,
+    DEFAULT_CIRCLE_RADIUS,
     DEFAULT_CIRCLE_UNIT,
     check_circle_memory,
     check_circle_notes,
     check_circle_resize,
-    check_circle_size,
+    check_circle_radius,
     check_circle_unit,
     write_circle_frames,
 )
@@ -247,7 +247,7 @@ def write_frames(
     circle_unit: int = DEFAULT_CIRCLE_UNIT,
     circle_memory: int = DEFAULT_CIRCLE_MEMORY,
     circle_notes: int = DEFAULT_CIRCLE_NOTES,
-    circle_size: int = DEFAULT_CIRCLE_SIZE,
+    circle_radius: int = DEFAULT_CIRCLE_RADIUS,
     circle_resize: bool = DEFAULT_CIRCLE_RESIZE,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
@@ -301,10 +301,10 @@ def write_frames(
     to the circle that its rank had in the previous frame (moved by an angle from the note's name and a distance from its
     octave, in units of ``circle_unit`` pixels, 1 to 10, default 4), colored by the colormap at the note's strength on the
     tiles' scale, and remembered in a circular buffer of the last ``circle_memory`` (100 to 500, default 300) circles that
-    every frame draws in full, on a background of the colormap's middle color, each circle as large as ``circle_size`` (its
-    circumference in pixels, 25 to 50, default 25) and with an opacity that falls with its age (the oldest barely visible); with
+    every frame draws in full, on a background of the colormap's middle color, each circle with the radius ``circle_radius`` (whole
+    pixels, 4 to 8, default 4) and with an opacity that falls with its age (the oldest barely visible); with
     ``circle_resize`` (a bool, default off) the radius of each circle is also scaled by its note's strength, from 1 to
-    3 times (never smaller than ``circle_size``). Smoothing and the colormap apply; ``interpolate``, ``resolution``, ``note_count``,
+    3 times (never smaller than ``circle_radius``). Smoothing and the colormap apply; ``interpolate``, ``resolution``, ``note_count``,
     ``threshold`` and ``blend_width`` describe a grid of tiles or skipped frames and are accepted and ignored. The three
     circle settings are checked for every image type and have no effect for the others.
 
@@ -321,7 +321,7 @@ def write_frames(
     circle_unit = check_circle_unit(circle_unit)
     circle_memory = check_circle_memory(circle_memory)
     circle_notes = check_circle_notes(circle_notes)
-    circle_size = check_circle_size(circle_size)
+    circle_radius = check_circle_radius(circle_radius)
     circle_resize = check_circle_resize(circle_resize)
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
     peak = float(smoothed.max()) if smoothed.size else 0.0
@@ -334,7 +334,7 @@ def write_frames(
             circle_notes,
             circle_unit,
             circle_memory,
-            circle_size,
+            circle_radius,
             IMAGE_WIDTH,
             IMAGE_HEIGHT,
             resize=circle_resize,

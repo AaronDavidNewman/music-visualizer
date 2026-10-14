@@ -32,7 +32,7 @@ def check_resolution(value) -> int:
         or int(value) != value
         or not MIN_RESOLUTION <= value <= MAX_RESOLUTION
     ):
-        raise ValueError(f"The resolution must be a whole number from {MIN_RESOLUTION} to {MAX_RESOLUTION}.")
+        raise ValueError(f"The oversampling must be a whole number from {MIN_RESOLUTION} to {MAX_RESOLUTION}.")
     return int(value)
 
 

@@ -25,7 +25,7 @@ from .colormap_names import INVALID
 from .test_circles import (
     A4,
     steady,
-    SIZE_MESSAGE,
+    RADIUS_MESSAGE,
     RESIZE_MESSAGE,
     C4,
     F3,
@@ -169,39 +169,38 @@ def test_the_newest_circle_is_drawn_last_and_within_a_frame_the_strongest_is_on_
     assert strongest not in [colour(f) for _, f in first[:-1]]
 
 
-def test_each_disc_has_the_size_that_was_asked_for_whatever_the_unit_and_the_color_of_its_strength(tmp_path, monkeypatch):
+def test_each_disc_has_the_radius_that_was_asked_for_whatever_the_movement_and_the_color_of_its_strength(tmp_path, monkeypatch):
     discs = Discs(monkeypatch)
     colormap = COLORMAPS[0]
     table = lookup_table(colormap)
-    for size, unit in ((25, 4), (44, 4), (44, 10), (50, 1)):
+    for radius, unit in ((4, 4), (6, 4), (6, 10), (8, 1)):
         discs.calls.clear()
-        write(notes({F5: 1.0, A4: 0.25}), tmp_path / f"{size}_{unit}", colormap=colormap, circle_unit=unit, circle_size=size)
+        write(notes({F5: 1.0, A4: 0.25}), tmp_path / f"{radius}_{unit}", colormap=colormap, circle_unit=unit, circle_radius=radius)
         assert len(discs.calls) == 2
         for box, fill in discs.calls:
             x0, y0, x1, y1 = box
-            assert x1 - x0 == pytest.approx(2 * size / (2 * math.pi)) and y1 - y0 == pytest.approx(2 * size / (2 * math.pi))
+            assert x1 - x0 == pytest.approx(2 * radius) and y1 - y0 == pytest.approx(2 * radius)
         fills = [fill for _, fill in discs.calls]
         # weakest first: the quarter-strength note (half way along the scale) is the older of the two, one place back in the memory
         assert fills == [(*(int(v) for v in table[round(0.5 * 255)]), round(255 * 299 / 300)), (*(int(v) for v in table[255]), 255)]
 
 
-def test_the_size_changes_how_many_pixels_a_circle_covers(tmp_path):
+def test_the_radius_changes_how_many_pixels_a_circle_covers(tmp_path):
     areas = {}
-    for size in (25, 37, 50):
-        files = write(notes({A4: 1.0}), tmp_path / str(size), colormap=COLORMAPS[0], circle_size=size, circle_unit=4)
+    for radius in (4, 6, 8):
+        files = write(notes({A4: 1.0}), tmp_path / str(radius), colormap=COLORMAPS[0], circle_radius=radius, circle_unit=4)
         picture = rgb(files[0])
         background = np.array(lookup_table(COLORMAPS[0])[128])
-        areas[size] = int((picture != background).any(axis=2).sum())
-        radius = size / (2 * math.pi)
-        assert areas[size] == pytest.approx(math.pi * radius**2, rel=0.25), size  # the area of a disc of that circumference
-    assert areas[25] < areas[37] < areas[50]
+        areas[radius] = int((picture != background).any(axis=2).sum())
+        assert areas[radius] == pytest.approx(math.pi * radius**2, rel=0.25), radius  # the area of a disc of that radius
+    assert areas[4] < areas[6] < areas[8]
 
 
 def test_the_edge_of_a_circle_is_smooth_with_in_between_colors(tmp_path):
     colormap = COLORMAPS[0]
     table = lookup_table(colormap)
     background, colour = np.array(table[128], dtype=int), np.array(table[255], dtype=int)
-    picture = rgb(write(notes({A4: 1.0}), tmp_path, colormap=colormap, circle_size=50)[0]).astype(int)
+    picture = rgb(write(notes({A4: 1.0}), tmp_path, colormap=colormap, circle_radius=8)[0]).astype(int)
     pixels = picture.reshape(-1, 3)
     solid = (pixels == background).all(axis=1) | (pixels == colour).all(axis=1)
     edge = pixels[~solid]
@@ -210,15 +209,15 @@ def test_the_edge_of_a_circle_is_smooth_with_in_between_colors(tmp_path):
     assert ((edge >= low - 1) & (edge <= high + 1)).all()  # every one is a mix of the two colors, nothing else
 
 
-@pytest.mark.parametrize("size", [25, 37, 50])
-def test_the_area_a_circle_covers_is_that_of_a_disc_of_its_circumference_to_within_eight_percent(tmp_path, size):
+@pytest.mark.parametrize("radius", [4, 5, 6, 7, 8])
+def test_the_area_a_circle_covers_is_that_of_a_disc_of_its_radius_to_within_eight_percent(tmp_path, radius):
     colormap = COLORMAPS[0]
     table = lookup_table(colormap)
     background, colour = np.array(table[128], dtype=float), np.array(table[255], dtype=float)
     channel = int(np.abs(colour - background).argmax())
-    picture = rgb(write(notes({A4: 1.0}), tmp_path, colormap=colormap, circle_size=size)[0]).astype(float)
+    picture = rgb(write(notes({A4: 1.0}), tmp_path, colormap=colormap, circle_radius=radius)[0]).astype(float)
     coverage = (picture[:, :, channel] - background[channel]) / (colour[channel] - background[channel])
-    assert coverage.sum() == pytest.approx(math.pi * (size / (2 * math.pi)) ** 2, rel=0.08)  # the shape is kept to a quarter of a pixel
+    assert coverage.sum() == pytest.approx(math.pi * radius**2, rel=0.08)  # the shape is kept to a quarter of a pixel
 
 
 def test_a_note_at_the_same_volume_is_drawn_again_on_the_same_place_and_the_older_circles_there_are_covered(tmp_path, monkeypatch):
@@ -240,24 +239,23 @@ def radius_of(box):
 
 def test_the_resize_scales_each_radius_by_the_strength_of_its_note_from_one_to_three_times(tmp_path, monkeypatch):
     discs = Discs(monkeypatch)
-    size = 37
-    base = size / (2 * math.pi)
+    base = 6
     shares = (1e-9, 0.25, 1.0)  # about no energy, a quarter, the loudest note of the file
-    write(notes({C4: shares[0], A4: shares[1], F5: shares[2]}), tmp_path, circle_size=size, circle_resize=True)
+    write(notes({C4: shares[0], A4: shares[1], F5: shares[2]}), tmp_path, circle_radius=base, circle_resize=True)
     assert len(discs.calls) == 3  # weakest first
     for (box, _), share in zip(discs.calls, shares):
         color = int(np.rint(math.sqrt(share) * 255))
         assert radius_of(box) == pytest.approx(base * (1.0 + 2.0 * color / 255), abs=1e-9)
-    assert radius_of(discs.calls[0][0]) == pytest.approx(base * 1.0, abs=1e-9)  # no energy: the size that was asked for, not smaller
+    assert radius_of(discs.calls[0][0]) == pytest.approx(base * 1.0, abs=1e-9)  # no energy: the radius that was asked for, not smaller
     assert radius_of(discs.calls[2][0]) == pytest.approx(base * 3.0, abs=1e-9)
 
 
-def test_with_the_resize_off_or_not_given_every_circle_has_the_radius_of_the_size(tmp_path, monkeypatch):
+def test_with_the_resize_off_or_not_given_every_circle_has_the_radius_that_was_set(tmp_path, monkeypatch):
     discs = Discs(monkeypatch)
-    base = 44 / (2 * math.pi)
+    base = 7
     frames = notes({C4: 1e-9, A4: 0.25, F5: 1.0})
-    write(frames, tmp_path / "a", circle_size=44)
-    write(frames, tmp_path / "b", circle_size=44, circle_resize=False)
+    write(frames, tmp_path / "a", circle_radius=7)
+    write(frames, tmp_path / "b", circle_radius=7, circle_resize=False)
     assert len(discs.calls) == 6
     assert all(radius_of(box) == pytest.approx(base, abs=1e-9) for box, _ in discs.calls)
 
@@ -275,11 +273,10 @@ def test_the_resize_changes_only_the_sizes_not_the_places_the_colors_or_the_opac
     assert [radius_of(b) for b, _ in off] != [radius_of(b) for b, _ in on]
 
 
-def test_no_circle_is_smaller_than_the_size_or_larger_than_three_times_it_whatever_the_music(tmp_path, monkeypatch):
+def test_no_circle_is_smaller_than_the_radius_or_larger_than_three_times_it_whatever_the_music(tmp_path, monkeypatch):
     discs = Discs(monkeypatch)
-    size = 44
-    base = size / (2 * math.pi)
-    write(np.random.default_rng(21).random((20, 88)) ** 3, tmp_path, circle_size=size, circle_resize=True, circle_notes=12)
+    base = 7
+    write(np.random.default_rng(21).random((20, 88)) ** 3, tmp_path, circle_radius=base, circle_resize=True, circle_notes=12)
     radii = [radius_of(box) for box, _ in discs.calls]
     assert len(radii) > 0 and min(radii) >= base - 1e-9 and max(radii) <= 3 * base + 1e-9
     assert max(radii) > 1.5 * base  # and the loud ones really are larger
@@ -300,7 +297,7 @@ def test_the_loudest_circle_covers_about_nine_times_the_area_when_resized(tmp_pa
     channel = int(np.abs(colour - background).argmax())
 
     def covered(resize):
-        picture = rgb(write(notes({A4: 1.0}), tmp_path / str(resize), colormap=colormap, circle_size=37, circle_resize=resize)[0]).astype(float)
+        picture = rgb(write(notes({A4: 1.0}), tmp_path / str(resize), colormap=colormap, circle_radius=6, circle_resize=resize)[0]).astype(float)
         return ((picture[:, :, channel] - background[channel]) / (colour[channel] - background[channel])).sum()
 
     assert covered(True) == pytest.approx(9 * covered(False), rel=0.08)  # three times the radius
@@ -323,7 +320,7 @@ def test_an_old_circle_is_blended_into_the_background_by_its_opacity(tmp_path):
     background = np.array(table[128], dtype=float)
     unit, memory, frames = 10, 100, 5
     index = 83  # G#8: 5 units, so 50 pixels between circles: they do not overlap each other in the first frames
-    files = write(notes(*steady(index, frames)), tmp_path, colormap=colormap, circle_unit=unit, circle_memory=memory, circle_size=25)
+    files = write(notes(*steady(index, frames)), tmp_path, colormap=colormap, circle_unit=unit, circle_memory=memory, circle_radius=4)
     picture = rgb(files[-1])
     for age, (x, y) in enumerate(reversed(walk(index, unit, frames))):  # age 0 is the newest circle
         alpha = round(255 * (memory - age) / memory) / 255
@@ -387,10 +384,10 @@ def test_a_very_quiet_file_still_draws_circles_in_the_colors_of_their_share_of_i
     assert (picture.reshape(-1, 3).sum(axis=1) > 0).any()
 
 
-@pytest.mark.parametrize("unit, memory, count, size", [(1, 100, 5, 25), (10, 500, 12, 50), (1, 500, 12, 50), (10, 100, 5, 25)])
-def test_the_settings_at_their_extremes_all_work(tmp_path, unit, memory, count, size):
+@pytest.mark.parametrize("unit, memory, count, radius", [(1, 100, 5, 4), (10, 500, 12, 8), (1, 500, 12, 8), (10, 100, 5, 4)])
+def test_the_settings_at_their_extremes_all_work(tmp_path, unit, memory, count, radius):
     frames = np.random.default_rng(unit + memory + count).random((30, 88)) ** 2
-    files = write(frames, tmp_path, circle_unit=unit, circle_memory=memory, circle_notes=count, circle_size=size)
+    files = write(frames, tmp_path, circle_unit=unit, circle_memory=memory, circle_notes=count, circle_radius=radius)
     assert len(files) == 30 and all(Image.open(f).size == (252, 168) for f in files)
 
 
@@ -433,10 +430,11 @@ def test_circles_is_the_fourth_image_type():
         ({"circle_notes": 4}, NOTES_MESSAGE),
         ({"circle_notes": 13}, NOTES_MESSAGE),
         ({"circle_notes": True}, NOTES_MESSAGE),
-        ({"circle_size": 24}, SIZE_MESSAGE),
-        ({"circle_size": 51}, SIZE_MESSAGE),
-        ({"circle_size": 30.5}, SIZE_MESSAGE),
-        ({"circle_size": "30"}, SIZE_MESSAGE),
+        ({"circle_radius": 3}, RADIUS_MESSAGE),
+        ({"circle_radius": 9}, RADIUS_MESSAGE),
+        ({"circle_radius": 5.5}, RADIUS_MESSAGE),
+        ({"circle_radius": "6"}, RADIUS_MESSAGE),
+        ({"circle_radius": True}, RADIUS_MESSAGE),
         ({"circle_resize": 1}, RESIZE_MESSAGE),
         ({"circle_resize": "true"}, RESIZE_MESSAGE),
         ({"circle_resize": None}, RESIZE_MESSAGE),
@@ -495,7 +493,7 @@ def test_a_circles_job_does_not_import_the_drawing_library_of_matplotlib():
 def test_three_hundred_frames_with_the_largest_settings_finish_well_within_a_minute(tmp_path):
     frames = np.random.default_rng(3).random((300, 88)) ** 2
     start = time.perf_counter()
-    files = write(frames, tmp_path, circle_unit=10, circle_memory=500, circle_notes=12, circle_size=50, smoothing=0.3, smoothing_window=3)
+    files = write(frames, tmp_path, circle_unit=10, circle_memory=500, circle_notes=12, circle_radius=8, smoothing=0.3, smoothing_window=3)
     elapsed = time.perf_counter() - start
     assert len(files) == 300
     assert elapsed < 60, f"300 circle frames took {elapsed:.1f} s"

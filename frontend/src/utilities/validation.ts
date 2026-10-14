@@ -63,7 +63,7 @@ export function validateThreshold(value: string | number): string | null {
 
 /** The readout beside the slider: "Off" at 0, otherwise the percentage of the loudest note. */
 export function formatThreshold(value: number): string {
-  return value === 0 ? "Off" : `${Number(value.toFixed(2))}% of the loudest note`;
+  return value === 0 ? "Off" : `${Number(value.toFixed(2))}%`;
 }
 
 /** The result summary item: "Off" or the percentage such as "30%". */
@@ -164,11 +164,11 @@ export function validateColormap(value: string): string | null {
 export const GRID_COLUMNS = 12;
 export const GRID_ROWS = 7;
 
-/** The resolution: how many times finer than the original grid the picture is drawn (a whole number). */
+/** The oversampling (the `resolution` field of the request): how many times finer than the original grid the picture is drawn (a whole number). */
 export const RESOLUTION_RANGE = { min: 1, max: 5, step: 1 } as const;
 export const DEFAULT_RESOLUTION = RESOLUTION_RANGE.min;
 
-const resolutionMessage = `The resolution must be a whole number from ${RESOLUTION_RANGE.min} to ${RESOLUTION_RANGE.max}.`;
+const resolutionMessage = `The oversampling must be a whole number from ${RESOLUTION_RANGE.min} to ${RESOLUTION_RANGE.max}.`;
 
 /** Returns an error message, or null when the resolution is a whole number from 1 to 5. */
 export function validateResolution(value: string | number): string | null {
@@ -220,22 +220,22 @@ export function validateInterpolate(value: string | number): string | null {
 
 /** The readout beside the slider: "1 (every frame drawn)", or "3 (one frame in 3 drawn)". */
 export function formatInterpolate(value: number): string {
-  return value === INTERPOLATE_RANGE.min ? `${value} (every frame drawn)` : `${value} (one frame in ${value} drawn)`;
+  return value === INTERPOLATE_RANGE.min ? `${value} ` : `(1/${value} frames)`;
 }
 
 /** The settings of the Circles image type: the unit in pixels, the size (circumference) in pixels, the memory in circles, the strongest notes per frame. */
 export const CIRCLE_UNIT_RANGE = { min: 1, max: 10, step: 1 } as const;
 export const DEFAULT_CIRCLE_UNIT = 4;
-export const CIRCLE_SIZE_RANGE = { min: 25, max: 50, step: 1 } as const;
-export const DEFAULT_CIRCLE_SIZE = 25;
+export const CIRCLE_RADIUS_RANGE = { min: 4, max: 8, step: 1 } as const;
+export const DEFAULT_CIRCLE_RADIUS = 4;
 export const DEFAULT_CIRCLE_RESIZE = false;
 export const CIRCLE_MEMORY_RANGE = { min: 100, max: 500, step: 10 } as const;
 export const DEFAULT_CIRCLE_MEMORY = 300;
 export const CIRCLE_NOTES_RANGE = { min: 5, max: 12, step: 1 } as const;
 export const DEFAULT_CIRCLE_NOTES = 8;
 
-const circleUnitMessage = `The circle unit must be a whole number from ${CIRCLE_UNIT_RANGE.min} to ${CIRCLE_UNIT_RANGE.max}.`;
-const circleSizeMessage = `The circle size must be a whole number from ${CIRCLE_SIZE_RANGE.min} to ${CIRCLE_SIZE_RANGE.max}.`;
+const circleUnitMessage = `The circle movement must be a whole number from ${CIRCLE_UNIT_RANGE.min} to ${CIRCLE_UNIT_RANGE.max}.`;
+const circleRadiusMessage = `The circle radius must be a whole number from ${CIRCLE_RADIUS_RANGE.min} to ${CIRCLE_RADIUS_RANGE.max}.`;
 const circleMemoryMessage = `The circle memory must be a whole number from ${CIRCLE_MEMORY_RANGE.min} to ${CIRCLE_MEMORY_RANGE.max}.`;
 const circleNotesMessage = `The number of circle notes must be a whole number from ${CIRCLE_NOTES_RANGE.min} to ${CIRCLE_NOTES_RANGE.max}.`;
 
@@ -250,8 +250,8 @@ export function validateCircleUnit(value: string | number): string | null {
 }
 
 /** Returns an error message, or null when the size (the circumference) is a whole number of pixels from 25 to 50. */
-export function validateCircleSize(value: string | number): string | null {
-  return validateWhole(value, CIRCLE_SIZE_RANGE.min, CIRCLE_SIZE_RANGE.max, circleSizeMessage);
+export function validateCircleRadius(value: string | number): string | null {
+  return validateWhole(value, CIRCLE_RADIUS_RANGE.min, CIRCLE_RADIUS_RANGE.max, circleRadiusMessage);
 }
 
 /** Returns an error message, or null when the memory is a whole number of circles from 100 to 500. */
@@ -259,7 +259,7 @@ export function validateCircleMemory(value: string | number): string | null {
   return validateWhole(value, CIRCLE_MEMORY_RANGE.min, CIRCLE_MEMORY_RANGE.max, circleMemoryMessage);
 }
 
-/** Returns an error message, or null when the circles per frame are a whole number from 5 to 12. */
+/** Returns an error message, or null when the notes of the Circles group are a whole number from 5 to 12. */
 export function validateCircleNotes(value: string | number): string | null {
   return validateWhole(value, CIRCLE_NOTES_RANGE.min, CIRCLE_NOTES_RANGE.max, circleNotesMessage);
 }
@@ -268,8 +268,8 @@ export function validateCircleNotes(value: string | number): string | null {
 export function formatCircleUnit(value: number): string {
   return `${value} px`;
 }
-export function formatCircleSize(value: number): string {
-  return `${value} px around`;
+export function formatCircleRadius(value: number): string {
+  return `${value} px`;
 }
 export function formatCircleResize(value: boolean): string {
   return value ? "On" : "Off";
@@ -281,7 +281,7 @@ export function formatCircleNotes(value: number): string {
   return `${value} notes`;
 }
 
-/** Whether the settings that describe a grid of tiles (Threshold, Notes, Resolution, Interpolate) mean anything: not for circles. */
+/** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate) mean anything: not for circles. */
 export function gridSettingsApply(imageType: string): boolean {
   return imageType !== "circles";
 }

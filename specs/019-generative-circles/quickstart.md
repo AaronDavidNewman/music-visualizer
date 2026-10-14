@@ -1,5 +1,7 @@
 # Quickstart: Generative Circles
 
+> **Amended 2026-10-14 (feature 020, grouped settings).** On the page the circles settings were renamed: **Unit** is now **Movement**, **Size** is now **Radius**, **Circles per frame** is now **Notes** (and the summary says Memory for the circle memory), all inside a **Circles** group that is shown only for Circles; the controls the type does not use are no longer greyed out but not shown. **The Size setting became a real radius**: a whole number of pixels from **4 to 8** (default 4), request field `circle_radius` with the message `The circle radius must be a whole number from 4 to 8.`, replacing the circumference of 25 to 50 pixels (`circle_size`, now ignored if sent; a radius of 3.98 to 7.96). The unit message is now `The circle movement must be a whole number from 1 to 10.`. Where this document, or its earlier amendments, say size, circumference, 25 to 50 or `circle_size`, the radius governs; the Resize by volume factor (1 to 3) applies to the radius. See `specs/020-grouped-settings-ui/`.
+
 Validation guide for [spec.md](spec.md). The values are in [data-model.md](data-model.md) and the interface in [contracts/circles-api.md](contracts/circles-api.md).
 
 ## Prerequisites
