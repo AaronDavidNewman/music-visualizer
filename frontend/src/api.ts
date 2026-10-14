@@ -19,6 +19,15 @@ export interface JobResult {
   colormap: string;
   /** How many times finer than the original 12 \u00d7 7 grid the picture is drawn (1 to 5). */
   resolution: number;
+  /** How many of the 84 drawn notes make up the picture: the ones with the most energy (12 to 84). */
+  note_count: number;
+  /** Only every n-th frame is drawn (1 to 5); the frames between are made from their neighbors. */
+  interpolate: number;
+  /** The Circles image type: the unit in pixels, the memory in circles and the notes per frame. */
+  circle_unit: number;
+  circle_size: number;
+  circle_memory: number;
+  circle_notes: number;
   window_spacing: number;
   step_samples: number;
   window_count: number;
@@ -44,6 +53,15 @@ export interface JobSettings {
   colormap: string;
   /** 1 to 5: a whole number. */
   resolution: number;
+  /** 12 to 84: a whole number. */
+  noteCount: number;
+  /** 1 to 5: a whole number. */
+  interpolate: number;
+  /** Only used by Circles: 1 to 10 pixels, 100 to 500 circles, 5 to 12 notes per frame. */
+  circleUnit: number;
+  circleSize: number;
+  circleMemory: number;
+  circleNotes: number;
 }
 
 /** Uploads the file and waits for the frames to be created. Rejects with a message fit to show the user. */
@@ -60,6 +78,12 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("blend_width", String(settings.blendWidth));
   body.append("colormap", settings.colormap);
   body.append("resolution", String(settings.resolution));
+  body.append("note_count", String(settings.noteCount));
+  body.append("interpolate", String(settings.interpolate));
+  body.append("circle_unit", String(settings.circleUnit));
+  body.append("circle_size", String(settings.circleSize));
+  body.append("circle_memory", String(settings.circleMemory));
+  body.append("circle_notes", String(settings.circleNotes));
 
   let res: Response;
   try {

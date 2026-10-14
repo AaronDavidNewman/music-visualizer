@@ -24,6 +24,21 @@ from ..services.frame_rendering import (
     frame_count,
     write_frames,
 )
+from ..services.circles import (
+    DEFAULT_CIRCLE_MEMORY,
+    DEFAULT_CIRCLE_NOTES,
+    DEFAULT_CIRCLE_SIZE,
+    DEFAULT_CIRCLE_UNIT,
+    MAX_CIRCLE_MEMORY,
+    MAX_CIRCLE_NOTES,
+    MAX_CIRCLE_SIZE,
+    MAX_CIRCLE_UNIT,
+    MIN_CIRCLE_MEMORY,
+    MIN_CIRCLE_NOTES,
+    MIN_CIRCLE_SIZE,
+    MIN_CIRCLE_UNIT,
+)
+from ..services.frame_interpolation import DEFAULT_INTERPOLATE, MAX_INTERPOLATE, MIN_INTERPOLATE
 from ..services.image_types import (
     DEFAULT_BLEND_WIDTH,
     DEFAULT_IMAGE_TYPE,
@@ -32,6 +47,7 @@ from ..services.image_types import (
     MIN_BLEND_WIDTH,
 )
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
+from ..services.note_selection import DEFAULT_NOTE_COUNT, MAX_NOTE_COUNT, MIN_NOTE_COUNT
 from ..services.resolution import DEFAULT_RESOLUTION, MAX_RESOLUTION, MIN_RESOLUTION
 from ..services.window_spacing import default_spacing, resolve_step
 
@@ -146,6 +162,96 @@ def _parse_blend_width(text: str | None, sent: bool) -> int | float:
     return int(value) if value.is_integer() else value
 
 
+def _parse_circle_unit(text: str | None, sent: bool) -> int:
+    """The requested circle unit in pixels. Not sent means the default; anything sent must be a whole number 1..10."""
+    if text is None and not sent:
+        return DEFAULT_CIRCLE_UNIT
+    text = text or ""
+    message = f"The circle unit must be a whole number from {MIN_CIRCLE_UNIT} to {MAX_CIRCLE_UNIT}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not value.is_integer() or not MIN_CIRCLE_UNIT <= value <= MAX_CIRCLE_UNIT:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
+def _parse_circle_memory(text: str | None, sent: bool) -> int:
+    """The requested circle memory. Not sent means the default; anything sent must be a whole number 100..500."""
+    if text is None and not sent:
+        return DEFAULT_CIRCLE_MEMORY
+    text = text or ""
+    message = f"The circle memory must be a whole number from {MIN_CIRCLE_MEMORY} to {MAX_CIRCLE_MEMORY}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not value.is_integer() or not MIN_CIRCLE_MEMORY <= value <= MAX_CIRCLE_MEMORY:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
+def _parse_circle_notes(text: str | None, sent: bool) -> int:
+    """The requested number of circles per frame. Not sent means the default; anything sent must be a whole number 5..12."""
+    if text is None and not sent:
+        return DEFAULT_CIRCLE_NOTES
+    text = text or ""
+    message = f"The number of circle notes must be a whole number from {MIN_CIRCLE_NOTES} to {MAX_CIRCLE_NOTES}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not value.is_integer() or not MIN_CIRCLE_NOTES <= value <= MAX_CIRCLE_NOTES:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
+def _parse_circle_size(text: str | None, sent: bool) -> int:
+    """The requested circle size (its circumference in pixels). Not sent means the default; anything sent must be a whole number 25..50."""
+    if text is None and not sent:
+        return DEFAULT_CIRCLE_SIZE
+    text = text or ""
+    message = f"The circle size must be a whole number from {MIN_CIRCLE_SIZE} to {MAX_CIRCLE_SIZE}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not value.is_integer() or not MIN_CIRCLE_SIZE <= value <= MAX_CIRCLE_SIZE:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
+def _parse_interpolate(text: str | None, sent: bool) -> int:
+    """The requested interpolate value. Not sent means 1 (every frame drawn); anything sent must be a whole number 1..5."""
+    if text is None and not sent:
+        return DEFAULT_INTERPOLATE
+    text = text or ""
+    message = f"The interpolate value must be a whole number from {MIN_INTERPOLATE} to {MAX_INTERPOLATE}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not value.is_integer() or not MIN_INTERPOLATE <= value <= MAX_INTERPOLATE:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
+def _parse_note_count(text: str | None, sent: bool) -> int:
+    """The requested number of notes. Not sent means all 84; anything sent must be a whole number 12..84."""
+    if text is None and not sent:
+        return DEFAULT_NOTE_COUNT
+    text = text or ""
+    message = f"The number of notes must be a whole number from {MIN_NOTE_COUNT} to {MAX_NOTE_COUNT}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not value.is_integer() or not MIN_NOTE_COUNT <= value <= MAX_NOTE_COUNT:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
 def _parse_resolution(text: str | None, sent: bool) -> int:
     """The requested resolution. Not sent means the default (1); anything sent must be a whole number 1..5."""
     if text is None and not sent:
@@ -231,6 +337,12 @@ def create_job(
     blend_width: str | None = Form(None),
     colormap: str | None = Form(None),
     resolution: str | None = Form(None),
+    note_count: str | None = Form(None),
+    interpolate: str | None = Form(None),
+    circle_unit: str | None = Form(None),
+    circle_memory: str | None = Form(None),
+    circle_notes: str | None = Form(None),
+    circle_size: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -243,6 +355,12 @@ def create_job(
     blend_width_value = _parse_blend_width(blend_width, "blend_width" in sent)
     colormap_value = _parse_colormap(colormap, "colormap" in sent)
     resolution_value = _parse_resolution(resolution, "resolution" in sent)
+    note_count_value = _parse_note_count(note_count, "note_count" in sent)
+    interpolate_value = _parse_interpolate(interpolate, "interpolate" in sent)
+    circle_unit_value = _parse_circle_unit(circle_unit, "circle_unit" in sent)
+    circle_memory_value = _parse_circle_memory(circle_memory, "circle_memory" in sent)
+    circle_notes_value = _parse_circle_notes(circle_notes, "circle_notes" in sent)
+    circle_size_value = _parse_circle_size(circle_size, "circle_size" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -284,7 +402,9 @@ def create_job(
         # write_frames smooths the note values (each frame is mixed with the earlier frames of the window), colors every
         # tile from the colormap at its own note's strength, blacks the tiles of notes below the threshold, and writes
         # the finished tile colors as the chosen image type; a resolution above 1 first interpolates the grid of smoothed
-        # note values to a finer one
+        # note values to a finer one, and a number of notes below 84 first builds the picture from the notes with the most
+        # energy in the file only; an interpolate value above 1 draws only every n-th frame and makes the others from their
+        # neighbors with Pillow; the image type circles draws wandering circles instead (its three settings)
         write_frames(
             average_frames(result, fps, frames),
             frames_dir,
@@ -295,6 +415,12 @@ def create_job(
             image_type=image_type_value,
             blend_width=blend_width_value,
             resolution=resolution_value,
+            note_count=note_count_value,
+            interpolate=interpolate_value,
+            circle_unit=circle_unit_value,
+            circle_memory=circle_memory_value,
+            circle_notes=circle_notes_value,
+            circle_size=circle_size_value,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -322,6 +448,12 @@ def create_job(
         "blend_width": blend_width_value,
         "colormap": colormap_value,
         "resolution": resolution_value,
+        "note_count": note_count_value,
+        "interpolate": interpolate_value,
+        "circle_unit": circle_unit_value,
+        "circle_memory": circle_memory_value,
+        "circle_notes": circle_notes_value,
+        "circle_size": circle_size_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

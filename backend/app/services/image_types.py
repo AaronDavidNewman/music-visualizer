@@ -16,7 +16,8 @@ meet is 25% each). Compared with a straight ramp over the same distance, the edg
 does not blend with the start of the next row, because they are not side by side in the picture.
 
 A third kind, ``contour``, is not tile colors at all: the grid of note values is drawn as a filled contour map. It is drawn by
-``contour.py``, because it needs matplotlib's drawing; this module stays pure numpy and only lists its name.
+``contour.py``, because it needs matplotlib's drawing; this module stays pure numpy and only lists its name. A fourth kind,
+``circles``, is not made from the grid either: circles that wander as the music plays (``circles.py``).
 
 This module knows nothing about the note analysis or the grid of the application: the tile geometry is passed in.
 """
@@ -26,7 +27,7 @@ import numbers
 
 import numpy as np
 
-IMAGE_TYPES = ("tiles", "blended", "contour")
+IMAGE_TYPES = ("tiles", "blended", "contour", "circles")
 DEFAULT_IMAGE_TYPE = "tiles"
 
 # The blend width is a percentage of the tile width: the reach of the fade on each side of an edge.

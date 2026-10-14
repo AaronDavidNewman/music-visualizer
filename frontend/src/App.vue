@@ -8,6 +8,12 @@ import { DEFAULT_SAMPLE_RATE, formatSpacing } from "./utilities/spacing";
 import {
   colormapLabel,
   formatBlendWidthSummary,
+  formatCircleMemory,
+  formatCircleNotes,
+  formatCircleSize,
+  formatCircleUnit,
+  gridSettingsApply,
+  formatNoteCountSummary,
   formatResolution,
   formatThresholdSummary,
   imageTypeLabel,
@@ -58,9 +64,17 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li>Colormap: {{ colormapLabel(result.colormap) }}</li>
             <li>Smoothing: {{ result.smoothing.toFixed(2) }}</li>
             <li>Smoothing window: {{ result.smoothing_window }}</li>
-            <li>Threshold: {{ formatThresholdSummary(result.threshold) }}</li>
+            <li v-if="gridSettingsApply(result.image_type)">Threshold: {{ formatThresholdSummary(result.threshold) }}</li>
+            <li v-if="gridSettingsApply(result.image_type)">Notes: {{ formatNoteCountSummary(result.note_count) }}</li>
+            <li v-if="gridSettingsApply(result.image_type)">Interpolate: {{ result.interpolate }}</li>
             <li>Image type: {{ imageTypeLabel(result.image_type) }}</li>
-            <li>Resolution: {{ formatResolution(result.resolution) }}</li>
+            <li v-if="gridSettingsApply(result.image_type)">Resolution: {{ formatResolution(result.resolution) }}</li>
+            <template v-if="result.image_type === 'circles'">
+              <li>Circle unit: {{ formatCircleUnit(result.circle_unit) }}</li>
+              <li>Circle size: {{ formatCircleSize(result.circle_size) }}</li>
+              <li>Circle memory: {{ formatCircleMemory(result.circle_memory) }}</li>
+              <li>Circles per frame: {{ formatCircleNotes(result.circle_notes) }}</li>
+            </template>
             <li v-if="result.image_type === 'blended'">Blend width: {{ formatBlendWidthSummary(result.blend_width) }}</li>
             <li>Window spacing: {{ formatSpacing(result.window_spacing) }}</li>
             <li>Step: {{ Number(result.step_samples.toFixed(2)) }} samples</li>

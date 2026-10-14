@@ -4,6 +4,12 @@ import {
   colormapHelp,
   frameRateHelp,
   imageTypeHelp,
+  interpolateHelp,
+  circleMemoryHelp,
+  circleSizeHelp,
+  circleNotesHelp,
+  circleUnitHelp,
+  noteCountHelp,
   resolutionHelp,
   smoothingHelp,
   smoothingWindowHelp,
@@ -52,7 +58,7 @@ describe("setting explanations", () => {
     expect(smoothingWindowHelp).toContain("no effect while Smoothing is 0");
   });
 
-  it("explains the three image types", () => {
+  it("explains the four image types", () => {
     expect(imageTypeHelp).toContain("Tiles:");
     expect(imageTypeHelp).toContain("flat");
     expect(imageTypeHelp).toContain("hard edges");
@@ -60,6 +66,8 @@ describe("setting explanations", () => {
     expect(imageTypeHelp).toContain("fade into each other");
     expect(imageTypeHelp).toContain("Contour:");
     expect(imageTypeHelp).toContain("contour map");
+    expect(imageTypeHelp).toContain("Circles:");
+    expect(imageTypeHelp).toContain("circles");
   });
 
   it("explains the blend width: the reach on each side of an edge, as a share of a tile, the range, and where it applies", () => {
@@ -86,5 +94,50 @@ describe("resolution explanation", () => {
     expect(resolutionHelp).toContain("60 \u00d7 35");
     expect(resolutionHelp).toContain("smaller tiles");
     expect(resolutionHelp).toContain("contour");
+  });
+});
+
+describe("number of notes explanation", () => {
+  it("explains the choice by energy over the whole file, the bigger features, the range and that it is not always steadier", () => {
+    expect(noteCountHelp).toContain("most energy");
+    expect(noteCountHelp).toContain("whole file");
+    expect(noteCountHelp).toContain("12 to 84");
+    expect(noteCountHelp).toContain("bigger");
+    expect(noteCountHelp).toContain("not steadier in every case");
+  });
+});
+
+describe("interpolation explanation", () => {
+  it("explains that only every n-th frame is drawn, that the frames between are blends of their neighbors, and that it is faster", () => {
+    expect(interpolateHelp).toContain("every n-th frame");
+    expect(interpolateHelp).toContain("blending");
+    expect(interpolateHelp).toContain("neighbors");
+    expect(interpolateHelp).toContain("contour");
+    expect(interpolateHelp).toContain("1 to 5");
+  });
+
+  it("no longer offers a choice of function", () => {
+    expect(interpolateHelp).not.toContain("Soft light");
+    expect(interpolateHelp).not.toContain("Subtract");
+  });
+});
+
+describe("circles explanations", () => {
+  it("explains the unit in pixels, the memory of the last circles, and how many of the strongest notes put a circle down", () => {
+    expect(circleUnitHelp).toContain("1 to 10");
+    expect(circleUnitHelp).toContain("pixels");
+    expect(circleMemoryHelp).toContain("100 to 500");
+    expect(circleMemoryHelp).toContain("oldest");
+    expect(circleNotesHelp).toContain("5 to 12");
+    expect(circleNotesHelp).toContain("strongest");
+  });
+
+  it("explains the size as the circumference, apart from the step, and the fading of old circles", () => {
+    expect(circleSizeHelp).toContain("25 to 50");
+    expect(circleSizeHelp).toContain("circumference");
+    expect(circleUnitHelp).not.toContain("radius");
+    expect(circleUnitHelp).toContain("stays in place");
+    expect(circleMemoryHelp).toContain("fade");
+    expect(circleMemoryHelp).toContain("middle color");
   });
 });

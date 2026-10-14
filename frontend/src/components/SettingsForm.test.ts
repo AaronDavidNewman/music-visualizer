@@ -75,9 +75,9 @@ describe("the smoothing window field", () => {
 describe("the image type controls", () => {
   const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
 
-  it("offer Tiles, Blended tiles and Contour in a dropdown that starts at Tiles", async () => {
+  it("offer Tiles, Blended tiles, Contour and Circles in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -176,14 +176,120 @@ describe("the resolution slider", () => {
     expect(slider(await render(true))).toContain("disabled");
   });
 
-  it("does not depend on the image type: its rule is not bound to the image type", () => {
+  it("depends on the image type only through the grid rule (disabled for circles, enabled for the other types)", () => {
     const input = formSource.match(/<input\s+id="resolution"[\s\S]*?\/>/)?.[0] ?? "";
-    expect(input).toContain(':disabled="busy"');
-    expect(input).not.toContain("imageType");
+    expect(input).toContain(':disabled="busy || !gridSettingsApply(imageType)"');
+    expect(input).not.toMatch(/imageType\s*[!=]==/); // not a comparison with one image type
   });
 
   it("comes after the Blend width field", async () => {
     const html = await render();
     expect(html.indexOf('for="resolution"')).toBeGreaterThan(html.indexOf('for="blend-width"'));
+  });
+});
+
+describe("the notes slider", () => {
+  const slider = (html: string) => html.match(/<input id="notes"[^>]*>/)?.[0] ?? "";
+
+  it("is a slider from 12 to 84 in steps of 1 starting at 84, with its readout, label and info button", async () => {
+    const html = await render();
+    const tag = slider(html);
+    expect(tag).toContain('type="range"');
+    expect(tag).toContain('min="12"');
+    expect(tag).toContain('max="84"');
+    expect(tag).toContain('step="1"');
+    expect(tag).toContain('value="84"');
+    expect(html).toMatch(/<output[^>]*for="notes"[^>]*>All 84 notes<\/output>/);
+    expect(html).toContain(">Notes</label>");
+    expect(html).toContain('aria-label="About notes"');
+  });
+
+  it("is enabled when no job runs and disabled while one runs", async () => {
+    expect(slider(await render(false))).not.toContain("disabled");
+    expect(slider(await render(true))).toContain("disabled");
+  });
+
+  it("depends on the image type only through the grid rule (disabled for circles, enabled for the other types)", () => {
+    const input = formSource.match(/<input\s+id="notes"[\s\S]*?\/>/)?.[0] ?? "";
+    expect(input).toContain(':disabled="busy || !gridSettingsApply(imageType)"');
+    expect(input).not.toMatch(/imageType\s*[!=]==/); // not a comparison with one image type
+  });
+
+  it("comes after the Threshold field and before the Image type field", async () => {
+    const html = await render();
+    expect(html.indexOf('for="notes"')).toBeGreaterThan(html.indexOf('for="threshold"'));
+    expect(html.indexOf('for="notes"')).toBeLessThan(html.indexOf('for="image-type"'));
+  });
+});
+
+describe("the interpolate slider", () => {
+  const slider = (html: string) => html.match(/<input id="interpolate"[^>]*>/)?.[0] ?? "";
+
+  it("is a slider from 1 to 5 in steps of 1 starting at 1 with its readout, label and info button", async () => {
+    const html = await render();
+    const tag = slider(html);
+    expect(tag).toContain('type="range"');
+    expect(tag).toContain('min="1"');
+    expect(tag).toContain('max="5"');
+    expect(tag).toContain('step="1"');
+    expect(tag).toContain('value="1"');
+    expect(html).toMatch(/<output[^>]*for="interpolate"[^>]*>1 \(every frame drawn\)<\/output>/);
+    expect(html).toContain(">Interpolate</label>");
+    expect(html).toContain('aria-label="About interpolate"');
+  });
+
+  it("is enabled when no job runs and disabled while one runs", async () => {
+    expect(slider(await render(false))).not.toContain("disabled");
+    expect(slider(await render(true))).toContain("disabled");
+  });
+
+  it("has no function dropdown any more (only blend is made)", async () => {
+    const html = await render();
+    expect(html).not.toContain("interpolate-function");
+    expect(html).not.toContain("Interpolation function");
+    expect(formSource).not.toContain("interpolate-function");
+  });
+
+  it("comes after the Resolution field", async () => {
+    const html = await render();
+    expect(html.indexOf('for="interpolate"')).toBeGreaterThan(html.indexOf('for="resolution"'));
+  });
+});
+
+describe("the circles controls", () => {
+  it("are not shown at the starting image type (Tiles)", async () => {
+    const html = await render();
+    for (const id of ["circle-unit", "circle-size", "circle-memory", "circle-notes"]) expect(html).not.toContain(`id="${id}"`);
+  });
+
+  it("are four sliders shown only while Circles is chosen, with readouts and info buttons", () => {
+    for (const [id, label] of [["circle-unit", "Unit"], ["circle-size", "Size"], ["circle-memory", "Memory"], ["circle-notes", "Circles per frame"]] as const) {
+      const input = formSource.match(new RegExp(`<input\\s+id="${id}"[\\s\\S]*?/>`))?.[0] ?? "";
+      expect(input, id).toContain('type="range"');
+      expect(input).toContain(':disabled="busy"');
+      expect(formSource).toContain(`<label for="${id}">${label}</label>`);
+    }
+    expect(formSource).toMatch(/v-if="imageType === 'circles'"/);
+    expect(formSource).toContain('label="circle unit"');
+    expect(formSource).toContain('label="circle size"');
+    expect(formSource).toContain('label="circle memory"');
+    expect(formSource).toContain('label="circles per frame"');
+  });
+
+  it("make the five grid controls disabled while Circles is chosen", () => {
+    for (const id of ["interpolate", "resolution", "notes", "threshold"]) {
+      const input = formSource.match(new RegExp(`<input\\s+id="${id}"[\\s\\S]*?/>`))?.[0] ?? "";
+      expect(input, id).toContain("!gridSettingsApply(imageType)");
+    }
+    const blend = formSource.match(/<input\s+id="blend-width"[\s\S]*?\/>/)?.[0] ?? "";
+    expect(blend).toContain("!blendWidthApplies(imageType)");
+  });
+
+  it("leave the five controls enabled at the starting image type and while no job runs", async () => {
+    const html = await render(false);
+    for (const id of ["interpolate", "resolution", "notes", "threshold"]) {
+      const tag = html.match(new RegExp(`<input id="${id}"[^>]*>`))?.[0] ?? "";
+      expect(tag, id).not.toContain("disabled");
+    }
   });
 });

@@ -92,6 +92,7 @@ export const IMAGE_TYPES = [
   { value: "tiles", label: "Tiles" },
   { value: "blended", label: "Blended tiles" },
   { value: "contour", label: "Contour" },
+  { value: "circles", label: "Circles" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -134,18 +135,18 @@ export function formatBlendWidth(value: number): string {
 export function formatBlendWidthSummary(value: number): string {
   return `${Number(value.toFixed(2))}%`;
 }
-
+// "coolwarm", "YlOrRd", "inferno", "Blues", "YlGn", "Greys", "hsv"
 /** The colormaps that can be chosen: four of matplotlib's named scales. A tile's color is the color of the chosen scale at its note's strength. */
 export const COLORMAPS = [
-  { value: "summer", label: "Summer" },
-  { value: "autumn", label: "Autumn" },
-  { value: "hot", label: "Hot" },
-  { value: "cool", label: "Cool" },
+  { value: "coolwarm", label: "Cool Warm" },
+  { value: "YlOrRd", label: "Autumn" },
+  { value: "inferno", label: "Hot" },
+  { value: "Blues", label: "Blues" },
   { value: "viridis", label: "Viridis"},
   { value: "Greys", label: "Grayscale"},
   { value: "hsv", label: "HSV"}
 ] as const;
-export const DEFAULT_COLORMAP = "hot";
+export const DEFAULT_COLORMAP = "coolwarm";
 
 const colormapMessage = `The colormap must be one of ${COLORMAPS.map((c) => c.value).join(", ")}.`;
 
@@ -179,4 +180,104 @@ export function validateResolution(value: string | number): string | null {
 /** The readout beside the slider and the result summary item: "1\u00d7", or the multiple and its grid, "3\u00d7 (36 \u00d7 21)". */
 export function formatResolution(value: number): string {
   return value === 1 ? "1\u00d7" : `${value}\u00d7 (${GRID_COLUMNS * value} \u00d7 ${GRID_ROWS * value})`;
+}
+
+/** The number of notes: how many of the 84 drawn notes make up the picture (the ones with the most energy). */
+export const NOTE_COUNT_RANGE = { min: 12, max: GRID_COLUMNS * GRID_ROWS, step: 1 } as const;
+export const DEFAULT_NOTE_COUNT = NOTE_COUNT_RANGE.max;
+
+const noteCountMessage = `The number of notes must be a whole number from ${NOTE_COUNT_RANGE.min} to ${NOTE_COUNT_RANGE.max}.`;
+
+/** Returns an error message, or null when the number of notes is a whole number from 12 to 84. */
+export function validateNoteCount(value: string | number): string | null {
+  const n = parseNumber(value);
+  const ok = Number.isInteger(n) && n >= NOTE_COUNT_RANGE.min && n <= NOTE_COUNT_RANGE.max;
+  return ok ? null : noteCountMessage;
+}
+
+/** The readout beside the slider: "All 84 notes", or how many of the 84 are used, "36 of 84 notes". */
+export function formatNoteCount(value: number): string {
+  return value === NOTE_COUNT_RANGE.max ? `All ${NOTE_COUNT_RANGE.max} notes` : `${value} of ${NOTE_COUNT_RANGE.max} notes`;
+}
+
+/** The result summary item: "All 84" or "36 of 84". */
+export function formatNoteCountSummary(value: number): string {
+  return value === NOTE_COUNT_RANGE.max ? `All ${NOTE_COUNT_RANGE.max}` : `${value} of ${NOTE_COUNT_RANGE.max}`;
+}
+
+/** Interpolate: only every n-th frame is drawn, the frames between are made from their neighbors (a whole number). */
+export const INTERPOLATE_RANGE = { min: 1, max: 5, step: 1 } as const;
+export const DEFAULT_INTERPOLATE = INTERPOLATE_RANGE.min;
+
+const interpolateMessage = `The interpolate value must be a whole number from ${INTERPOLATE_RANGE.min} to ${INTERPOLATE_RANGE.max}.`;
+
+/** Returns an error message, or null when the interpolate value is a whole number from 1 to 5. */
+export function validateInterpolate(value: string | number): string | null {
+  const n = parseNumber(value);
+  const ok = Number.isInteger(n) && n >= INTERPOLATE_RANGE.min && n <= INTERPOLATE_RANGE.max;
+  return ok ? null : interpolateMessage;
+}
+
+/** The readout beside the slider: "1 (every frame drawn)", or "3 (one frame in 3 drawn)". */
+export function formatInterpolate(value: number): string {
+  return value === INTERPOLATE_RANGE.min ? `${value} (every frame drawn)` : `${value} (one frame in ${value} drawn)`;
+}
+
+/** The settings of the Circles image type: the unit in pixels, the size (circumference) in pixels, the memory in circles, the strongest notes per frame. */
+export const CIRCLE_UNIT_RANGE = { min: 1, max: 10, step: 1 } as const;
+export const DEFAULT_CIRCLE_UNIT = 4;
+export const CIRCLE_SIZE_RANGE = { min: 25, max: 50, step: 1 } as const;
+export const DEFAULT_CIRCLE_SIZE = 25;
+export const CIRCLE_MEMORY_RANGE = { min: 100, max: 500, step: 10 } as const;
+export const DEFAULT_CIRCLE_MEMORY = 300;
+export const CIRCLE_NOTES_RANGE = { min: 5, max: 12, step: 1 } as const;
+export const DEFAULT_CIRCLE_NOTES = 8;
+
+const circleUnitMessage = `The circle unit must be a whole number from ${CIRCLE_UNIT_RANGE.min} to ${CIRCLE_UNIT_RANGE.max}.`;
+const circleSizeMessage = `The circle size must be a whole number from ${CIRCLE_SIZE_RANGE.min} to ${CIRCLE_SIZE_RANGE.max}.`;
+const circleMemoryMessage = `The circle memory must be a whole number from ${CIRCLE_MEMORY_RANGE.min} to ${CIRCLE_MEMORY_RANGE.max}.`;
+const circleNotesMessage = `The number of circle notes must be a whole number from ${CIRCLE_NOTES_RANGE.min} to ${CIRCLE_NOTES_RANGE.max}.`;
+
+function validateWhole(value: string | number, min: number, max: number, message: string): string | null {
+  const n = parseNumber(value);
+  return Number.isInteger(n) && n >= min && n <= max ? null : message;
+}
+
+/** Returns an error message, or null when the unit is a whole number of pixels from 1 to 10. */
+export function validateCircleUnit(value: string | number): string | null {
+  return validateWhole(value, CIRCLE_UNIT_RANGE.min, CIRCLE_UNIT_RANGE.max, circleUnitMessage);
+}
+
+/** Returns an error message, or null when the size (the circumference) is a whole number of pixels from 25 to 50. */
+export function validateCircleSize(value: string | number): string | null {
+  return validateWhole(value, CIRCLE_SIZE_RANGE.min, CIRCLE_SIZE_RANGE.max, circleSizeMessage);
+}
+
+/** Returns an error message, or null when the memory is a whole number of circles from 100 to 500. */
+export function validateCircleMemory(value: string | number): string | null {
+  return validateWhole(value, CIRCLE_MEMORY_RANGE.min, CIRCLE_MEMORY_RANGE.max, circleMemoryMessage);
+}
+
+/** Returns an error message, or null when the circles per frame are a whole number from 5 to 12. */
+export function validateCircleNotes(value: string | number): string | null {
+  return validateWhole(value, CIRCLE_NOTES_RANGE.min, CIRCLE_NOTES_RANGE.max, circleNotesMessage);
+}
+
+/** The readouts beside the sliders, and the result summary items: "4 px", "25 px around", "300 circles", "8 notes". */
+export function formatCircleUnit(value: number): string {
+  return `${value} px`;
+}
+export function formatCircleSize(value: number): string {
+  return `${value} px around`;
+}
+export function formatCircleMemory(value: number): string {
+  return `${value} circles`;
+}
+export function formatCircleNotes(value: number): string {
+  return `${value} notes`;
+}
+
+/** Whether the settings that describe a grid of tiles (Threshold, Notes, Resolution, Interpolate) mean anything: not for circles. */
+export function gridSettingsApply(imageType: string): boolean {
+  return imageType !== "circles";
 }

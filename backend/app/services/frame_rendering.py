@@ -5,7 +5,11 @@ the windows that start inside that period, or, if none does, the most recent win
 started before the period (which is the window covering its start when windows are consecutive).
 Each frame becomes a 12 x 7 grid of coloured tiles (one row per octave, one column per note name,
 252 x 168 pixels, 3:2); a higher resolution (1 to 5) first interpolates the grid to 12 r x 7 r values, so the
-same picture size has more and smaller tiles (see ``resolution``).
+same picture size has more and smaller tiles (see ``resolution``). A number of notes below 84 builds the picture from
+only the notes with the most energy in the file, spread over the whole grid (see ``note_selection``).
+The image type ``circles`` draws wandering circles instead of a grid (see ``circles``).
+An interpolate value above 1 draws only every n-th frame and makes the frames in between from their neighbors with Pillow
+(see ``frame_interpolation``).
 
 A tile's color is the color of a matplotlib colormap (``summer``, ``autumn``, ``hot`` or ``cool``) at a position that
 depends only on how strong the tile's own note is: its smoothed value as a share of the largest smoothed value in the
@@ -25,8 +29,20 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from .circles import (
+    DEFAULT_CIRCLE_MEMORY,
+    DEFAULT_CIRCLE_NOTES,
+    DEFAULT_CIRCLE_SIZE,
+    DEFAULT_CIRCLE_UNIT,
+    check_circle_memory,
+    check_circle_notes,
+    check_circle_size,
+    check_circle_unit,
+    write_circle_frames,
+)
 from .colormaps import DEFAULT_COLORMAP, check_colormap, colorize
 from .contour import write_contour_frames
+from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
 from .image_types import (
     DEFAULT_BLEND_WIDTH,
     DEFAULT_IMAGE_TYPE,
@@ -36,6 +52,7 @@ from .image_types import (
     tile_edges,
 )
 from .note_analysis import NOTE_COUNT, AnalysisResult
+from .note_selection import DEFAULT_NOTE_COUNT, check_note_count, spread_notes
 from .resolution import DEFAULT_RESOLUTION, check_resolution, interpolate_grid
 
 # 12 columns (the notes of an octave) by 7 rows (octaves) of tiles 21 wide by 24 tall: tile width is
@@ -223,6 +240,12 @@ def write_frames(
     image_type: str = DEFAULT_IMAGE_TYPE,
     blend_width: float = DEFAULT_BLEND_WIDTH,
     resolution: int = DEFAULT_RESOLUTION,
+    note_count: int = DEFAULT_NOTE_COUNT,
+    interpolate: int = DEFAULT_INTERPOLATE,
+    circle_unit: int = DEFAULT_CIRCLE_UNIT,
+    circle_memory: int = DEFAULT_CIRCLE_MEMORY,
+    circle_notes: int = DEFAULT_CIRCLE_NOTES,
+    circle_size: int = DEFAULT_CIRCLE_SIZE,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -255,6 +278,31 @@ def write_frames(
     chosen by matplotlib, and the color scale is *linear* from 0 to the largest smoothed value in the whole file (the
     tiles use the square root of the strength). ``blend_width`` has no effect for it either.
 
+    ``note_count`` (a whole number from 12 to 84, default 84 = all drawn notes) builds the picture from only the
+    ``note_count`` notes with the most energy, the energy of a note being the sum of its smoothed values over the whole
+    file, so the same notes are used in every frame. Their values are spread over the 84 values of the original grid
+    (``spread_notes``: ``np.linspace`` positions and ``np.interp``, in order of pitch) *after* the smoothing and before the
+    resolution step, the threshold and the colors, which work on the spread values as they do on the note values. The scale
+    of the colors and the threshold's reference are still the largest value of the whole file over all 88 notes, so the
+    same strength has the same color at every number of notes. With 84 notes nothing changes.
+
+    ``interpolate`` (a whole number from 1 to 5, default 1 = every frame drawn) draws only every n-th frame, the frames
+    ``0, n, 2n, ...`` (counting from 0) and always the last one, exactly as they are drawn at 1; the other frames are
+    made from their two nearest drawn frames with the Pillow library (see ``frame_interpolation``): ``Image.blend`` mixes
+    them with the weight of the frame's position in its gap. The smoothing, the notes, the resolution, the threshold and
+    the colors are worked out for all frames as before; only the drawing is skipped. The number of frames, their names and the size do not change, and at 1 nothing
+    changes.
+
+    ``image_type="circles"`` draws circles that wander as the music plays instead of a grid (see ``circles``): in every
+    frame the ``circle_notes`` (5 to 12, default 8) strongest notes of that frame each put down a circle, placed relative
+    to the circle that its rank had in the previous frame (moved by an angle from the note's name and a distance from its
+    octave, in units of ``circle_unit`` pixels, 1 to 10, default 4), colored by the colormap at the note's strength on the
+    tiles' scale, and remembered in a circular buffer of the last ``circle_memory`` (100 to 500, default 300) circles that
+    every frame draws in full, on a background of the colormap's middle color, each circle as large as ``circle_size`` (its
+    circumference in pixels, 25 to 50, default 25) and with an opacity that falls with its age (the oldest barely visible). Smoothing and the colormap apply; ``interpolate``, ``resolution``, ``note_count``,
+    ``threshold`` and ``blend_width`` describe a grid of tiles or skipped frames and are accepted and ignored. The three
+    circle settings are checked for every image type and have no effect for the others.
+
     Every argument is checked before anything is written.
     """
     colormap = check_colormap(colormap)
@@ -263,17 +311,49 @@ def write_frames(
     image_type = check_image_type(image_type)
     blend_width = check_blend_width(blend_width)
     resolution = check_resolution(resolution)
+    note_count = check_note_count(note_count)
+    interpolate = check_interpolate(interpolate)
+    circle_unit = check_circle_unit(circle_unit)
+    circle_memory = check_circle_memory(circle_memory)
+    circle_notes = check_circle_notes(circle_notes)
+    circle_size = check_circle_size(circle_size)
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
     peak = float(smoothed.max()) if smoothed.size else 0.0
+    if image_type == "circles":
+        write_circle_frames(
+            smoothed[:, :SHOWN_NOTES],
+            peak,
+            colormap,
+            directory,
+            circle_notes,
+            circle_unit,
+            circle_memory,
+            circle_size,
+            IMAGE_WIDTH,
+            IMAGE_HEIGHT,
+        )
+        return
     columns, rows = GRID_COLUMNS * resolution, GRID_ROWS * resolution
-    values = interpolate_grid(smoothed[:, :SHOWN_NOTES], GRID_COLUMNS, GRID_ROWS, resolution)
+    shown = spread_notes(smoothed[:, :SHOWN_NOTES], note_count)
+    values = interpolate_grid(shown, GRID_COLUMNS, GRID_ROWS, resolution)
     hidden = hidden_below(values, peak, threshold)
+    frames_to_draw = key_frames(values.shape[0], interpolate)
     if image_type == "contour":
         values[hidden] = 0
-        write_contour_frames(values, peak, colormap, directory, columns, rows, IMAGE_WIDTH, IMAGE_HEIGHT)
-        return
-    colours = colorize(values, colormap, columns * rows, peak)
-    colours[hidden] = 0
+        write_contour_frames(
+            values, peak, colormap, directory, columns, rows, IMAGE_WIDTH, IMAGE_HEIGHT, indices=frames_to_draw
+        )
+    else:
+        colours = colorize(values, colormap, columns * rows, peak)
+        colours[hidden] = 0
+        _write_tile_frames(colours, directory, image_type, blend_width, columns, rows, frames_to_draw)
+    write_interpolated_frames(directory, values.shape[0], interpolate)
+
+
+def _write_tile_frames(
+    colours: np.ndarray, directory: Path, image_type: str, blend_width: float, columns: int, rows: int, frames_to_draw
+) -> None:
+    """Draw the frames ``frames_to_draw`` of ``tiles`` or ``blended`` from the finished tile colors (all frames' colors)."""
     directory.mkdir(parents=True, exist_ok=True)
     blend = pool = None
     futures = []
@@ -282,7 +362,7 @@ def write_frames(
         blend = make_grid_blender(blend_width, columns, rows, IMAGE_WIDTH, IMAGE_HEIGHT)
         pool = ThreadPoolExecutor(max_workers=_BLEND_WORKERS)
     try:
-        for i in range(colours.shape[0]):
+        for i in frames_to_draw:
             path = directory / f"frame_{i:06d}.png"
             if blend is None and columns * rows <= _PALETTE_TILES:
                 # Level 6 makes these files about a third of the size of level 1 for roughly 0.2 s more per 10,000 frames.

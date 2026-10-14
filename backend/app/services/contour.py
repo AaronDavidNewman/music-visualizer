@@ -20,6 +20,7 @@ This module knows nothing about the note analysis: the values, the geometry and 
 """
 
 import threading
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -51,8 +52,11 @@ def write_contour_frames(
     rows: int,
     width: int,
     height: int,
+    indices: Sequence[int] | None = None,
 ) -> None:
     """Save one PNG of ``width`` x ``height`` pixels per row of ``values`` as ``frame_000000.png`` and up.
+
+    ``indices`` are the numbers of the frames to draw (each into the file with its own number); ``None`` draws them all.
 
     ``values`` is ``(frames, rows * columns)``: the smoothed value of every drawn note in every frame, with the notes the
     threshold hides already set to 0; note ``n`` is at row ``n // columns`` and column ``n % columns`` of the grid, and
@@ -73,7 +77,8 @@ def write_contour_frames(
         figure = pyplot.figure(figsize=(width / DPI, height / DPI), dpi=DPI)
         try:
             axes = pyplot.axes([0, 0, 1, 1])  # fills the whole figure: no margin
-            for i, frame in enumerate(values):
+            for i in range(len(values)) if indices is None else indices:
+                frame = values[i]
                 path = directory / f"frame_{i:06d}.png"
                 if peak <= 0 or frame.min() == frame.max():
                     _flat_frame(colormap, float(frame[0]), peak, width, height).save(path)

@@ -5,20 +5,39 @@ import {
   COLORMAPS,
   DEFAULT_COLORMAP,
   DEFAULT_BLEND_WIDTH,
+  DEFAULT_CIRCLE_MEMORY,
+  DEFAULT_CIRCLE_NOTES,
+  DEFAULT_CIRCLE_SIZE,
+  DEFAULT_CIRCLE_UNIT,
   DEFAULT_IMAGE_TYPE,
+  DEFAULT_INTERPOLATE,
+  DEFAULT_NOTE_COUNT,
   DEFAULT_RESOLUTION,
   DEFAULT_SMOOTHING,
   DEFAULT_SMOOTHING_WINDOW,
   DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
+  CIRCLE_MEMORY_RANGE,
+  CIRCLE_NOTES_RANGE,
+  CIRCLE_SIZE_RANGE,
+  CIRCLE_UNIT_RANGE,
   IMAGE_TYPES,
+  INTERPOLATE_RANGE,
+  NOTE_COUNT_RANGE,
   RESOLUTION_RANGE,
   SMOOTHING_RANGE,
   SMOOTHING_WINDOW_RANGE,
   THRESHOLD_RANGE,
   WINDOW_SIZES,
   blendWidthApplies,
+  gridSettingsApply,
   formatBlendWidth,
+  formatCircleMemory,
+  formatCircleNotes,
+  formatCircleSize,
+  formatCircleUnit,
+  formatInterpolate,
+  formatNoteCount,
   formatResolution,
   formatSmoothing,
   formatThreshold,
@@ -26,7 +45,13 @@ import {
   validateColormap,
   validateFile,
   validateFrameRate,
+  validateCircleMemory,
+  validateCircleNotes,
+  validateCircleSize,
+  validateCircleUnit,
   validateImageType,
+  validateInterpolate,
+  validateNoteCount,
   validateResolution,
   validateSmoothing,
   validateSmoothingWindow,
@@ -46,7 +71,13 @@ import {
   blendWidthHelp,
   colormapHelp,
   frameRateHelp,
+  circleMemoryHelp,
+  circleNotesHelp,
+  circleSizeHelp,
+  circleUnitHelp,
   imageTypeHelp,
+  interpolateHelp,
+  noteCountHelp,
   resolutionHelp,
   smoothingHelp,
   smoothingWindowHelp,
@@ -69,6 +100,12 @@ const threshold = ref<number>(DEFAULT_THRESHOLD);
 const imageType = ref<string>(DEFAULT_IMAGE_TYPE);
 const blendWidth = ref<number>(DEFAULT_BLEND_WIDTH);
 const resolution = ref<number>(DEFAULT_RESOLUTION);
+const noteCount = ref<number>(DEFAULT_NOTE_COUNT);
+const interpolate = ref<number>(DEFAULT_INTERPOLATE);
+const circleUnit = ref<number>(DEFAULT_CIRCLE_UNIT);
+const circleMemory = ref<number>(DEFAULT_CIRCLE_MEMORY);
+const circleNotes = ref<number>(DEFAULT_CIRCLE_NOTES);
+const circleSize = ref<number>(DEFAULT_CIRCLE_SIZE);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
 function defaultSpacingText(sampleRate: number, frameRate: string, size: number): string | null {
@@ -94,6 +131,12 @@ const imageTypeError = computed(() => validateImageType(imageType.value));
 const blendWidthError = computed(() => validateBlendWidth(blendWidth.value));
 const colormapError = computed(() => validateColormap(colormap.value));
 const resolutionError = computed(() => validateResolution(resolution.value));
+const noteCountError = computed(() => validateNoteCount(noteCount.value));
+const interpolateError = computed(() => validateInterpolate(interpolate.value));
+const circleUnitError = computed(() => validateCircleUnit(circleUnit.value));
+const circleMemoryError = computed(() => validateCircleMemory(circleMemory.value));
+const circleNotesError = computed(() => validateCircleNotes(circleNotes.value));
+const circleSizeError = computed(() => validateCircleSize(circleSize.value));
 const canSubmit = computed(
   () =>
     !fileError.value &&
@@ -106,7 +149,13 @@ const canSubmit = computed(
     !imageTypeError.value &&
     !blendWidthError.value &&
     !colormapError.value &&
-    !resolutionError.value,
+    !resolutionError.value &&
+    !noteCountError.value &&
+    !interpolateError.value &&
+    !circleUnitError.value &&
+    !circleMemoryError.value &&
+    !circleNotesError.value &&
+    !circleSizeError.value,
 );
 
 const belowMinimum = computed(
@@ -133,6 +182,12 @@ function onSubmit() {
     blendWidth: blendWidth.value,
     colormap: colormap.value,
     resolution: resolution.value,
+    noteCount: noteCount.value,
+    interpolate: interpolate.value,
+    circleUnit: circleUnit.value,
+    circleMemory: circleMemory.value,
+    circleNotes: circleNotes.value,
+    circleSize: circleSize.value,
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -241,11 +296,31 @@ function onSubmit() {
           :min="THRESHOLD_RANGE.min"
           :max="THRESHOLD_RANGE.max"
           :step="THRESHOLD_RANGE.step"
-          :disabled="busy"
+          :disabled="busy || !gridSettingsApply(imageType)"
         />
         <output class="slider-value slider-value-wide" for="threshold">{{ formatThreshold(threshold) }}</output>
       </span>
       <small v-if="thresholdError" class="error">{{ thresholdError }}</small>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label for="notes">Notes</label>
+        <InfoPopover label="notes" :text="noteCountHelp" />
+      </div>
+      <span class="slider-row">
+        <input
+          id="notes"
+          v-model.number="noteCount"
+          type="range"
+          :min="NOTE_COUNT_RANGE.min"
+          :max="NOTE_COUNT_RANGE.max"
+          :step="NOTE_COUNT_RANGE.step"
+          :disabled="busy || !gridSettingsApply(imageType)"
+        />
+        <output class="slider-value slider-value-wide" for="notes">{{ formatNoteCount(noteCount) }}</output>
+      </span>
+      <small v-if="noteCountError" class="error">{{ noteCountError }}</small>
     </div>
 
     <div class="field">
@@ -279,6 +354,88 @@ function onSubmit() {
       <small v-if="blendWidthError" class="error">{{ blendWidthError }}</small>
     </div>
 
+    <template v-if="imageType === 'circles'">
+      <div class="field">
+        <div class="field-head">
+          <label for="circle-unit">Unit</label>
+          <InfoPopover label="circle unit" :text="circleUnitHelp" />
+        </div>
+        <span class="slider-row">
+          <input
+            id="circle-unit"
+            v-model.number="circleUnit"
+            type="range"
+            :min="CIRCLE_UNIT_RANGE.min"
+            :max="CIRCLE_UNIT_RANGE.max"
+            :step="CIRCLE_UNIT_RANGE.step"
+            :disabled="busy"
+          />
+          <output class="slider-value slider-value-wide" for="circle-unit">{{ formatCircleUnit(circleUnit) }}</output>
+        </span>
+        <small v-if="circleUnitError" class="error">{{ circleUnitError }}</small>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="circle-size">Size</label>
+          <InfoPopover label="circle size" :text="circleSizeHelp" />
+        </div>
+        <span class="slider-row">
+          <input
+            id="circle-size"
+            v-model.number="circleSize"
+            type="range"
+            :min="CIRCLE_SIZE_RANGE.min"
+            :max="CIRCLE_SIZE_RANGE.max"
+            :step="CIRCLE_SIZE_RANGE.step"
+            :disabled="busy"
+          />
+          <output class="slider-value slider-value-wide" for="circle-size">{{ formatCircleSize(circleSize) }}</output>
+        </span>
+        <small v-if="circleSizeError" class="error">{{ circleSizeError }}</small>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="circle-memory">Memory</label>
+          <InfoPopover label="circle memory" :text="circleMemoryHelp" />
+        </div>
+        <span class="slider-row">
+          <input
+            id="circle-memory"
+            v-model.number="circleMemory"
+            type="range"
+            :min="CIRCLE_MEMORY_RANGE.min"
+            :max="CIRCLE_MEMORY_RANGE.max"
+            :step="CIRCLE_MEMORY_RANGE.step"
+            :disabled="busy"
+          />
+          <output class="slider-value slider-value-wide" for="circle-memory">{{ formatCircleMemory(circleMemory) }}</output>
+        </span>
+        <small v-if="circleMemoryError" class="error">{{ circleMemoryError }}</small>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="circle-notes">Circles per frame</label>
+          <InfoPopover label="circles per frame" :text="circleNotesHelp" />
+        </div>
+        <span class="slider-row">
+          <input
+            id="circle-notes"
+            v-model.number="circleNotes"
+            type="range"
+            :min="CIRCLE_NOTES_RANGE.min"
+            :max="CIRCLE_NOTES_RANGE.max"
+            :step="CIRCLE_NOTES_RANGE.step"
+            :disabled="busy"
+          />
+          <output class="slider-value slider-value-wide" for="circle-notes">{{ formatCircleNotes(circleNotes) }}</output>
+        </span>
+        <small v-if="circleNotesError" class="error">{{ circleNotesError }}</small>
+      </div>
+    </template>
+
     <div class="field">
       <div class="field-head">
         <label for="resolution">Resolution</label>
@@ -292,11 +449,31 @@ function onSubmit() {
           :min="RESOLUTION_RANGE.min"
           :max="RESOLUTION_RANGE.max"
           :step="RESOLUTION_RANGE.step"
-          :disabled="busy"
+          :disabled="busy || !gridSettingsApply(imageType)"
         />
         <output class="slider-value slider-value-wide" for="resolution">{{ formatResolution(resolution) }}</output>
       </span>
       <small v-if="resolutionError" class="error">{{ resolutionError }}</small>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label for="interpolate">Interpolate</label>
+        <InfoPopover label="interpolate" :text="interpolateHelp" />
+      </div>
+      <span class="slider-row">
+        <input
+          id="interpolate"
+          v-model.number="interpolate"
+          type="range"
+          :min="INTERPOLATE_RANGE.min"
+          :max="INTERPOLATE_RANGE.max"
+          :step="INTERPOLATE_RANGE.step"
+          :disabled="busy || !gridSettingsApply(imageType)"
+        />
+        <output class="slider-value slider-value-wide" for="interpolate">{{ formatInterpolate(interpolate) }}</output>
+      </span>
+      <small v-if="interpolateError" class="error">{{ interpolateError }}</small>
     </div>
 
     <button type="submit" :disabled="!canSubmit || busy">{{ busy ? "Working…" : "Create frames" }}</button>

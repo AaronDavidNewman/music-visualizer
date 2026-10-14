@@ -1,0 +1,424 @@
+"""``write_frames(..., image_type="circles")``: the pictures of wandering circles.
+
+No colormap is named and no number of contour levels is assumed (see ``colormap_names.py``). Where a circle should be is
+worked out here from the note's frequency (see ``test_circles.py``); what is drawn is watched by a spy on the drawing of
+a disc and by decoding the pictures.
+"""
+
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+import pytest
+from PIL import Image, ImageDraw
+
+import math
+
+from app.services.circles import SUPERSAMPLE
+from app.services.colormaps import COLORMAPS, lookup_table
+from app.services.frame_rendering import write_frames
+from app.services.image_types import IMAGE_TYPES
+
+from .colormap_names import INVALID
+from .test_circles import (
+    A4,
+    steady,
+    SIZE_MESSAGE,
+    C4,
+    F3,
+    F5,
+    MEMORY_MESSAGE,
+    NOTES_MESSAGE,
+    UNIT_MESSAGE,
+    W,
+    H,
+    expected_step,
+)
+
+BACKEND = Path(__file__).resolve().parents[1]
+TYPES = ["tiles", "blended", "contour", "circles"]
+
+
+def notes(*per_frame):
+    """(frames, 88) note values; each frame is a dict {note: value}."""
+    out = np.zeros((len(per_frame), 88))
+    for t, values in enumerate(per_frame):
+        for note, value in values.items():
+            out[t, note] = value
+    return out
+
+
+def write(frames, directory, **options):
+    write_frames(frames, directory, image_type="circles", **options)
+    return sorted(directory.glob("frame_*.png"))
+
+
+def rgb(path):
+    return np.asarray(Image.open(path).convert("RGB"))
+
+
+def name(i):
+    return f"frame_{i:06d}.png"
+
+
+class Discs:
+    """Records every disc that is drawn: (box, fill), in the order they are drawn."""
+
+    def __init__(self, monkeypatch):
+        self.calls = []
+        original = ImageDraw.ImageDraw.ellipse
+
+        def spy(draw, xy, fill=None, *args, **kwargs):
+            x0, y0, x1, y1 = xy  # the box of a disc in the large picture: its last pixel is included, so the far ends are one short
+            self.calls.append(((x0 / SUPERSAMPLE, y0 / SUPERSAMPLE, (x1 + 1) / SUPERSAMPLE, (y1 + 1) / SUPERSAMPLE), fill))  # in finished-picture pixels
+            return original(draw, xy, fill, *args, **kwargs)
+
+        monkeypatch.setattr(ImageDraw.ImageDraw, "ellipse", spy)
+
+    def by_frame(self, memory_sizes):
+        """Split the calls into frames, given how many discs each frame draws."""
+        frames, start = [], 0
+        for size in memory_sizes:
+            frames.append(self.calls[start : start + size])
+            start += size
+        assert start == len(self.calls)
+        return frames
+
+
+def centre(box):
+    return (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+
+
+def walk(index, unit, count):
+    """The places of a steady note's circles, worked out from the frequency (the middle plus the steps, wrapped)."""
+    dx, dy = expected_step(index, unit)
+    return [((W / 2 + k * dx) % W, (H / 2 + k * dy) % H) for k in range(1, count + 1)]
+
+
+# --- the pictures -----------------------------------------------------------------------------------------------------------------
+
+
+def test_every_frame_is_an_rgb_png_of_the_image_size_one_per_input_frame(tmp_path):
+    files = write(np.random.default_rng(1).random((6, 88)), tmp_path)
+    assert [f.name for f in files] == [name(i) for i in range(6)]
+    for f in files:
+        image = Image.open(f)
+        assert image.size == (252, 168) and image.mode == "RGB"
+
+
+@pytest.mark.parametrize("colormap", COLORMAPS)
+@pytest.mark.parametrize("index", [F5, F3, A4, C4, 0, 83, 11, 52])
+def test_the_newest_circle_is_at_the_expected_place_in_the_color_of_the_strength(tmp_path, colormap, index):
+    unit = 10
+    frames = notes(*steady(index, 5))  # the volume alternates 1.0 and 0.5, so the note moves every frame
+    files = write(frames, tmp_path, colormap=colormap, circle_unit=unit)
+    table = lookup_table(colormap)
+    for t, (x, y) in enumerate(walk(index, unit, 5)):
+        picture = rgb(files[t])
+        share = 1.0 if t % 2 == 0 else 0.5  # the file's loudest value is 1.0
+        want = table[int(np.rint(math.sqrt(share) * 255))]  # the square-root scale of the tiles
+        assert tuple(picture[min(int(y), H - 1), min(int(x), W - 1)]) == tuple(want), (colormap, index, t)
+
+
+def test_the_background_is_the_middle_color_of_the_colormap_and_a_silent_input_is_all_that_color(tmp_path):
+    for colormap in COLORMAPS:
+        middle = tuple(int(v) for v in lookup_table(colormap)[128])  # the table entry at the middle of the scale
+        files = write(notes({A4: 1.0}), tmp_path / f"one_{colormap}", colormap=colormap, circle_unit=4)
+        picture = rgb(files[0])
+        assert tuple(picture[0, 0]) == middle and tuple(picture[-1, -1]) == middle  # far from the one circle
+        for f in write(np.zeros((4, 88)), tmp_path / colormap, colormap=colormap, threshold=5, smoothing=0.4, smoothing_window=3):
+            assert (rgb(f) == np.array(middle)).all()
+
+
+def test_a_trail_the_earlier_circles_stay_in_the_picture_until_the_memory_drops_them(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    frames = 130
+    write(notes(*steady(F5, frames)), tmp_path, circle_memory=100, circle_unit=4)
+    sizes = [min(t + 1, 100) for t in range(frames)]  # the memory fills, then stays at 100
+    per_frame = discs.by_frame(sizes)
+    places = walk(F5, 4, frames)
+    for t, drawn in enumerate(per_frame):
+        want = places[max(0, t + 1 - 100) : t + 1]  # exactly the last 100 circles, oldest first
+        got = [centre(box) for box, _ in drawn]
+        assert len(got) == len(want) and np.allclose(np.array(got), np.array(want), atol=1e-9), t
+
+
+def test_with_several_circles_a_frame_the_count_is_the_circles_so_far_up_to_the_memory(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    frames = np.random.default_rng(4).random((40, 88)) + 0.1
+    write(frames, tmp_path, circle_notes=8, circle_memory=100)
+    sizes = [min((t + 1) * 8, 100) for t in range(40)]
+    assert [len(f) for f in discs.by_frame(sizes)] == sizes
+
+
+def test_the_newest_circle_is_drawn_last_and_within_a_frame_the_strongest_is_on_top(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    colormap = COLORMAPS[0]
+    frames = notes({F5: 1.0, A4: 0.5, C4: 0.1}, {F5: 1.0, A4: 0.5, C4: 0.1})
+    write(frames, tmp_path, colormap=colormap, circle_notes=5, circle_memory=100)
+    first, second = discs.by_frame([3, 6])
+    table = lookup_table(colormap)
+    strongest = tuple(int(v) for v in table[255])
+    colour = lambda fill: tuple(fill[:3])  # noqa: E731 - the fill is (r, g, b, opacity)
+    assert colour(first[-1][1]) == strongest and colour(second[-1][1]) == strongest  # the last disc of a frame is the strongest note's
+    assert first[-1][1][3] == 255 and second[-1][1][3] == 255  # and it is the newest: opaque
+    assert [colour(f) for _, f in second[:3]] == [colour(f) for _, f in first]  # the old circles come first, in order
+    assert strongest not in [colour(f) for _, f in first[:-1]]
+
+
+def test_each_disc_has_the_size_that_was_asked_for_whatever_the_unit_and_the_color_of_its_strength(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    colormap = COLORMAPS[0]
+    table = lookup_table(colormap)
+    for size, unit in ((25, 4), (44, 4), (44, 10), (50, 1)):
+        discs.calls.clear()
+        write(notes({F5: 1.0, A4: 0.25}), tmp_path / f"{size}_{unit}", colormap=colormap, circle_unit=unit, circle_size=size)
+        assert len(discs.calls) == 2
+        for box, fill in discs.calls:
+            x0, y0, x1, y1 = box
+            assert x1 - x0 == pytest.approx(2 * size / (2 * math.pi)) and y1 - y0 == pytest.approx(2 * size / (2 * math.pi))
+        fills = [fill for _, fill in discs.calls]
+        # weakest first: the quarter-strength note (half way along the scale) is the older of the two, one place back in the memory
+        assert fills == [(*(int(v) for v in table[round(0.5 * 255)]), round(255 * 299 / 300)), (*(int(v) for v in table[255]), 255)]
+
+
+def test_the_size_changes_how_many_pixels_a_circle_covers(tmp_path):
+    areas = {}
+    for size in (25, 37, 50):
+        files = write(notes({A4: 1.0}), tmp_path / str(size), colormap=COLORMAPS[0], circle_size=size, circle_unit=4)
+        picture = rgb(files[0])
+        background = np.array(lookup_table(COLORMAPS[0])[128])
+        areas[size] = int((picture != background).any(axis=2).sum())
+        radius = size / (2 * math.pi)
+        assert areas[size] == pytest.approx(math.pi * radius**2, rel=0.25), size  # the area of a disc of that circumference
+    assert areas[25] < areas[37] < areas[50]
+
+
+def test_the_edge_of_a_circle_is_smooth_with_in_between_colors(tmp_path):
+    colormap = COLORMAPS[0]
+    table = lookup_table(colormap)
+    background, colour = np.array(table[128], dtype=int), np.array(table[255], dtype=int)
+    picture = rgb(write(notes({A4: 1.0}), tmp_path, colormap=colormap, circle_size=50)[0]).astype(int)
+    pixels = picture.reshape(-1, 3)
+    solid = (pixels == background).all(axis=1) | (pixels == colour).all(axis=1)
+    edge = pixels[~solid]
+    assert len(edge) >= 20  # a hard-edged disc of this size has no such pixels; a smooth one has a ring of them
+    low, high = np.minimum(background, colour), np.maximum(background, colour)
+    assert ((edge >= low - 1) & (edge <= high + 1)).all()  # every one is a mix of the two colors, nothing else
+
+
+@pytest.mark.parametrize("size", [25, 37, 50])
+def test_the_area_a_circle_covers_is_that_of_a_disc_of_its_circumference_to_within_eight_percent(tmp_path, size):
+    colormap = COLORMAPS[0]
+    table = lookup_table(colormap)
+    background, colour = np.array(table[128], dtype=float), np.array(table[255], dtype=float)
+    channel = int(np.abs(colour - background).argmax())
+    picture = rgb(write(notes({A4: 1.0}), tmp_path, colormap=colormap, circle_size=size)[0]).astype(float)
+    coverage = (picture[:, :, channel] - background[channel]) / (colour[channel] - background[channel])
+    assert coverage.sum() == pytest.approx(math.pi * (size / (2 * math.pi)) ** 2, rel=0.08)  # the shape is kept to a quarter of a pixel
+
+
+def test_a_note_at_the_same_volume_is_drawn_again_on_the_same_place_and_the_older_circles_there_are_covered(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    colormap = COLORMAPS[0]
+    files = write(notes(*({F5: 1.0} for _ in range(6))), tmp_path, colormap=colormap, circle_unit=10)
+    frames = discs.by_frame([1, 2, 3, 4, 5, 6])
+    first = centre(frames[0][0][0])
+    for t, drawn in enumerate(frames):
+        assert all(centre(box) == pytest.approx(first, abs=1e-9) for box, _ in drawn), t  # all on the one place
+        assert drawn[-1][1][3] == 255  # the newest is opaque and hides the older ones under it
+    x, y = first
+    assert tuple(rgb(files[-1])[min(int(y), H - 1), min(int(x), W - 1)]) == tuple(lookup_table(colormap)[255])
+
+
+def test_the_opacity_of_a_circle_falls_with_its_age_until_it_is_barely_visible(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    frames = 130
+    write(notes(*({F5: 1.0} for _ in range(frames))), tmp_path, circle_memory=100)
+    last = discs.by_frame([min(t + 1, 100) for t in range(frames)])[-1]  # the full memory after the last frame
+    alphas = [fill[3] for _, fill in last]
+    assert alphas == [round(255 * (100 - age) / 100) for age in range(99, -1, -1)]  # oldest first: 3, 5, 8 ... 255
+    assert alphas[0] <= 3 and alphas[-1] == 255
+    assert alphas == sorted(alphas)
+
+
+def test_an_old_circle_is_blended_into_the_background_by_its_opacity(tmp_path):
+    colormap = COLORMAPS[0]
+    table = lookup_table(colormap)
+    background = np.array(table[128], dtype=float)
+    unit, memory, frames = 10, 100, 5
+    index = 83  # G#8: 5 units, so 50 pixels between circles: they do not overlap each other in the first frames
+    files = write(notes(*steady(index, frames)), tmp_path, colormap=colormap, circle_unit=unit, circle_memory=memory, circle_size=25)
+    picture = rgb(files[-1])
+    for age, (x, y) in enumerate(reversed(walk(index, unit, frames))):  # age 0 is the newest circle
+        alpha = round(255 * (memory - age) / memory) / 255
+        share = 1.0 if (frames - 1 - age) % 2 == 0 else 0.5  # the volume alternates, so the colors do
+        colour = np.array(table[int(np.rint(math.sqrt(share) * 255))], dtype=float)
+        want = (1 - alpha) * background + alpha * colour
+        got = picture[min(int(y), H - 1), min(int(x), W - 1)].astype(float)
+        assert np.abs(got - want).max() <= 3, (age, got, want)  # integer blending in Pillow: within a few levels of 255
+
+
+def test_the_circles_follow_the_smoothed_values_and_the_colormap_changes_only_the_colors(tmp_path, monkeypatch):
+    discs = Discs(monkeypatch)
+    impulse = notes({F5: 1.0}, {}, {}, {}, {}, {})
+    write(impulse, tmp_path / "plain", circle_unit=4)
+    plain_calls = len(discs.calls)
+    write(impulse, tmp_path / "smooth", circle_unit=4, smoothing=0.5, smoothing_window=3)
+    smooth_calls = len(discs.calls) - plain_calls
+    assert plain_calls == 6  # one circle put down in frame 0 and drawn again in each of the six frames: 6 discs in all
+    assert smooth_calls > plain_calls  # smoothing leaves a trace in the frames after the impulse: more circles are put down
+    # the colormap changes the colors and not the places
+    if len(COLORMAPS) > 1:
+        before = len(discs.calls)
+        write(impulse, tmp_path / "a", colormap=COLORMAPS[0])
+        middle = len(discs.calls)
+        write(impulse, tmp_path / "b", colormap=COLORMAPS[1])
+        a, b = discs.calls[before:middle], discs.calls[middle:]
+        assert [centre(c[0]) for c in a] == [centre(c[0]) for c in b]  # the same places
+        assert [c[1] for c in a] != [c[1] for c in b]  # in other colors
+
+
+def test_smoothing_is_applied_before_the_choice_of_the_strongest_note(tmp_path, monkeypatch):
+    # a click at note 60 in frame 0 and six steady quieter notes: raw, the click is gone in frame 1; smoothed (0.8, window 1)
+    # it still has 0.44 of its value and is the strongest note of frame 1
+    discs = Discs(monkeypatch)
+    frames = np.zeros((2, 88))
+    frames[:, 10:16] = 0.2
+    frames[0, 60] = 1.0
+    unit = 4
+    write(frames, tmp_path / "raw", circle_unit=unit)
+    raw_first, raw_second = discs.by_frame([7, 13])  # frame 0: six steady notes and the click; frame 1: the six steady ones are added
+    discs.calls.clear()
+    write(frames, tmp_path / "smooth", circle_unit=unit, smoothing=0.8, smoothing_window=1)
+    smooth_first, smooth_second = discs.by_frame([7, 14])  # smoothed, the click is still there in frame 1
+    # the strongest circle of frame 0 is the click's (the last disc of the frame); it is rank 0 in both runs
+    place0 = centre(raw_first[-1][0])
+    assert place0 == pytest.approx(tuple(walk(60, unit, 1)[0]), abs=1e-9)
+    # frame 1: raw, the strongest is the lowest of the steady notes (note 10, ties to the lower); smoothed, it is the click's note again
+    dx10, dy10 = expected_step(10, unit)
+    dx60, dy60 = expected_step(60, unit)
+    assert centre(raw_second[-1][0]) == pytest.approx(((place0[0] + dx10) % W, (place0[1] + dy10) % H), abs=1e-9)
+    assert centre(smooth_second[-1][0]) == pytest.approx(((place0[0] + dx60) % W, (place0[1] + dy60) % H), abs=1e-9)
+
+
+def test_a_very_quiet_file_still_draws_circles_in_the_colors_of_their_share_of_its_own_peak(tmp_path):
+    colormap = COLORMAPS[0]
+    files = write(notes({F5: 1e-6, A4: 0.25e-6}, {F5: 1e-6}), tmp_path, colormap=colormap, circle_unit=10)
+    table = lookup_table(colormap)
+    picture = rgb(files[0])
+    x, y = walk(F5, 10, 1)[0]
+    assert tuple(picture[min(int(y), H - 1), min(int(x), W - 1)]) == tuple(table[255])  # the loudest note of the file: the last color
+    assert (picture.reshape(-1, 3).sum(axis=1) > 0).any()
+
+
+@pytest.mark.parametrize("unit, memory, count, size", [(1, 100, 5, 25), (10, 500, 12, 50), (1, 500, 12, 50), (10, 100, 5, 25)])
+def test_the_settings_at_their_extremes_all_work(tmp_path, unit, memory, count, size):
+    frames = np.random.default_rng(unit + memory + count).random((30, 88)) ** 2
+    files = write(frames, tmp_path, circle_unit=unit, circle_memory=memory, circle_notes=count, circle_size=size)
+    assert len(files) == 30 and all(Image.open(f).size == (252, 168) for f in files)
+
+
+def test_the_other_settings_do_not_apply_to_circles_and_are_ignored(tmp_path):
+    frames = np.random.default_rng(6).random((12, 88)) ** 2
+    plain = write(frames, tmp_path / "plain")
+    ignored = write(
+        frames, tmp_path / "ignored", interpolate=5, resolution=5, note_count=12, threshold=10, blend_width=10
+    )
+    assert [f.read_bytes() for f in plain] == [f.read_bytes() for f in ignored]
+    assert len(ignored) == 12  # no frame is skipped: every frame is drawn
+
+
+def test_two_runs_give_byte_identical_files(tmp_path):
+    frames = np.random.default_rng(8).random((20, 88)) ** 2
+    options = dict(circle_unit=6, circle_memory=200, circle_notes=10, smoothing=0.3, smoothing_window=3)
+    a = write(frames, tmp_path / "a", **options)
+    b = write(frames, tmp_path / "b", **options)
+    assert [f.read_bytes() for f in a] == [f.read_bytes() for f in b]
+
+
+# --- the image type list and the refusals ----------------------------------------------------------------------------------------
+
+
+def test_circles_is_the_fourth_image_type():
+    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles")
+
+
+@pytest.mark.parametrize("image_type", TYPES)
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"circle_unit": 0}, UNIT_MESSAGE),
+        ({"circle_unit": 11}, UNIT_MESSAGE),
+        ({"circle_unit": 2.5}, UNIT_MESSAGE),
+        ({"circle_unit": None}, UNIT_MESSAGE),
+        ({"circle_memory": 99}, MEMORY_MESSAGE),
+        ({"circle_memory": 501}, MEMORY_MESSAGE),
+        ({"circle_memory": "300"}, MEMORY_MESSAGE),
+        ({"circle_notes": 4}, NOTES_MESSAGE),
+        ({"circle_notes": 13}, NOTES_MESSAGE),
+        ({"circle_notes": True}, NOTES_MESSAGE),
+        ({"circle_size": 24}, SIZE_MESSAGE),
+        ({"circle_size": 51}, SIZE_MESSAGE),
+        ({"circle_size": 30.5}, SIZE_MESSAGE),
+        ({"circle_size": "30"}, SIZE_MESSAGE),
+    ],
+)
+def test_a_bad_circle_setting_is_refused_before_anything_is_written_for_every_image_type(tmp_path, image_type, kwargs, message):
+    with pytest.raises(ValueError) as error:
+        write_frames(np.random.default_rng(1).random((3, 88)), tmp_path / "out", image_type=image_type, **kwargs)
+    assert str(error.value) == message
+    assert not (tmp_path / "out").exists()
+
+
+def test_other_arguments_are_still_checked_for_circles(tmp_path):
+    for kwargs in ({"colormap": INVALID[0]}, {"threshold": 11}, {"resolution": 6}, {"note_count": 11}, {"interpolate": 6}, {"blend_width": 5}):
+        with pytest.raises(ValueError):
+            write_frames(np.zeros((3, 88)), tmp_path / "out", image_type="circles", **kwargs)
+    assert not (tmp_path / "out").exists()
+
+
+def test_an_error_while_saving_a_picture_is_raised_and_the_threads_are_shut_down(tmp_path, monkeypatch):
+    import threading
+
+    def broken(self, *args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Image.Image, "save", broken)
+    before = threading.active_count()
+    with pytest.raises(OSError, match="disk full"):
+        write(np.random.default_rng(1).random((6, 88)), tmp_path)
+    assert threading.active_count() == before
+
+
+def test_no_frames_and_one_frame_work(tmp_path):
+    assert write(np.zeros((0, 88)), tmp_path / "none") == []
+    assert [f.name for f in write(notes({A4: 1.0}), tmp_path / "one")] == [name(0)]
+
+
+# --- the environment and the time ----------------------------------------------------------------------------------------------------
+
+
+def test_a_circles_job_does_not_import_the_drawing_library_of_matplotlib():
+    code = (
+        f"import sys, tempfile, pathlib, numpy as np\nsys.path.insert(0, {str(BACKEND)!r})\n"
+        "import app.main\n"
+        "from app.services.frame_rendering import write_frames\n"
+        "d = pathlib.Path(tempfile.mkdtemp())\n"
+        "write_frames(np.random.default_rng(1).random((3, 88)), d, image_type='circles')\n"
+        "print('matplotlib.pyplot' in sys.modules)\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=BACKEND, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.split()[-1] == "False"
+
+
+def test_three_hundred_frames_with_the_largest_settings_finish_well_within_a_minute(tmp_path):
+    frames = np.random.default_rng(3).random((300, 88)) ** 2
+    start = time.perf_counter()
+    files = write(frames, tmp_path, circle_unit=10, circle_memory=500, circle_notes=12, circle_size=50, smoothing=0.3, smoothing_window=3)
+    elapsed = time.perf_counter() - start
+    assert len(files) == 300
+    assert elapsed < 60, f"300 circle frames took {elapsed:.1f} s"

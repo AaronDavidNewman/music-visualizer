@@ -25,7 +25,33 @@ import {
   validateFile,
   validateFrameRate,
   blendWidthApplies,
+  DEFAULT_NOTE_COUNT,
   DEFAULT_RESOLUTION,
+  NOTE_COUNT_RANGE,
+  formatNoteCount,
+  formatNoteCountSummary,
+  validateNoteCount,
+  CIRCLE_MEMORY_RANGE,
+  CIRCLE_SIZE_RANGE,
+  CIRCLE_NOTES_RANGE,
+  CIRCLE_UNIT_RANGE,
+  DEFAULT_CIRCLE_MEMORY,
+  DEFAULT_CIRCLE_SIZE,
+  DEFAULT_CIRCLE_NOTES,
+  DEFAULT_CIRCLE_UNIT,
+  formatCircleMemory,
+  formatCircleSize,
+  formatCircleNotes,
+  formatCircleUnit,
+  gridSettingsApply,
+  validateCircleMemory,
+  validateCircleSize,
+  validateCircleNotes,
+  validateCircleUnit,
+  DEFAULT_INTERPOLATE,
+  INTERPOLATE_RANGE,
+  formatInterpolate,
+  validateInterpolate,
   RESOLUTION_RANGE,
   formatResolution,
   validateResolution,
@@ -166,30 +192,33 @@ describe("smoothing window", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Tiles, Blended tiles and Contour in that order and starts at tiles", () => {
+  it("offers Tiles, Blended tiles, Contour and Circles in that order and starts at tiles", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["tiles", "Tiles"],
       ["blended", "Blended tiles"],
       ["contour", "Contour"],
+      ["circles", "Circles"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
     expect(imageTypeLabel("tiles")).toBe("Tiles");
     expect(imageTypeLabel("blended")).toBe("Blended tiles");
     expect(imageTypeLabel("contour")).toBe("Contour");
+    expect(imageTypeLabel("circles")).toBe("Circles");
   });
 
   it.each(values)("accepts %j", (v) => {
     expect(validateImageType(v)).toBeNull();
   });
 
-  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "gradient", "tiles,blended"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour.");
+  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended"])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles.");
   });
 
   it("applies the blend width to Blended tiles only", () => {
     expect(blendWidthApplies("blended")).toBe(true);
     expect(blendWidthApplies("tiles")).toBe(false);
     expect(blendWidthApplies("contour")).toBe(false);
+    expect(blendWidthApplies("circles")).toBe(false);
     expect(blendWidthApplies("")).toBe(false);
   });
 });
@@ -275,5 +304,81 @@ describe("resolution", () => {
     for (let r = RESOLUTION_RANGE.min; r <= RESOLUTION_RANGE.max; r += RESOLUTION_RANGE.step) {
       if (r > 1) expect(formatResolution(r)).toContain(`(${12 * r} \u00d7 ${7 * r})`);
     }
+  });
+});
+
+describe("number of notes", () => {
+  it("ranges from 12 to 84 in whole steps and starts at 84", () => {
+    expect(NOTE_COUNT_RANGE).toEqual({ min: 12, max: 84, step: 1 });
+    expect(DEFAULT_NOTE_COUNT).toBe(84);
+  });
+
+  it.each([12, 13, 48, 83, 84, "12", "84", " 36 ", 36.0])("accepts %j", (v) => {
+    expect(validateNoteCount(v)).toBeNull();
+  });
+
+  it.each([0, 11, 85, -1, 36.5, "", "  ", "abc", "NaN", "Infinity", "1e9", "36x", NaN, Infinity])("rejects %j", (v) => {
+    expect(validateNoteCount(v)).toBe("The number of notes must be a whole number from 12 to 84.");
+  });
+
+  it("says how many of the 84 notes are used", () => {
+    expect(formatNoteCount(84)).toBe("All 84 notes");
+    expect(formatNoteCount(36)).toBe("36 of 84 notes");
+    expect(formatNoteCount(12)).toBe("12 of 84 notes");
+    expect(formatNoteCountSummary(84)).toBe("All 84");
+    expect(formatNoteCountSummary(24)).toBe("24 of 84");
+  });
+});
+
+describe("interpolate", () => {
+  it("ranges from 1 to 5 in whole steps and starts at 1", () => {
+    expect(INTERPOLATE_RANGE).toEqual({ min: 1, max: 5, step: 1 });
+    expect(DEFAULT_INTERPOLATE).toBe(1);
+  });
+
+  it.each([1, 2, 3, 4, 5, "1", "5", " 3 ", 3.0])("accepts %j", (v) => {
+    expect(validateInterpolate(v)).toBeNull();
+  });
+
+  it.each([0, 6, -1, 2.5, "", "  ", "abc", "NaN", "Infinity", "1e9", "3x", NaN, Infinity])("rejects %j", (v) => {
+    expect(validateInterpolate(v)).toBe("The interpolate value must be a whole number from 1 to 5.");
+  });
+
+  it("says how many frames are drawn", () => {
+    expect(formatInterpolate(1)).toBe("1 (every frame drawn)");
+    expect(formatInterpolate(3)).toBe("3 (one frame in 3 drawn)");
+    expect(formatInterpolate(5)).toBe("5 (one frame in 5 drawn)");
+  });
+});
+
+describe("circles settings", () => {
+  it("has the ranges and defaults of the spec", () => {
+    expect(CIRCLE_UNIT_RANGE).toMatchObject({ min: 1, max: 10, step: 1 });
+    expect(CIRCLE_MEMORY_RANGE).toMatchObject({ min: 100, max: 500 });
+    expect(CIRCLE_NOTES_RANGE).toMatchObject({ min: 5, max: 12, step: 1 });
+    expect(CIRCLE_SIZE_RANGE).toMatchObject({ min: 25, max: 50, step: 1 });
+    expect([DEFAULT_CIRCLE_UNIT, DEFAULT_CIRCLE_MEMORY, DEFAULT_CIRCLE_NOTES, DEFAULT_CIRCLE_SIZE]).toEqual([4, 300, 8, 25]);
+  });
+
+  it.each([
+    ["unit", validateCircleUnit, [1, 4, 10, "7", " 5 ", 3.0], [0, 11, -1, 2.5, "", "  ", "abc", "NaN", "Infinity", "1e9", NaN, Infinity], "The circle unit must be a whole number from 1 to 10."],
+    ["size", validateCircleSize, [25, 37, 50, "40", " 30 ", 44.0], [0, 24, 51, 30.5, "", "  ", "abc", "NaN", "Infinity", "1e9", NaN, Infinity], "The circle size must be a whole number from 25 to 50."],
+    ["memory", validateCircleMemory, [100, 300, 500, "250", " 400 ", 200.0], [0, 99, 501, 250.5, "", "abc", "NaN", "Infinity", "1e9", NaN, Infinity], "The circle memory must be a whole number from 100 to 500."],
+    ["notes", validateCircleNotes, [5, 8, 12, "6", " 9 ", 7.0], [0, 4, 13, 7.5, "", "abc", "NaN", "Infinity", "1e9", NaN, Infinity], "The number of circle notes must be a whole number from 5 to 12."],
+  ] as const)("the %s validator accepts the whole numbers of its range and refuses the rest with the server's message", (_name, check, good, bad, message) => {
+    for (const v of good) expect(check(v), String(v)).toBeNull();
+    for (const v of bad) expect(check(v), String(v)).toBe(message);
+  });
+
+  it("shows the unit in pixels, the memory in circles and the notes per frame", () => {
+    expect(formatCircleUnit(4)).toBe("4 px");
+    expect(formatCircleSize(25)).toBe("25 px around");
+    expect(formatCircleMemory(300)).toBe("300 circles");
+    expect(formatCircleNotes(8)).toBe("8 notes");
+  });
+
+  it("applies the grid settings to every image type except circles", () => {
+    for (const type of ["tiles", "blended", "contour"]) expect(gridSettingsApply(type)).toBe(true);
+    expect(gridSettingsApply("circles")).toBe(false);
   });
 });
