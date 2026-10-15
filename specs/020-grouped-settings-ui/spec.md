@@ -1,5 +1,7 @@
 # Feature Specification: Grouped, Collapsible Settings
 
+> **Amended 2026-10-15 (feature 022, Circles paint).** There is a fifth image type, `circles_paint` ("Circles paint"): the circles of Circles with no memory, painted onto a copy of the previous picture. Where this document says there are four image types, there are five (`tiles`, `blended`, `contour`, `circles`, `circles_paint`), and the refusal message lists all five; the Circles paint group of the settings page has no Memory control. See `specs/022-circles-paint/`.
+
 **Feature Branch**: `020-grouped-settings-ui` (no git branch created; spec directory name only)
 
 **Created**: 2026-10-14

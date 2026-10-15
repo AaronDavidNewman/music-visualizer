@@ -20,6 +20,7 @@ from app.services.frame_rendering import (
     write_frames,
 )
 
+from .frame_size import HEIGHT, WIDTH
 from .colormap_names import DECODABLE, INVALID, WITHOUT_BLACK
 from .test_resolution import MESSAGE as RESOLUTION_MESSAGE
 from .test_resolution import with_np_interp
@@ -85,16 +86,16 @@ def tile_middles(picture, r):
 
 
 @pytest.mark.parametrize("r", RESOLUTIONS)
-def test_the_geometry_of_the_tiles_is_the_rounded_even_split_in_252_by_168(tmp_path, r):
+def test_the_geometry_of_the_tiles_is_the_rounded_even_split_in_the_image_size(tmp_path, r):
     index = tile_index(r)
     columns, rows = GRID_COLUMNS * r, GRID_ROWS * r
-    assert index.shape == (168, 252) and index.max() == columns * rows - 1
-    widths = np.diff(edges(columns, 252))
-    heights = np.diff(edges(rows, 168))
-    assert widths.sum() == 252 and heights.sum() == 168
+    assert index.shape == (HEIGHT, WIDTH) and index.max() == columns * rows - 1
+    widths = np.diff(edges(columns, WIDTH))
+    heights = np.diff(edges(rows, HEIGHT))
+    assert widths.sum() == WIDTH and heights.sum() == HEIGHT
     assert widths.max() - widths.min() <= 1 and heights.max() - heights.min() <= 1  # at most one pixel apart
     if r == 1:
-        assert set(widths) == {21} and set(heights) == {24}
+        assert set(widths) == {WIDTH // 12} and set(heights) == {HEIGHT // 7, HEIGHT // 7 + 1}  # 50 pixels wide, 57 or 58 high
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
@@ -106,7 +107,7 @@ def test_tiles_are_a_grid_of_12r_by_7r_flat_tiles_each_the_color_of_its_interpol
     expected, _ = expected_tile_colors(frames, name, r)
     for i, f in enumerate(files):
         picture = rgb(f)
-        assert picture.shape == (168, 252, 3)
+        assert picture.shape == (HEIGHT, WIDTH, 3)
         assert (picture == expected[i][tile_index(r)]).all(), (name, r, i)  # every pixel: flat tiles in exact positions
 
 
@@ -167,15 +168,15 @@ def test_a_note_at_a_corner_of_the_grid_keeps_its_color_at_every_resolution_and_
 def far_from_inner_edges(r, blend_width):
     """The pixels farther than the blend reach from every inner tile edge: they have exactly their tile's color."""
     columns, rows = GRID_COLUMNS * r, GRID_ROWS * r
-    reach = blend_width / 100.0 * (252 / columns)
-    xe, ye = edges(columns, 252), edges(rows, 168)
+    reach = blend_width / 100.0 * (WIDTH / columns)
+    xe, ye = edges(columns, WIDTH), edges(rows, HEIGHT)
 
     def far(position_edges, size):
         centre = np.arange(size) + 0.5
         inner = position_edges[1:-1]
         return np.array([np.abs(inner - c).min() > reach if len(inner) else True for c in centre])
 
-    return far(ye, 168)[:, None] & far(xe, 252)[None, :]
+    return far(ye, HEIGHT)[:, None] & far(xe, WIDTH)[None, :]
 
 
 @pytest.mark.parametrize("r", RESOLUTIONS)
@@ -188,9 +189,9 @@ def test_blended_equals_tiles_wherever_it_is_farther_than_the_reach_from_an_edge
     assert far.any()
     for t, b in zip(tiles, blended):
         pt, pb = rgb(t), rgb(b)
-        assert pb.shape == (168, 252, 3)
+        assert pb.shape == (HEIGHT, WIDTH, 3)
         assert (pt[far] == pb[far]).all()  # the middle of each tile stays flat
-        reach = blend_width / 100.0 * (252 / (GRID_COLUMNS * r))
+        reach = blend_width / 100.0 * (WIDTH / (GRID_COLUMNS * r))
         if reach >= 1.0:  # below a pixel the fade is too narrow to change any pixel after rounding (the spec's share of a tile)
             assert (pt[~far] != pb[~far]).any()  # and the fade does something near the edges
 
@@ -198,17 +199,17 @@ def test_blended_equals_tiles_wherever_it_is_farther_than_the_reach_from_an_edge
 @pytest.mark.parametrize("r", RESOLUTIONS)
 def test_the_fade_is_a_share_of_the_tile_so_it_gets_narrower_as_the_tiles_shrink(tmp_path, r):
     columns, rows = GRID_COLUMNS * r, GRID_ROWS * r
-    reach = 25 / 100.0 * (252 / columns)
+    reach = 25 / 100.0 * (WIDTH / columns)
     frames = random_notes(2, seed=80 + r)
     tiles = rgb(write(frames, tmp_path / "t", resolution=r)[0])
     blended = rgb(write(frames, tmp_path / "b", resolution=r, image_type="blended", blend_width=25)[0])
     changed = (tiles != blended).any(axis=2)
     ys, xs = np.nonzero(changed)
-    xe, ye = edges(columns, 252)[1:-1], edges(rows, 168)[1:-1]
+    xe, ye = edges(columns, WIDTH)[1:-1], edges(rows, HEIGHT)[1:-1]
     near_x = np.abs((xs + 0.5)[:, None] - xe[None, :]).min(axis=1)
     near_y = np.abs((ys + 0.5)[:, None] - ye[None, :]).min(axis=1)
     assert (np.minimum(near_x, near_y) <= reach + 1e-9).all()  # a pixel changes only within the reach of an inner edge
-    assert reach == pytest.approx(0.25 * 252 / columns)  # and the reach is a quarter of the mean tile width
+    assert reach == pytest.approx(0.25 * WIDTH / columns)  # and the reach is a quarter of the mean tile width
 
 
 # --- Contour -----------------------------------------------------------------------------------------------------------------
@@ -236,7 +237,7 @@ def test_the_contour_is_drawn_from_the_interpolated_grid(tmp_path, monkeypatch, 
         assert x[-1] == pytest.approx(expected[i].max()) and y[-1] == pytest.approx(expected[i].max())
     for f in files:
         picture = np.asarray(Image.open(f))
-        assert picture.shape == (168, 252, 4) and (picture[..., 3] == 255).all()
+        assert picture.shape == (HEIGHT, WIDTH, 4) and (picture[..., 3] == 255).all()
 
 
 # --- Every image type ---------------------------------------------------------------------------------------------------------
@@ -264,7 +265,7 @@ def test_a_frame_of_equal_values_is_one_flat_color_at_every_resolution(tmp_path,
 def test_the_frame_count_the_names_and_the_size_do_not_depend_on_the_resolution(tmp_path, image_type, r):
     files = write(random_notes(5, seed=40), tmp_path, image_type=image_type, resolution=r)
     assert [f.name for f in files] == [f"frame_{i:06d}.png" for i in range(5)]
-    assert all(Image.open(f).size == (252, 168) for f in files)
+    assert all(Image.open(f).size == (WIDTH, HEIGHT) for f in files)
 
 
 @pytest.mark.parametrize("image_type", TYPES)

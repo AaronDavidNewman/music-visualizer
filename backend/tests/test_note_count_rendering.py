@@ -12,6 +12,7 @@ from PIL import Image
 from app.services.colormaps import COLORMAPS, DEFAULT_COLORMAP, lookup_table
 from app.services.frame_rendering import SHOWN_NOTES, smooth_frames, write_frames
 
+from .frame_size import HEIGHT, WIDTH
 from .colormap_names import INVALID, WITHOUT_BLACK
 from .test_note_selection import MESSAGE as NOTE_COUNT_MESSAGE
 from .test_note_selection import ranking
@@ -186,7 +187,7 @@ def test_the_scale_is_the_files_peak_over_all_88_notes_including_the_undrawn_one
 def test_the_frame_count_the_names_and_the_size_do_not_depend_on_the_number_of_notes(tmp_path, image_type, n):
     files = write(random_notes(5, seed=50), tmp_path, image_type=image_type, note_count=n)
     assert [f.name for f in files] == [f"frame_{i:06d}.png" for i in range(5)]
-    assert all(Image.open(f).size == (252, 168) for f in files)
+    assert all(Image.open(f).size == (WIDTH, HEIGHT) for f in files)
 
 
 @pytest.mark.parametrize("image_type", TYPES)

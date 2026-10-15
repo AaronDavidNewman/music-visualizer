@@ -24,12 +24,14 @@ export const GROUPS: readonly GroupDefinition[] = [
     title: "Circles",
     controls: ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"],
   },
+  // the same circles with no memory (feature 022): so no Memory control
+  { id: "circles_paint", title: "Circles paint", controls: ["circle-unit", "circle-radius", "circle-resize", "circle-notes"] },
   { id: "data-smoothing", title: "Data smoothing", controls: ["smoothing-window", "smoothing"] },
   { id: "image-smoothing", title: "Image smoothing", controls: ["resolution", "interpolate"] },
 ];
 
 /** The ids of the groups that belong to one image type: exactly one of them follows the Image type group. */
-const TYPE_GROUPS = ["tiles", "contour", "blended", "circles"];
+const TYPE_GROUPS = ["tiles", "contour", "blended", "circles", "circles_paint"];
 
 const byId = new Map(GROUPS.map((g) => [g.id, g]));
 

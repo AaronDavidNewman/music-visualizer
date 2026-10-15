@@ -13,6 +13,7 @@ from PIL import Image
 
 from app.services.colormaps import COLORMAPS, lookup_table
 
+from .frame_size import HEIGHT, WIDTH
 from .colormap_names import WITHOUT_BLACK
 from .test_jobs_api import (  # noqa: F401
     SR,
@@ -50,8 +51,8 @@ def tiny():
 
 def tile_grid(image, r):
     """The colors at the middle of every tile of a 12r x 7r picture (edges at the nearest whole pixel)."""
-    xe = np.rint(np.linspace(0, 252, 12 * r + 1)).astype(int)
-    ye = np.rint(np.linspace(0, 168, 7 * r + 1)).astype(int)
+    xe = np.rint(np.linspace(0, WIDTH, 12 * r + 1)).astype(int)
+    ye = np.rint(np.linspace(0, HEIGHT, 7 * r + 1)).astype(int)
     return image[np.ix_((ye[:-1] + ye[1:] - 1) // 2, (xe[:-1] + xe[1:] - 1) // 2)]
 
 
@@ -138,15 +139,15 @@ def test_the_frames_have_the_same_size_and_count_at_every_resolution(client, ima
         assert job[key] == base[key]
     for i in (0, job["frame_count"] // 2, job["frame_count"] - 1):
         image = Image.open(io.BytesIO(frame_bytes(client, job, i)))
-        assert image.format == "PNG" and image.size == (252, 168)
+        assert image.format == "PNG" and image.size == (WIDTH, HEIGHT)
 
 
 @pytest.mark.parametrize("r", [1, 2, 3, 5])
 def test_a_tiles_frame_is_a_grid_of_12r_by_7r_flat_tiles(client, r):
     job = post(client, chord_wav(2), resolution=str(r)).json()
     image = picture(client, job, job["frame_count"] // 2)
-    xe = np.rint(np.linspace(0, 252, 12 * r + 1)).astype(int)
-    ye = np.rint(np.linspace(0, 168, 7 * r + 1)).astype(int)
+    xe = np.rint(np.linspace(0, WIDTH, 12 * r + 1)).astype(int)
+    ye = np.rint(np.linspace(0, HEIGHT, 7 * r + 1)).astype(int)
     for ty in range(7 * r):
         for tx in range(12 * r):
             tile = image[ye[ty] : ye[ty + 1], xe[tx] : xe[tx + 1]]

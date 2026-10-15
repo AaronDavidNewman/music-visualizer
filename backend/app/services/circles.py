@@ -25,6 +25,9 @@ put down most recently (the picture *remembers* them).
   *opacity that falls with its age*: the newest circle is opaque, and a circle ``age`` places back in the memory (0 for the
   newest) has the opacity ``(memory - age) / memory``, so the oldest circle, just before it leaves the memory, is barely
   visible. The step of a circle (``unit``, called Movement on the page) and its radius are separate settings.
+* **The frame size** (feature 021): ``unit`` and ``radius`` are measured in pixels of a frame ``REFERENCE_WIDTH`` (252) wide and are
+  multiplied by ``width / 252`` on a frame ``width`` wide (2.38 for the 600-pixel frame), the resize factor included; the start in the
+  middle and the wrap-around follow the frame's own width and height. On a 252-pixel frame nothing is scaled.
 * **Resize by volume** (off by default): the radius of each circle is multiplied by a factor that grows in a straight line
   with the note's strength on the color scale (the color index ``c`` of 0 to 255), from 1 for the faintest to 3 for the
   strongest note of the file: ``1 + 2 * c / 255``, so no circle is smaller than ``radius``. Off, every circle has the radius ``radius``.
@@ -57,6 +60,10 @@ DEFAULT_CIRCLE_MEMORY = 300
 MIN_CIRCLE_NOTES = 5
 MAX_CIRCLE_NOTES = 12
 DEFAULT_CIRCLE_NOTES = 8
+
+# the Movement and the Radius are measured in pixels of a frame this wide (the frame that was 252 x 168 before feature 021); on a
+# wider frame they are scaled by width / REFERENCE_WIDTH, so that the same settings give the same picture in proportion to the frame
+REFERENCE_WIDTH = 252
 
 # the radius of a circle in whole pixels (feature 020; before it the setting was the circumference, 25 to 50 pixels, a radius of 3.98 to 7.96)
 MIN_CIRCLE_RADIUS = 4
@@ -169,18 +176,21 @@ def plan_circles(
 
     ``values`` is ``(frames, 84)``: the smoothed value of every drawn note in every frame; ``peak`` is the largest smoothed
     value of the whole file. A circle is ``(x, y, color index 0 to 255)``. ``added`` is weakest first; ``remembered`` is the
-    last ``memory`` circles, oldest first. The values are never modified.
+    last ``memory`` circles, oldest first. The values are never modified. With ``memory=None`` nothing is remembered
+    (``remembered`` is empty): the plan of the ``circles_paint`` kind, which only uses ``added``.
     """
     notes = check_circle_notes(notes)
     unit = check_circle_unit(unit)
-    memory = check_circle_memory(memory)
+    if memory is not None:
+        memory = check_circle_memory(memory)
     values = np.asarray(values, dtype=np.float64)
     if values.ndim != 2 or values.shape[1] != _NOTES:
         raise ValueError(f"Each frame needs {_NOTES} note values (got shape {values.shape}).")
-    steps = [step_pixels(i, unit) for i in range(_NOTES)]
+    frame_scale = width / REFERENCE_WIDTH  # the unit is measured in pixels of the reference frame
+    steps = [step_pixels(i, unit * frame_scale) for i in range(_NOTES)]
     places = [[width / 2, height / 2] for _ in range(notes)]  # the last place of every rank
     last: list = [None] * notes  # the last (note, color) of every rank
-    remembered: deque = deque(maxlen=memory)
+    remembered: deque = deque(maxlen=0 if memory is None else memory)  # a buffer that keeps nothing when there is no memory
     for frame in values:
         order = np.argsort(-frame, kind="stable")[:notes]
         added = []
@@ -234,6 +244,7 @@ def write_circle_frames(
     colors = [tuple(int(v) for v in row) for row in lookup_table(colormap)]
     background = colors[MIDDLE_COLOR_ROW]
     scale = SUPERSAMPLE
+    frame_scale = width / REFERENCE_WIDTH  # the radius is measured in pixels of the reference frame
     directory.mkdir(parents=True, exist_ok=True)
     pool = ThreadPoolExecutor(max_workers=_SAVE_WORKERS)
     try:
@@ -243,7 +254,7 @@ def write_circle_frames(
             draw = ImageDraw.Draw(large, "RGBA")  # a fill with an alpha is blended into the picture
             newest = len(remembered) - 1
             for place, (x, y, color) in enumerate(remembered):
-                r = radius * resize_factor(color, resize)
+                r = radius * frame_scale * resize_factor(color, resize)
                 draw.ellipse(
                     [(x - r) * scale, (y - r) * scale, (x + r) * scale - 1, (y + r) * scale - 1],  # the box includes its last pixel
                     fill=(*colors[color], circle_opacity(newest - place, memory)),

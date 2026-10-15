@@ -59,6 +59,14 @@ describe("setting explanations", () => {
     expect(smoothingWindowHelp).toContain("no effect while Smoothing is 0");
   });
 
+  it("explains Circles paint: no memory, a copy of the previous picture, solid circles that never fade", () => {
+    expect(imageTypeHelp).toContain("Circles paint:");
+    expect(imageTypeHelp).toContain("no memory");
+    expect(imageTypeHelp).toContain("previous");
+    expect(imageTypeHelp).toContain("solid");
+    expect(imageTypeHelp).toContain("never fade");
+  });
+
   it("explains the four image types", () => {
     expect(imageTypeHelp).toContain("Tiles:");
     expect(imageTypeHelp).toContain("flat");
@@ -135,6 +143,10 @@ describe("circles explanations", () => {
 
   it("explains the size as the circumference, apart from the step, and the fading of old circles", () => {
     expect(circleRadiusHelp).toContain("4 to 8");
+    for (const text of [circleUnitHelp, circleRadiusHelp]) {
+      expect(text).toContain("252 pixels wide"); // what the number is measured against
+      expect(text).toContain("2.4 times");
+    }
     expect(circleRadiusHelp).toContain("radius");
     expect(circleRadiusHelp).not.toContain("circumference");
     expect(circleUnitHelp).toContain("Movement");

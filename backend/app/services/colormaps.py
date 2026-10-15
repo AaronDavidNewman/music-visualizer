@@ -15,7 +15,7 @@ import numbers
 
 import numpy as np
 
-COLORMAPS = ("coolwarm", "YlOrRd", "inferno", "Blues", "YlGn", "Greys", "hsv")
+COLORMAPS = ("coolwarm", "YlOrRd", "inferno", "Blues", "viridis", "Greys", "hsv")
 DEFAULT_COLORMAP = "hot"
 COLORMAP_STEPS = 256
 

@@ -15,6 +15,7 @@ from PIL import Image
 from app.services.colormaps import COLORMAPS, lookup_table
 from app.services.image_types import IMAGE_TYPES
 
+from .frame_size import HEIGHT, WIDTH
 from .test_circles import MEMORY_MESSAGE, NOTES_MESSAGE, RADIUS_MESSAGE, RESIZE_MESSAGE, UNIT_MESSAGE
 from .test_jobs_api import (  # noqa: F401
     SR,
@@ -48,8 +49,8 @@ def steady_note(seconds=3.0, changing=True):
 # --- choosing it ---------------------------------------------------------------------------------------------------------------
 
 
-def test_circles_is_the_fourth_image_type_and_tiles_stays_the_default():
-    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles")
+def test_circles_is_the_fourth_image_type_circles_paint_the_fifth_and_tiles_stays_the_first():
+    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles", "circles_paint")
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
@@ -101,7 +102,7 @@ def test_the_resize_accepts_true_false_one_and_zero_in_any_case(client, text, ex
     assert job["circle_resize"] is expected
 
 
-def test_the_frames_are_252_by_168_pngs_and_their_count_equals_that_of_tiles(client):
+def test_the_frames_are_pngs_of_the_image_size_and_their_count_equals_that_of_tiles(client):
     data = chord_wav(2)
     circles = post(client, data).json()
     tiles = post(client, data, image_type="tiles").json()
@@ -110,7 +111,7 @@ def test_the_frames_are_252_by_168_pngs_and_their_count_equals_that_of_tiles(cli
         assert circles[key] == tiles[key]
     for i in range(circles["frame_count"]):
         image = Image.open(io.BytesIO(frame_bytes(client, circles, i)))
-        assert image.format == "PNG" and image.size == (252, 168) and image.mode == "RGB", i
+        assert image.format == "PNG" and image.size == (WIDTH, HEIGHT) and image.mode == "RGB", i
 
 
 @pytest.mark.parametrize("text", ["", " ", "Circles", "CIRCLES", " circles", "circles ", "circle", "contours", "1"])

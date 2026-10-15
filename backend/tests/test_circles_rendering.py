@@ -21,6 +21,7 @@ from app.services.colormaps import COLORMAPS, lookup_table
 from app.services.frame_rendering import write_frames
 from app.services.image_types import IMAGE_TYPES
 
+from .frame_size import HEIGHT, SCALE, WIDTH
 from .colormap_names import INVALID
 from .test_circles import (
     A4,
@@ -67,13 +68,15 @@ def name(i):
 class Discs:
     """Records every disc that is drawn: (box, fill), in the order they are drawn."""
 
-    def __init__(self, monkeypatch):
+    def __init__(self, monkeypatch, per_reference_pixel=SCALE):
+        """``per_reference_pixel``: finished-picture pixels in one pixel of the 252-pixel reference frame (the app's frame by default)."""
         self.calls = []
         original = ImageDraw.ImageDraw.ellipse
+        unit = SUPERSAMPLE * per_reference_pixel
 
         def spy(draw, xy, fill=None, *args, **kwargs):
             x0, y0, x1, y1 = xy  # the box of a disc in the large picture: its last pixel is included, so the far ends are one short
-            self.calls.append(((x0 / SUPERSAMPLE, y0 / SUPERSAMPLE, (x1 + 1) / SUPERSAMPLE, (y1 + 1) / SUPERSAMPLE), fill))  # in finished-picture pixels
+            self.calls.append(((x0 / unit, y0 / unit, (x1 + 1) / unit, (y1 + 1) / unit), fill))  # in reference pixels
             return original(draw, xy, fill, *args, **kwargs)
 
         monkeypatch.setattr(ImageDraw.ImageDraw, "ellipse", spy)
@@ -86,6 +89,11 @@ class Discs:
             start += size
         assert start == len(self.calls)
         return frames
+
+
+def pixel(picture, x, y):
+    """The pixel of a picture at the place (x, y) given in reference pixels."""
+    return picture[min(int(y * SCALE), HEIGHT - 1), min(int(x * SCALE), WIDTH - 1)]
 
 
 def centre(box):
@@ -106,7 +114,7 @@ def test_every_frame_is_an_rgb_png_of_the_image_size_one_per_input_frame(tmp_pat
     assert [f.name for f in files] == [name(i) for i in range(6)]
     for f in files:
         image = Image.open(f)
-        assert image.size == (252, 168) and image.mode == "RGB"
+        assert image.size == (WIDTH, HEIGHT) and image.mode == "RGB"
 
 
 @pytest.mark.parametrize("colormap", COLORMAPS)
@@ -120,7 +128,7 @@ def test_the_newest_circle_is_at_the_expected_place_in_the_color_of_the_strength
         picture = rgb(files[t])
         share = 1.0 if t % 2 == 0 else 0.5  # the file's loudest value is 1.0
         want = table[int(np.rint(math.sqrt(share) * 255))]  # the square-root scale of the tiles
-        assert tuple(picture[min(int(y), H - 1), min(int(x), W - 1)]) == tuple(want), (colormap, index, t)
+        assert tuple(pixel(picture, x, y)) == tuple(want), (colormap, index, t)
 
 
 def test_the_background_is_the_middle_color_of_the_colormap_and_a_silent_input_is_all_that_color(tmp_path):
@@ -192,7 +200,7 @@ def test_the_radius_changes_how_many_pixels_a_circle_covers(tmp_path):
         picture = rgb(files[0])
         background = np.array(lookup_table(COLORMAPS[0])[128])
         areas[radius] = int((picture != background).any(axis=2).sum())
-        assert areas[radius] == pytest.approx(math.pi * radius**2, rel=0.25), radius  # the area of a disc of that radius
+        assert areas[radius] == pytest.approx(math.pi * radius**2 * SCALE**2, rel=0.25), radius  # the area of a disc of that radius
     assert areas[4] < areas[6] < areas[8]
 
 
@@ -217,7 +225,7 @@ def test_the_area_a_circle_covers_is_that_of_a_disc_of_its_radius_to_within_eigh
     channel = int(np.abs(colour - background).argmax())
     picture = rgb(write(notes({A4: 1.0}), tmp_path, colormap=colormap, circle_radius=radius)[0]).astype(float)
     coverage = (picture[:, :, channel] - background[channel]) / (colour[channel] - background[channel])
-    assert coverage.sum() == pytest.approx(math.pi * radius**2, rel=0.08)  # the shape is kept to a quarter of a pixel
+    assert coverage.sum() == pytest.approx(math.pi * radius**2 * SCALE**2, rel=0.08)  # the shape is kept to a quarter of a pixel
 
 
 def test_a_note_at_the_same_volume_is_drawn_again_on_the_same_place_and_the_older_circles_there_are_covered(tmp_path, monkeypatch):
@@ -230,7 +238,7 @@ def test_a_note_at_the_same_volume_is_drawn_again_on_the_same_place_and_the_olde
         assert all(centre(box) == pytest.approx(first, abs=1e-9) for box, _ in drawn), t  # all on the one place
         assert drawn[-1][1][3] == 255  # the newest is opaque and hides the older ones under it
     x, y = first
-    assert tuple(rgb(files[-1])[min(int(y), H - 1), min(int(x), W - 1)]) == tuple(lookup_table(colormap)[255])
+    assert tuple(pixel(rgb(files[-1]), x, y)) == tuple(lookup_table(colormap)[255])
 
 
 def radius_of(box):
@@ -303,6 +311,83 @@ def test_the_loudest_circle_covers_about_nine_times_the_area_when_resized(tmp_pa
     assert covered(True) == pytest.approx(9 * covered(False), rel=0.08)  # three times the radius
 
 
+# --- the circles at another frame width (feature 021): the settings are measured on a 252-pixel-wide reference frame -------------
+
+
+def melody_values(frames=40, seed=31):
+    """(frames, 84) values: a few strong notes at a time, so that circles wander a long way and wrap around."""
+    rng = np.random.default_rng(seed)
+    values = rng.random((frames, 84)) ** 3
+    values[:, 40:] *= 0.1
+    return values
+
+
+def draw_discs(monkeypatch, tmp_path, width, height, per_reference_pixel, **options):
+    from app.services.circles import write_circle_frames
+
+    discs = Discs(monkeypatch, per_reference_pixel=per_reference_pixel)
+    settings = dict(notes=6, unit=7, memory=100, radius=5, resize=False)
+    settings.update(options)
+    write_circle_frames(
+        melody_values(), 1.0, COLORMAPS[0], tmp_path, settings["notes"], settings["unit"], settings["memory"], settings["radius"], width, height,
+        resize=settings["resize"],
+    )
+    return discs.calls
+
+
+@pytest.mark.parametrize("resize", [False, True])
+def test_a_frame_of_another_width_has_the_same_discs_in_reference_pixels_but_larger_on_the_frame(tmp_path, resize):
+    scale = 600 / 252
+
+    def discs(label, width, height, per_reference_pixel):
+        with pytest.MonkeyPatch.context() as patch:  # one spy at a time: a spy that stays patched would record the next run too
+            return draw_discs(patch, tmp_path / label, width, height, per_reference_pixel, resize=resize)
+
+    small = discs("small", 252, 168, 1.0)
+    big = discs("big", 600, 400, scale)  # reported in reference pixels
+    raw = discs("raw", 600, 400, 1.0)  # reported in the pixels of the frame itself
+    assert len(small) == len(big) == len(raw) > 0
+    # reference pixels: the discs are those of the 252 frame (the wrap at 600 x 400 is the wrap at 252 x 168 scaled)
+    assert np.allclose(np.array([centre(b) for b, _ in small]), np.array([centre(b) for b, _ in big]), atol=1e-6)
+    assert np.allclose(np.array([radius_of(b) for b, _ in small]), np.array([radius_of(b) for b, _ in big]), atol=1e-6)
+    assert [f for _, f in small] == [f for _, f in big]  # the same colors and opacities
+    # on the frame itself the centers and radii are 600 / 252 times as large
+    assert np.allclose(np.array([centre(b) for b, _ in raw]), scale * np.array([centre(b) for b, _ in small]), atol=1e-6)
+    assert np.allclose(np.array([radius_of(b) for b, _ in raw]), scale * np.array([radius_of(b) for b, _ in small]), atol=1e-6)
+
+
+def test_a_circle_has_the_radius_of_the_setting_times_the_frame_width_over_252(tmp_path, monkeypatch):
+    discs = draw_discs(monkeypatch, tmp_path, 600, 400, 1.0, radius=4, resize=False)
+    for box, _ in discs:
+        assert radius_of(box) == pytest.approx(4 * 600 / 252, abs=1e-9)
+
+
+def test_the_scale_follows_the_width_and_not_the_height(tmp_path, monkeypatch):
+    discs = draw_discs(monkeypatch, tmp_path, 600, 300, 1.0, radius=4, resize=False)  # a frame that is not 3:2
+    for box, _ in discs:
+        assert radius_of(box) == pytest.approx(4 * 600 / 252, abs=1e-9)
+        assert 0 <= centre(box)[1] <= 300  # but the wrap-around follows the height
+
+
+def test_the_picture_at_another_width_is_that_size_and_is_the_reference_picture_reduced(tmp_path):
+    from app.services.circles import write_circle_frames
+
+    values = melody_values(12)
+    write_circle_frames(values, 1.0, COLORMAPS[0], tmp_path / "small", 6, 7, 100, 5, 252, 168)
+    write_circle_frames(values, 1.0, COLORMAPS[0], tmp_path / "big", 6, 7, 100, 5, 600, 400)
+    for i in range(12):
+        small = Image.open(tmp_path / "small" / name(i))
+        big = Image.open(tmp_path / "big" / name(i))
+        assert small.size == (252, 168) and big.size == (600, 400) and big.mode == "RGB"
+        reduced = np.asarray(big.resize((252, 168), Image.BOX)).astype(int)
+        difference = np.abs(reduced - np.asarray(small).astype(int))
+        assert difference.mean() < 6.0, (i, difference.mean())  # the same picture, only finer at the edges
+        background = np.array(lookup_table(COLORMAPS[0])[128])
+        covered_small = (np.asarray(small) != background).any(axis=2).mean()
+        covered_big = (np.asarray(big) != background).any(axis=2).mean()
+        assert covered_big == pytest.approx(covered_small, rel=0.15), i  # the circles cover the same share of the frame
+
+
 def test_the_opacity_of_a_circle_falls_with_its_age_until_it_is_barely_visible(tmp_path, monkeypatch):
     discs = Discs(monkeypatch)
     frames = 130
@@ -327,7 +412,7 @@ def test_an_old_circle_is_blended_into_the_background_by_its_opacity(tmp_path):
         share = 1.0 if (frames - 1 - age) % 2 == 0 else 0.5  # the volume alternates, so the colors do
         colour = np.array(table[int(np.rint(math.sqrt(share) * 255))], dtype=float)
         want = (1 - alpha) * background + alpha * colour
-        got = picture[min(int(y), H - 1), min(int(x), W - 1)].astype(float)
+        got = pixel(picture, x, y).astype(float)
         assert np.abs(got - want).max() <= 3, (age, got, want)  # integer blending in Pillow: within a few levels of 255
 
 
@@ -380,7 +465,7 @@ def test_a_very_quiet_file_still_draws_circles_in_the_colors_of_their_share_of_i
     table = lookup_table(colormap)
     picture = rgb(files[0])
     x, y = walk(F5, 10, 1)[0]
-    assert tuple(picture[min(int(y), H - 1), min(int(x), W - 1)]) == tuple(table[255])  # the loudest note of the file: the last color
+    assert tuple(pixel(picture, x, y)) == tuple(table[255])  # the loudest note of the file: the last color
     assert (picture.reshape(-1, 3).sum(axis=1) > 0).any()
 
 
@@ -388,7 +473,7 @@ def test_a_very_quiet_file_still_draws_circles_in_the_colors_of_their_share_of_i
 def test_the_settings_at_their_extremes_all_work(tmp_path, unit, memory, count, radius):
     frames = np.random.default_rng(unit + memory + count).random((30, 88)) ** 2
     files = write(frames, tmp_path, circle_unit=unit, circle_memory=memory, circle_notes=count, circle_radius=radius)
-    assert len(files) == 30 and all(Image.open(f).size == (252, 168) for f in files)
+    assert len(files) == 30 and all(Image.open(f).size == (WIDTH, HEIGHT) for f in files)
 
 
 def test_the_other_settings_do_not_apply_to_circles_and_are_ignored(tmp_path):
@@ -412,8 +497,8 @@ def test_two_runs_give_byte_identical_files(tmp_path):
 # --- the image type list and the refusals ----------------------------------------------------------------------------------------
 
 
-def test_circles_is_the_fourth_image_type():
-    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles")
+def test_circles_is_the_fourth_image_type_and_circles_paint_the_fifth():
+    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles", "circles_paint")
 
 
 @pytest.mark.parametrize("image_type", TYPES)

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from scipy.io import wavfile
 
+from .frame_size import HEIGHT, WIDTH, tile_center
 from app.config import settings
 from app.main import app
 from app.services.colormaps import DEFAULT_COLORMAP, lookup_table
@@ -56,7 +57,7 @@ def frame_rgb(client, job, index):
     r = client.get(job["frame_url_template"].replace("{index}", str(index)))
     assert r.status_code == 200
     arr = np.asarray(Image.open(io.BytesIO(r.content)).convert("RGB"))
-    return np.array([arr[(n // 12) * 24 + 12, (n % 12) * 21 + 10] for n in range(84)])
+    return np.array([arr[tile_center(n)] for n in range(84)])
 
 
 DEFAULT_ROWS = {tuple(row): i for i, row in enumerate(lookup_table(DEFAULT_COLORMAP).tolist())}
@@ -132,7 +133,7 @@ def test_frame_endpoint_serves_png(client):
     assert r.headers["content-type"] == "image/png"
     assert "max-age" in r.headers["cache-control"]
     img = Image.open(io.BytesIO(r.content))
-    assert img.size == (252, 168)
+    assert img.size == (WIDTH, HEIGHT)
 
 
 @pytest.mark.parametrize("job_id", ["../x", "ABCDEF" * 5 + "AB", "abc123", "g" * 32, "0" * 31])
@@ -455,13 +456,13 @@ def brightest_tile_share(client, job, row, col):
     return hits / job["frame_count"]
 
 
-def test_frame_images_are_252_by_168_and_exactly_three_to_two(client):
+def test_frame_images_are_the_image_size_and_exactly_three_to_two(client):
     audio = tone(440, 0.5)
     job = post(client, wav_bytes(audio, audio)).json()
     for index in (0, job["frame_count"] - 1):
         r = client.get(job["frame_url_template"].replace("{index}", str(index)))
         img = Image.open(io.BytesIO(r.content))
-        assert img.size == (252, 168)
+        assert img.size == (WIDTH, HEIGHT)
         assert img.size[0] * 2 == img.size[1] * 3
 
 
@@ -670,8 +671,8 @@ def test_served_frames_are_rgb_images_of_the_same_size_and_shape(client):
         r = client.get(job["frame_url_template"].replace("{index}", str(index)))
         img = Image.open(io.BytesIO(r.content))
         assert img.mode in ("P", "RGB")  # saved as an indexed-colour PNG; it decodes to exact RGB values
-        assert np.asarray(img.convert("RGB")).shape == (168, 252, 3)
-        assert img.size == (252, 168)
+        assert np.asarray(img.convert("RGB")).shape == (HEIGHT, WIDTH, 3)
+        assert img.size == (WIDTH, HEIGHT)
         assert img.size[0] * 2 == img.size[1] * 3
 
 

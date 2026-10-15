@@ -32,8 +32,12 @@ describe("the result summary", () => {
     }
   });
 
-  it("shows the four circle settings for circles", () => {
-    const circles = summary.slice(summary.indexOf("result.image_type === 'circles'"));
+  it("shows the circle settings for both circle types, and Memory for Circles only", () => {
+    const circles = summary.slice(summary.indexOf("isCirclesType(result.image_type)"));
+    expect(summary).toContain("isCirclesType(result.image_type)");
+    const memory = summary.split("\n").find((l) => l.includes("Memory:")) ?? "";
+    expect(memory).toContain("result.image_type === 'circles'");
+    expect(memory).not.toContain("circles_paint");
     expect(circles).toContain("Movement:");
     expect(circles).toContain("formatCircleUnit(result.circle_unit)");
     expect(circles).toContain("Radius:");
@@ -53,7 +57,7 @@ describe("the result summary", () => {
   });
 
   it("shows the circle lines in the order of the Circles group, and the grid lines for the grid types only", () => {
-    const circles = summary.slice(summary.indexOf("result.image_type === 'circles'"));
+    const circles = summary.slice(summary.indexOf("isCirclesType(result.image_type)"));
     const order = ["Movement:", "Radius:", "Resize by volume:", "Memory:", "Notes:"].map((l) => circles.indexOf(l));
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);

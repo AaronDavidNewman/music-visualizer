@@ -19,6 +19,7 @@ from PIL import Image
 from app.services.colormaps import COLORMAPS, DEFAULT_COLORMAP, lookup_table
 from app.services.frame_rendering import IMAGE_HEIGHT, IMAGE_WIDTH, write_frames
 
+from .frame_size import HEIGHT, WIDTH
 from .colormap_names import INVALID
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -67,7 +68,7 @@ def test_every_frame_is_an_opaque_picture_of_exactly_the_image_size_with_one_fil
     assert [f.name for f in files] == ["frame_000000.png", "frame_000001.png", "frame_000002.png"]
     for f in files:
         image = Image.open(f)
-        assert image.size == (IMAGE_WIDTH, IMAGE_HEIGHT) == (252, 168)
+        assert image.size == (IMAGE_WIDTH, IMAGE_HEIGHT) == (WIDTH, HEIGHT)
         assert (read(f)[..., 3] == 255).all()
 
 
@@ -78,7 +79,7 @@ def test_the_contour_fills_the_whole_picture_with_no_axes_border_or_margin(tmp_p
     values[40] = 1.0  # in the middle of the grid, so that the edges stay at the middle of the scale
     picture = read(contour(notes(values), tmp_path, name)[0])
     edges = np.concatenate([picture[0], picture[-1], picture[:, 0], picture[:, -1]])
-    assert len(edges) == 2 * 252 + 2 * 168
+    assert len(edges) == 2 * WIDTH + 2 * HEIGHT
     bad = [tuple(p[:3]) for p in edges if not near_scale(p, name, 0.5, tolerance=0.3)]
     assert not bad, bad[:5]  # none is the white (or black) of a figure background or a drawn border
 
@@ -214,7 +215,7 @@ def test_a_silent_input_is_flat_in_the_first_colour_and_does_not_warn(tmp_path, 
     assert len(files) == 4
     for f in files:
         assert (read(f)[..., :3] == lookup_table(name)[0]).all()
-        assert Image.open(f).size == (252, 168)
+        assert Image.open(f).size == (WIDTH, HEIGHT)
 
 
 @pytest.mark.parametrize("name", COLORMAPS)

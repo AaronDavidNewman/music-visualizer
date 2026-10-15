@@ -9,6 +9,7 @@ import pytest
 
 from app.services.colormaps import COLORMAPS, DEFAULT_COLORMAP, lookup_table
 
+from .frame_size import HEIGHT, WIDTH
 from .colormap_names import DECODABLE, FIRST, INVALID, MESSAGE, SECOND, WITHOUT_BLACK
 
 from .test_jobs_api import (  # noqa: F401
@@ -226,4 +227,4 @@ def test_the_pictures_have_the_same_size_count_and_format_for_all_the_colormaps(
     assert len(counts) == 1
     for name, job in jobs.items():
         img = Image.open(io.BytesIO(frame_bytes(client, job, 3)))
-        assert img.size == (252, 168) and img.mode == "P", name
+        assert img.size == (WIDTH, HEIGHT) and img.mode == "P", name

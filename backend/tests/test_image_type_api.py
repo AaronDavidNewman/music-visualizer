@@ -10,6 +10,7 @@ from PIL import Image
 
 from app.services.image_types import IMAGE_TYPES
 
+from .frame_size import HEIGHT, WIDTH
 from .colormap_names import SECOND
 from .test_jobs_api import chord_wav, client, frame_rgb, leftovers, wav_bytes  # noqa: F401
 
@@ -116,7 +117,7 @@ def test_blended_frames_have_the_size_and_count_of_tiles_frames_and_the_middles_
     for i in range(tiles["frame_count"]):
         flat = Image.open(io.BytesIO(frame_bytes(client, tiles, i)))
         soft = Image.open(io.BytesIO(frame_bytes(client, blended, i)))
-        assert flat.size == soft.size == (252, 168)
+        assert flat.size == soft.size == (WIDTH, HEIGHT)
         assert (frame_rgb(client, tiles, i) == frame_rgb(client, blended, i)).all()  # the middle of every tile
 
 
@@ -138,7 +139,7 @@ def test_served_pictures_have_the_right_format_size_and_headers(client):
     assert flat_response.headers["cache-control"] == soft_response.headers["cache-control"]
     flat, soft = Image.open(io.BytesIO(flat_response.content)), Image.open(io.BytesIO(soft_response.content))
     assert flat.mode == "P" and soft.mode == "RGB"
-    assert flat.size == soft.size == (252, 168)
+    assert flat.size == soft.size == (WIDTH, HEIGHT)
     assert len(soft_response.content) > len(flat_response.content)  # true-colour files are larger
 
 

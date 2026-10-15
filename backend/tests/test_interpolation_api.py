@@ -15,6 +15,7 @@ from PIL import Image
 from app.services.colormaps import COLORMAPS, lookup_table
 from app.services.frame_interpolation import key_frames
 
+from .frame_size import HEIGHT, WIDTH
 from .test_frame_interpolation import INTERPOLATE_MESSAGE
 from .test_jobs_api import (  # noqa: F401
     SR,
@@ -134,7 +135,7 @@ def test_the_frames_have_the_same_size_and_count_at_every_interpolate_value(clie
         assert job[key] == base[key]
     for i in range(job["frame_count"]):
         image = Image.open(io.BytesIO(frame_bytes(client, job, i)))
-        assert image.format == "PNG" and image.size == (252, 168), i
+        assert image.format == "PNG" and image.size == (WIDTH, HEIGHT), i
 
 
 @pytest.mark.parametrize("image_type", TYPES)

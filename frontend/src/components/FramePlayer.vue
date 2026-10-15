@@ -129,12 +129,13 @@ onBeforeUnmount(pause);
   gap: 0.75rem;
 }
 .frame {
-  width: min(100%, 660px);
-  /* Frames are 252 x 168 pixels (12 x 7 tiles of 21 x 24). Declaring the ratio reserves the right
-     space before a frame loads, so the image keeps 3:2 at any width and never changes size between frames. */
+  width: 100%;
+  max-width: 600px;
+  /* Frames are 600 x 400 pixels, so a frame is shown at its own size when there is room and is scaled down smoothly on a narrower
+     window. Declaring the ratio reserves the right space before a frame loads, so the image keeps 3:2 at any width and never
+     changes size between frames. The outline (not a border) takes no room from the 600 pixels. */
   aspect-ratio: 3 / 2;
-  image-rendering: pixelated;
-  border: 1px solid #ccc;
+  outline: 1px solid #ccc;
   background: #000;
 }
 .controls {
@@ -155,6 +156,7 @@ onBeforeUnmount(pause);
   color: #555;
 }
 .slider {
-  width: min(100%, 660px);
+  width: 100%;
+  max-width: 600px;
 }
 </style>

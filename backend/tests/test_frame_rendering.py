@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -9,8 +11,6 @@ from app.services.frame_rendering import (
     IMAGE_HEIGHT,
     IMAGE_WIDTH,
     SHOWN_NOTES,
-    TILE_HEIGHT,
-    TILE_WIDTH,
     average_frames,
     frame_count,
     hidden_below,
@@ -20,8 +20,9 @@ from app.services.frame_rendering import (
 )
 from app.services.note_analysis import NOTE_COUNT, AnalysisResult
 
-from app.services.image_types import IMAGE_TYPES
+from app.services.image_types import DEFAULT_BLEND_WIDTH, IMAGE_TYPES
 
+from .frame_size import COLUMN_EDGES, HEIGHT, WIDTH, tile_center
 from .colormap_names import FIRST, INVALID, MESSAGE, SECOND, TRACEABLE
 
 
@@ -338,12 +339,7 @@ def frame_files(directory):
 def tile_rgb(path):
     """(84, 3) colour of every tile of a written frame, from its centre pixel."""
     rgb = np.asarray(Image.open(path).convert("RGB"))
-    return np.array(
-        [
-            rgb[(n // GRID_COLUMNS) * TILE_HEIGHT + TILE_HEIGHT // 2, (n % GRID_COLUMNS) * TILE_WIDTH + TILE_WIDTH // 2]
-            for n in range(SHOWN_NOTES)
-        ]
-    )
+    return np.array([rgb[tile_center(n)] for n in range(SHOWN_NOTES)])
 
 
 def written_tiles(directory, frames, **kwargs):
@@ -596,9 +592,11 @@ def test_every_blended_pixel_lies_between_the_tile_colours_around_it(tmp_path, c
         name = f"frame_{i:06d}.png"
         flat = np.asarray(Image.open(tmp_path / "tiles" / name).convert("RGB"))
         soft = np.asarray(Image.open(tmp_path / "blended" / name))
-        # the fade never reaches farther than 5.25 pixels, so every pixel is within the range of the tile colours within 6
-        low = ndimage.minimum_filter(flat, size=(13, 13, 1), mode="nearest")
-        high = ndimage.maximum_filter(flat, size=(13, 13, 1), mode="nearest")
+        # the fade never reaches farther than the reach (12.5 pixels at the default blend width), so every pixel is within the
+        # range of the tile colours within one pixel more than that
+        window = 2 * (math.ceil(DEFAULT_BLEND_WIDTH / 100.0 * (WIDTH / GRID_COLUMNS)) + 1) + 1
+        low = ndimage.minimum_filter(flat, size=(window, window, 1), mode="nearest")
+        high = ndimage.maximum_filter(flat, size=(window, window, 1), mode="nearest")
         assert (soft >= low).all() and (soft <= high).all(), (options, i)
 
 
@@ -610,16 +608,18 @@ def test_a_hidden_tile_next_to_a_coloured_one_fades_toward_black(tmp_path):
     flat = tile_rgb(tmp_path / "tiles" / "frame_000000.png")
     assert flat[26].any() and not flat[25].any() and not flat[27].any()
     soft = np.asarray(Image.open(tmp_path / "blended" / "frame_000000.png")).astype(int)
-    y = 2 * TILE_HEIGHT + TILE_HEIGHT // 2
-    for edge_x in (2 * TILE_WIDTH, 3 * TILE_WIDTH):  # the left and the right edge of the coloured tile
+    y = tile_center(26)[0]
+    left, right = int(COLUMN_EDGES[2]), int(COLUMN_EDGES[3])  # the left and the right edge of the coloured tile
+    for edge_x in (left, right):
         average = (soft[y, edge_x - 1] + soft[y, edge_x]) / 2
         assert np.abs(average - flat[26] / 2).max() <= 1
-    assert (soft[y, 2 * TILE_WIDTH + 8 : 3 * TILE_WIDTH - 8] == flat[26]).all()  # the middle stays flat
+    reach = math.ceil(DEFAULT_BLEND_WIDTH / 100.0 * (WIDTH / GRID_COLUMNS)) + 2  # the fade ends at the reach from an edge
+    assert (soft[y, left + reach : right - reach] == flat[26]).all()  # the middle stays flat
 
 
 def test_threaded_writing_gives_exactly_the_plain_blend_of_each_frames_tile_colours(tmp_path):
     """Frames are blended and encoded on several threads: each file must equal a single plain call of the blend."""
-    from app.services.image_types import blend_tile_colors
+    from app.services.image_types import make_grid_blender
 
     many = np.vstack([LEVEL_FRAMES] * 6)  # 36 frames, so that several threads really work at once
     write_frames(many, tmp_path / "tiles", colormap=SECOND, image_type="tiles", smoothing=0.3)
@@ -628,7 +628,7 @@ def test_threaded_writing_gives_exactly_the_plain_blend_of_each_frames_tile_colo
     for i in range(36):
         name = f"frame_{i:06d}.png"
         colours = tile_rgb(tmp_path / "tiles" / name)  # the 84 finished tile colours of this frame
-        expected = blend_tile_colors(colours, 17, GRID_COLUMNS, GRID_ROWS, TILE_WIDTH, TILE_HEIGHT)
+        expected = make_grid_blender(17, GRID_COLUMNS, GRID_ROWS, WIDTH, HEIGHT)(colours)
         assert (np.asarray(Image.open(tmp_path / "blended" / name)) == expected).all(), i
 
 

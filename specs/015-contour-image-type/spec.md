@@ -1,5 +1,7 @@
 # Feature Specification: Contour Image Type
 
+> **Amended 2026-10-14 (feature 021, wider frames).** Frames are now **600 × 400 pixels** (3:2), drawn at that size, where this document says 252 × 168 (and tiles of 21 × 24 pixels): at the default grid the columns are 50 pixels wide and the rows 57 or 58 pixels high. The notes, the colors, the frame count and the timing are unchanged. See `specs/021-wider-frames/`.
+
 **Feature Branch**: `015-contour-image-type` (no git branch created; spec directory name only)
 
 **Created**: 2026-10-11

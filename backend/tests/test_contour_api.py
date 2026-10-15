@@ -13,6 +13,7 @@ from PIL import Image
 from app.services.colormaps import COLORMAPS, lookup_table
 from app.services.image_types import IMAGE_TYPES
 
+from .frame_size import HEIGHT, WIDTH
 from .colormap_names import FIRST, SECOND
 from .test_contour import near_scale
 from .test_jobs_api import (  # noqa: F401
@@ -76,7 +77,7 @@ def test_the_response_has_the_usual_keys_and_nothing_extra_for_contour(client):
         assert key not in job
 
 
-def test_the_frames_are_252_by_168_pngs_and_their_count_and_timing_equal_those_of_tiles(client):
+def test_the_frames_are_pngs_of_the_image_size_and_their_count_and_timing_equal_those_of_tiles(client):
     data = chord_wav(2)
     cont = post(client, data).json()
     tiles = post(client, data, image_type="tiles").json()
@@ -85,7 +86,7 @@ def test_the_frames_are_252_by_168_pngs_and_their_count_and_timing_equal_those_o
         assert cont[key] == tiles[key]
     for i in (0, cont["frame_count"] // 2, cont["frame_count"] - 1):
         image = Image.open(io.BytesIO(frame_bytes(client, cont, i)))
-        assert image.format == "PNG" and image.size == (252, 168)
+        assert image.format == "PNG" and image.size == (WIDTH, HEIGHT)
 
 
 @pytest.mark.parametrize(
@@ -170,8 +171,8 @@ def test_a_steady_note_is_one_contour_peak_at_its_place_in_the_grid_for_every_co
     # the start of it in the opposite corner
     job = post(client, steady_note_file(36), colormap=name).json()
     picture = frame_image(client, job, job["frame_count"] // 2)
-    assert near_scale(picture[round(3 / 6 * 167), 0][:3], name, 1.0), name
-    assert near_scale(picture[167, 251][:3], name, 0.0), name
+    assert near_scale(picture[round(3 / 6 * (HEIGHT - 1)), 0][:3], name, 1.0), name
+    assert near_scale(picture[HEIGHT - 1, WIDTH - 1][:3], name, 0.0), name
 
 
 def test_changing_the_colormap_changes_the_pictures_and_not_the_frame_count(client):
@@ -205,8 +206,11 @@ def test_a_threshold_changes_the_contour_by_hiding_a_faint_note(client):
     shown = post(client, data, threshold="0").json()
     middle = hidden["frame_count"] // 2
     assert frame_bytes(client, hidden, middle) != frame_bytes(client, shown, middle)
-    # and a threshold that hides nothing (the faint note is above it) changes nothing
-    assert frame_bytes(client, post(client, data, threshold="0.1").json(), middle) == frame_bytes(client, shown, middle)
+    # and a threshold that hides almost nothing (only the leakage of the loud note, far below the faint note) changes the picture
+    # far less: at the size of the frame the contour of such a tiny value moves by a fraction of a pixel, not by nothing
+    big = np.abs(frame_image(client, hidden, middle).astype(int) - frame_image(client, shown, middle).astype(int)).mean()
+    small = np.abs(frame_image(client, post(client, data, threshold="0.1").json(), middle).astype(int) - frame_image(client, shown, middle).astype(int)).mean()
+    assert small < big / 5, (small, big)
 
 
 @pytest.mark.parametrize("name", COLORMAPS)

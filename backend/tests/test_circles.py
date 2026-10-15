@@ -8,6 +8,7 @@ import math
 import numpy as np
 import pytest
 
+from .frame_size import REFERENCE_HEIGHT, REFERENCE_WIDTH
 from app.services.circles import (
     DEFAULT_CIRCLE_MEMORY,
     DEFAULT_CIRCLE_RESIZE,
@@ -37,7 +38,7 @@ from app.services.circles import (
     step_pixels,
 )
 
-W, H = 252, 168
+W, H = REFERENCE_WIDTH, REFERENCE_HEIGHT  # the plan of the circles is worked out on the reference frame (the old 252 x 168)
 UNIT_MESSAGE = "The circle movement must be a whole number from 1 to 10."
 MEMORY_MESSAGE = "The circle memory must be a whole number from 100 to 500."
 NOTES_MESSAGE = "The number of circle notes must be a whole number from 5 to 12."
@@ -407,6 +408,64 @@ def test_a_steady_note_at_one_volume_never_leaves_its_place_however_long_it_last
     values = frames_of(*({C4: 0.9} for _ in range(300)))
     places = {tuple(round(v, 9) for v in added[0][:2]) for added, _ in run(values, unit=10, memory=500)}
     assert len(places) == 1
+
+
+# --- the plan at another frame width (feature 021) ----------------------------------------------------------------------------------
+
+
+def plan_at(values, width, height, **options):
+    settings = dict(notes=8, unit=7, memory=100)
+    settings.update(options)
+    return list(plan_circles(values, float(values.max()), settings["notes"], settings["unit"], settings["memory"], width, height))
+
+
+def test_the_plan_on_a_wider_frame_is_the_reference_plan_scaled_by_the_width_over_252():
+    rng = np.random.default_rng(5)
+    values = rng.random((80, 84)) ** 2  # enough frames that circles wrap around the edges many times
+    scale = 600 / 252
+    reference = plan_at(values, 252, 168)
+    wide = plan_at(values, 600, 400)
+    assert len(reference) == len(wide) == 80
+    for t, ((ref_added, ref_memory), (added, memory)) in enumerate(zip(reference, wide)):
+        assert [c[2] for c in ref_added] == [c[2] for c in added]  # the same colors, in the same order
+        assert len(ref_memory) == len(memory)
+        got = np.array([c[:2] for c in memory])
+        want = scale * np.array([c[:2] for c in ref_memory])
+        assert np.allclose(got, want, atol=1e-6), t  # the wrap at 600 x 400 is the wrap at 252 x 168 scaled
+
+
+def test_the_first_circle_is_the_middle_of_the_wider_frame_moved_by_the_step_times_the_scale():
+    scale = 600 / 252
+    values = frames_of({F5: 1.0})
+    (added, _), = plan_at(values, 600, 400, unit=7)
+    dx, dy = expected_step(F5, 7)
+    assert added[0][0] == pytest.approx((300 + scale * dx) % 600, abs=1e-9)
+    assert added[0][1] == pytest.approx((200 + scale * dy) % 400, abs=1e-9)
+
+
+def test_a_steady_note_walks_by_its_scaled_step_and_wraps_at_the_wider_frame():
+    scale = 600 / 252
+    dx, dy = expected_step(C4, 10)  # 0 degrees, one unit: to the right
+    values = frames_of(*steady(C4, 40))
+    xs = [added[0][0] for added, _ in plan_at(values, 600, 400, unit=10)]
+    for k, x in enumerate(xs, start=1):
+        assert x == pytest.approx((300 + k * dx * scale) % 600, abs=1e-6)
+    assert all(0 <= x < 600 for x in xs) and any(b < a for a, b in zip(xs, xs[1:]))  # it came back in at the left edge
+
+
+def test_the_scale_comes_from_the_width_and_the_wrap_from_the_height():
+    scale = 600 / 252
+    values = frames_of(*steady(F5, 60))
+    dx, dy = expected_step(F5, 9)
+    for k, (added, _) in enumerate(plan_at(values, 600, 300, unit=9), start=1):  # a frame that is not 3:2
+        assert added[0][0] == pytest.approx((300 + k * dx * scale) % 600, abs=1e-6)
+        assert added[0][1] == pytest.approx((150 + k * dy * scale) % 300, abs=1e-6)
+
+
+def test_at_the_reference_width_nothing_changes():
+    rng = np.random.default_rng(8)
+    values = rng.random((30, 84)) ** 2
+    assert plan_at(values, 252, 168) == list(plan_circles(values, float(values.max()), 8, 7, 100))
 
 
 # --- the memory ------------------------------------------------------------------------------------------------------------------

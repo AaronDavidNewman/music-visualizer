@@ -4,7 +4,7 @@ Frame ``f`` covers ``[f / frame_rate, (f + 1) / frame_rate)`` seconds. It is the
 the windows that start inside that period, or, if none does, the most recent window that
 started before the period (which is the window covering its start when windows are consecutive).
 Each frame becomes a 12 x 7 grid of coloured tiles (one row per octave, one column per note name,
-252 x 168 pixels, 3:2); a higher resolution (1 to 5) first interpolates the grid to 12 r x 7 r values, so the
+600 x 400 pixels, 3:2); a higher resolution (1 to 5) first interpolates the grid to 12 r x 7 r values, so the
 same picture size has more and smaller tiles (see ``resolution``). A number of notes below 84 builds the picture from
 only the notes with the most energy in the file, spread over the whole grid (see ``note_selection``).
 The image type ``circles`` draws wandering circles instead of a grid (see ``circles``).
@@ -42,6 +42,7 @@ from .circles import (
     check_circle_unit,
     write_circle_frames,
 )
+from .circles_paint import write_paint_frames
 from .colormaps import DEFAULT_COLORMAP, check_colormap, colorize
 from .contour import write_contour_frames
 from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
@@ -57,15 +58,17 @@ from .note_analysis import NOTE_COUNT, AnalysisResult
 from .note_selection import DEFAULT_NOTE_COUNT, check_note_count, spread_notes
 from .resolution import DEFAULT_RESOLUTION, check_resolution, interpolate_grid
 
-# 12 columns (the notes of an octave) by 7 rows (octaves) of tiles 21 wide by 24 tall: tile width is
-# 87.5% of its height, so the 252 x 168 image is exactly 3:2, since (12 * 0.875) / 7 = 1.5.
+# 12 columns (the notes of an octave) by 7 rows (octaves) of tiles spread over a 600 x 400 frame (feature 021; it was 252 x 168):
+# the columns are 50 pixels wide and the rows 57 or 58 pixels high, since 400 does not divide into 7 whole rows (see ``tile_edges``).
 GRID_COLUMNS = 12
 GRID_ROWS = 7
 SHOWN_NOTES = GRID_COLUMNS * GRID_ROWS  # notes 0..83 are drawn; the four highest (84..87) are not
-TILE_WIDTH = 21
-TILE_HEIGHT = 24
-IMAGE_WIDTH = GRID_COLUMNS * TILE_WIDTH
-IMAGE_HEIGHT = GRID_ROWS * TILE_HEIGHT
+IMAGE_WIDTH = 600
+IMAGE_HEIGHT = 400
+# The frame that the settings of the circles are measured against (Movement and Radius): the frame size before feature 021.
+REFERENCE_WIDTH = 252
+REFERENCE_HEIGHT = 168
+FRAME_SCALE = IMAGE_WIDTH / REFERENCE_WIDTH  # = IMAGE_HEIGHT / REFERENCE_HEIGHT
 
 # Smoothing mixes each frame with the earlier frames of a window (0 = none). The smoothing is the weight of each earlier
 # frame against a weight of 1 for the current one; the window is how many earlier frames are looked at. Fixed ranges;
@@ -84,8 +87,8 @@ MAX_THRESHOLD = 10
 DEFAULT_THRESHOLD = 0
 
 assert SHOWN_NOTES <= NOTE_COUNT
-assert TILE_WIDTH * 8 == TILE_HEIGHT * 7  # tile width is exactly 87.5% of its height
 assert IMAGE_WIDTH * 2 == IMAGE_HEIGHT * 3  # exactly 3:2
+assert IMAGE_WIDTH * REFERENCE_HEIGHT == IMAGE_HEIGHT * REFERENCE_WIDTH  # the same shape as the reference frame
 
 # Guards ceil() against floating-point noise such as 5.000000000000001.
 _EPSILON = 1e-9
@@ -201,8 +204,8 @@ def hidden_notes(smoothed: np.ndarray, threshold: float = DEFAULT_THRESHOLD) -> 
     return hidden_below(smoothed[:, :SHOWN_NOTES], peak, threshold)
 
 # The number of the tile each pixel belongs to, for a grid of ``columns`` x ``rows`` tiles in the whole picture: the tile
-# edges are the nearest whole pixels to an even split, so for the original 12 x 7 grid every tile is 21 x 24 pixels and a
-# finer grid has smaller tiles that differ by at most one pixel.
+# edges are the nearest whole pixels to an even split, so the 12 columns are 50 pixels wide, the 7 rows 57 or 58 pixels high, and
+# a finer grid has smaller tiles; the tiles of an axis differ by at most one pixel.
 def _tile_index(columns: int, rows: int) -> np.ndarray:
     column_of = np.repeat(np.arange(columns), np.diff(tile_edges(columns, IMAGE_WIDTH)))
     row_of = np.repeat(np.arange(rows), np.diff(tile_edges(rows, IMAGE_HEIGHT)))
@@ -338,6 +341,20 @@ def write_frames(
             IMAGE_WIDTH,
             IMAGE_HEIGHT,
             resize=circle_resize,
+        )
+        return
+    if image_type == "circles_paint":  # the same circles with no memory (``circle_memory`` is checked above and not used)
+        write_paint_frames(
+            smoothed[:, :SHOWN_NOTES],
+            peak,
+            colormap,
+            directory,
+            circle_notes,
+            circle_unit,
+            circle_radius,
+            IMAGE_WIDTH,
+            IMAGE_HEIGHT,
+            circle_resize,
         )
         return
     columns, rows = GRID_COLUMNS * resolution, GRID_ROWS * resolution

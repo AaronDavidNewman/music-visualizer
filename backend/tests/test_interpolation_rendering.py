@@ -13,6 +13,7 @@ from app.services.colormaps import COLORMAPS, lookup_table
 from app.services.frame_interpolation import key_frames
 from app.services.frame_rendering import write_frames
 
+from .frame_size import HEIGHT, WIDTH
 from .colormap_names import INVALID
 from .test_frame_interpolation import INTERPOLATE_MESSAGE
 from .test_resolution_rendering import rgb
@@ -59,7 +60,7 @@ def test_interpolate_one_gives_exactly_the_files_made_without_the_setting(tmp_pa
 def test_the_frame_count_the_names_and_the_size_do_not_depend_on_the_interpolate_value(tmp_path, image_type, n, count):
     files = write(random_notes(count, seed=count), tmp_path, image_type=image_type, interpolate=n)
     assert [f.name for f in files] == [name(i) for i in range(count)]
-    assert all(Image.open(f).size == (252, 168) for f in files)
+    assert all(Image.open(f).size == (WIDTH, HEIGHT) for f in files)
 
 
 @pytest.mark.parametrize("n", [2, 3, 4, 5])

@@ -77,9 +77,9 @@ describe("the image type controls", () => {
   const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
   const blended = (busy = false) => renderType("blended", busy);
 
-  it("offer Tiles, Blended tiles, Contour and Circles in a dropdown that starts at Tiles", async () => {
+  it("offer Tiles, Blended tiles, Contour, Circles and Circles paint in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -382,8 +382,15 @@ const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
     ["circles", "Circles", ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"]],
     ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
   ],
+  circles_paint: [
+    ["analysis", "Analysis", TOP],
+    ["colormap", "Colormap", ["colormap"]],
+    ["image-type", "Image type", ["image-type"]],
+    ["circles_paint", "Circles paint", ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]],
+    ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
+  ],
 };
-const TYPE_IDS = ["tiles", "contour", "blended", "circles"];
+const TYPE_IDS = ["tiles", "contour", "blended", "circles", "circles_paint"];
 
 describe("the form is a list of titled groups (Story 1)", () => {
   it("starts with the top group, Colormap and Image type, all open, and ends with the Create frames button", async () => {
@@ -461,6 +468,26 @@ describe("the groups of the chosen image type (Story 2)", () => {
     expect(groupsOf(await renderType("blended"))[3].controls.slice(-1)).toEqual(["blend-width"]);
   });
 
+  it("has, for Circles paint, the circle controls two to a row, Notes last, and no Memory", async () => {
+    const html = await renderType("circles_paint");
+    const group = groupsOf(html)[3];
+    expect(group.id).toBe("circles_paint");
+    expect(group.title).toBe("Circles paint");
+    expect(group.controls).toEqual(["circle-unit", "circle-radius", "circle-resize", "circle-notes"]);
+    expect(html).not.toContain('id="circle-memory"');
+    expect(html).not.toContain('id="resolution"');
+    expect(html).not.toContain('id="threshold"');
+    expect(await renderType("circles")).toContain('id="circle-memory"');
+  });
+
+  it("shares the values of Movement, Radius, Resize by volume and Notes between Circles and Circles paint", () => {
+    // one ref each in the form, shown by either circle group, so that switching the type keeps what was entered
+    for (const control of ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]) expect(formSource).toContain(`inTypeGroup('${control}')`);
+    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint"]');
+    expect((formSource.match(/const circleUnit = ref/g) ?? []).length).toBe(1);
+    expect((formSource.match(/const circleNotes = ref/g) ?? []).length).toBe(1);
+  });
+
   it("has Notes last in Circles, alone on its row", async () => {
     expect(groupsOf(await renderType("circles"))[3].controls.slice(-1)).toEqual(["circle-notes"]);
   });
@@ -504,7 +531,7 @@ describe("the smoothing groups and the new names (Story 3)", () => {
     for (const type of TYPE_IDS) {
       const ids = groupsOf(await renderType(type)).map((g) => g.id);
       expect(ids, type).toContain("data-smoothing");
-      expect(ids.includes("image-smoothing"), type).toBe(type !== "circles");
+      expect(ids.includes("image-smoothing"), type).toBe(type !== "circles" && type !== "circles_paint");
     }
   });
 

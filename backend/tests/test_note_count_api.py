@@ -13,6 +13,7 @@ from PIL import Image
 
 from app.services.colormaps import COLORMAPS, lookup_table
 
+from .frame_size import HEIGHT, WIDTH
 from .test_jobs_api import (  # noqa: F401
     SR,
     chord_wav,
@@ -123,7 +124,7 @@ def test_the_frames_have_the_same_size_and_count_whatever_the_number_of_notes(cl
         assert job[key] == base[key]
     for i in (0, job["frame_count"] // 2, job["frame_count"] - 1):
         image = Image.open(io.BytesIO(frame_bytes(client, job, i)))
-        assert image.format == "PNG" and image.size == (252, 168)
+        assert image.format == "PNG" and image.size == (WIDTH, HEIGHT)
 
 
 @pytest.mark.parametrize("image_type", TYPES)
@@ -149,7 +150,7 @@ def test_the_resolution_and_the_number_of_notes_work_together(client, image_type
     assert r.status_code == 200, r.text
     job = r.json()
     assert (job["resolution"], job["note_count"]) == (3, 12)
-    assert Image.open(io.BytesIO(frame_bytes(client, job, 0))).size == (252, 168)
+    assert Image.open(io.BytesIO(frame_bytes(client, job, 0))).size == (WIDTH, HEIGHT)
 
 
 @pytest.mark.parametrize("image_type", TYPES)

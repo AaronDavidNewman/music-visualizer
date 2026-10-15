@@ -14,6 +14,7 @@ import {
   formatCircleRadius,
   formatCircleUnit,
   gridSettingsApply,
+  isCirclesType,
   formatNoteCountSummary,
   formatResolution,
   formatThresholdSummary,
@@ -70,11 +71,11 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li v-if="gridSettingsApply(result.image_type)">Interpolate: {{ result.interpolate }}</li>
             <li>Image type: {{ imageTypeLabel(result.image_type) }}</li>
             <li v-if="gridSettingsApply(result.image_type)">Oversampling: {{ formatResolution(result.resolution) }}</li>
-            <template v-if="result.image_type === 'circles'">
+            <template v-if="isCirclesType(result.image_type)">
               <li>Movement: {{ formatCircleUnit(result.circle_unit) }}</li>
               <li>Radius: {{ formatCircleRadius(result.circle_radius) }}</li>
               <li>Resize by volume: {{ formatCircleResize(result.circle_resize) }}</li>
-              <li>Memory: {{ formatCircleMemory(result.circle_memory) }}</li>
+              <li v-if="result.image_type === 'circles'">Memory: {{ formatCircleMemory(result.circle_memory) }}</li>
               <li>Notes: {{ formatCircleNotes(result.circle_notes) }}</li>
             </template>
             <li v-if="result.image_type === 'blended'">Blend width: {{ formatBlendWidthSummary(result.blend_width) }}</li>

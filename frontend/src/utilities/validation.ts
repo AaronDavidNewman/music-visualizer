@@ -93,6 +93,7 @@ export const IMAGE_TYPES = [
   { value: "blended", label: "Blended tiles" },
   { value: "contour", label: "Contour" },
   { value: "circles", label: "Circles" },
+  { value: "circles_paint", label: "Circles paint" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -281,7 +282,12 @@ export function formatCircleNotes(value: number): string {
   return `${value} notes`;
 }
 
+/** Whether the image type is one of the two kinds of circles (Circles, which has a memory, and Circles paint, which has none). */
+export function isCirclesType(imageType: string): boolean {
+  return imageType === "circles" || imageType === "circles_paint";
+}
+
 /** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate) mean anything: not for circles. */
 export function gridSettingsApply(imageType: string): boolean {
-  return imageType !== "circles";
+  return !isCirclesType(imageType);
 }

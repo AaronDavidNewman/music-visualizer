@@ -20,6 +20,7 @@ import {
   formatBlendWidthSummary,
   formatSmoothing,
   imageTypeLabel,
+  isCirclesType,
   formatThreshold,
   formatThresholdSummary,
   validateFile,
@@ -194,26 +195,37 @@ describe("smoothing window", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Tiles, Blended tiles, Contour and Circles in that order and starts at tiles", () => {
+  it("offers Tiles, Blended tiles, Contour, Circles and Circles paint in that order and starts at tiles", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["tiles", "Tiles"],
       ["blended", "Blended tiles"],
       ["contour", "Contour"],
       ["circles", "Circles"],
+      ["circles_paint", "Circles paint"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
     expect(imageTypeLabel("tiles")).toBe("Tiles");
     expect(imageTypeLabel("blended")).toBe("Blended tiles");
     expect(imageTypeLabel("contour")).toBe("Contour");
     expect(imageTypeLabel("circles")).toBe("Circles");
+    expect(imageTypeLabel("circles_paint")).toBe("Circles paint");
   });
 
   it.each(values)("accepts %j", (v) => {
     expect(validateImageType(v)).toBeNull();
   });
 
-  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles.");
+  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint"])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint.");
+  });
+
+  it("knows the two circle types, and the grid settings apply to neither", () => {
+    expect(isCirclesType("circles")).toBe(true);
+    expect(isCirclesType("circles_paint")).toBe(true);
+    for (const type of ["tiles", "blended", "contour", "", "circle", "paint"]) expect(isCirclesType(type), type).toBe(false);
+    expect(gridSettingsApply("circles")).toBe(false);
+    expect(gridSettingsApply("circles_paint")).toBe(false);
+    for (const type of ["tiles", "blended", "contour"]) expect(gridSettingsApply(type), type).toBe(true);
   });
 
   it("applies the blend width to Blended tiles only", () => {

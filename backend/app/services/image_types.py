@@ -1,10 +1,10 @@
 """The kinds of picture a frame can be drawn as, and the blend that makes the ``blended`` kind.
 
-``tiles`` is the picture of flat tiles (21 x 24 pixels for the original 12 x 7 grid; a finer grid, see ``resolution``, has
-smaller tiles whose edges are at the nearest whole pixel). ``blended`` has the same grid of finished tile colors, but the colors
+``tiles`` is the picture of flat tiles (50 pixels wide and 57 or 58 high for the original 12 x 7 grid on the 600 x 400 frame; a
+finer grid, see ``resolution``, has smaller tiles whose edges are at the nearest whole pixel). ``blended`` has the same grid of finished tile colors, but the colors
 of neighbouring tiles fade into each other across every edge the tiles share: a Gaussian feather (a Gaussian blur of the
 sharp edge, kept inside a feather mask) that reaches the *blend width* (a percentage of the tile width) on each side of
-the edge, the same distance in pixels in both directions. At the default width the feather mask is about 10 pixels across.
+the edge, the same distance in pixels in both directions. At the default width (25%) the feather reaches 12.5 pixels on each side of an edge: about 25 pixels across.
 
 For a pixel on one axis, with ``d`` the distance from the pixel's center to the nearest *inner* tile edge and ``R`` the
 reach in pixels: if ``d < R`` the pixel's own tile gets the weight ``(Phi(d / sigma) - Phi(-4)) / (1 - 2 * Phi(-4))`` and
@@ -17,7 +17,8 @@ does not blend with the start of the next row, because they are not side by side
 
 A third kind, ``contour``, is not tile colors at all: the grid of note values is drawn as a filled contour map. It is drawn by
 ``contour.py``, because it needs matplotlib's drawing; this module stays pure numpy and only lists its name. A fourth kind,
-``circles``, is not made from the grid either: circles that wander as the music plays (``circles.py``).
+``circles``, is not made from the grid either: circles that wander as the music plays (``circles.py``). A fifth, ``circles_paint``,
+makes the same circles with no memory, painted onto a copy of the previous picture (``circles_paint.py``).
 
 This module knows nothing about the note analysis or the grid of the application: the tile geometry is passed in.
 """
@@ -27,7 +28,7 @@ import numbers
 
 import numpy as np
 
-IMAGE_TYPES = ("tiles", "blended", "contour", "circles")
+IMAGE_TYPES = ("tiles", "blended", "contour", "circles", "circles_paint")
 DEFAULT_IMAGE_TYPE = "tiles"
 
 # The blend width is a percentage of the tile width: the reach of the fade on each side of an edge.
