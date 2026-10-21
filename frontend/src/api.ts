@@ -27,6 +27,7 @@ export interface JobResult {
   circle_unit: number;
   circle_radius: number;
   circle_resize: boolean;
+  gaussian: number;
   circle_memory: number;
   circle_notes: number;
   window_spacing: number;
@@ -62,6 +63,7 @@ export interface JobSettings {
   circleUnit: number;
   circleRadius: number;
   circleResize: boolean;
+  gaussian: number;
   circleMemory: number;
   circleNotes: number;
 }
@@ -85,6 +87,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("circle_unit", String(settings.circleUnit));
   body.append("circle_radius", String(settings.circleRadius));
   body.append("circle_resize", String(settings.circleResize));
+  body.append("gaussian", String(settings.gaussian));
   body.append("circle_memory", String(settings.circleMemory));
   body.append("circle_notes", String(settings.circleNotes));
 

@@ -35,6 +35,7 @@ from .circles import (
     DEFAULT_CIRCLE_RESIZE,
     DEFAULT_CIRCLE_RADIUS,
     DEFAULT_CIRCLE_UNIT,
+    MIDDLE_COLOR_ROW,
     check_circle_memory,
     check_circle_notes,
     check_circle_resize,
@@ -43,8 +44,9 @@ from .circles import (
     write_circle_frames,
 )
 from .circles_paint import write_paint_frames
-from .colormaps import DEFAULT_COLORMAP, check_colormap, colorize
+from .colormaps import DEFAULT_COLORMAP, check_colormap, colorize, lookup_table
 from .contour import write_contour_frames
+from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
 from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
 from .image_types import (
     DEFAULT_BLEND_WIDTH,
@@ -252,6 +254,7 @@ def write_frames(
     circle_notes: int = DEFAULT_CIRCLE_NOTES,
     circle_radius: int = DEFAULT_CIRCLE_RADIUS,
     circle_resize: bool = DEFAULT_CIRCLE_RESIZE,
+    gaussian: float = DEFAULT_GAUSSIAN,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -326,6 +329,7 @@ def write_frames(
     circle_notes = check_circle_notes(circle_notes)
     circle_radius = check_circle_radius(circle_radius)
     circle_resize = check_circle_resize(circle_resize)
+    gaussian = check_gaussian(gaussian)
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
     peak = float(smoothed.max()) if smoothed.size else 0.0
     if image_type == "circles":
@@ -369,8 +373,11 @@ def write_frames(
         )
     else:
         colours = colorize(values, colormap, columns * rows, peak)
-        colours[hidden] = 0
+        # A tile that the threshold hides: black for the flat tiles (the testing mode). A blended picture draws no tile there: it stays the
+        # background, the middle color of the colormap, and the tiles that are drawn fade into it.
+        colours[hidden] = lookup_table(colormap)[MIDDLE_COLOR_ROW] if image_type == "blended" else 0
         _write_tile_frames(colours, directory, image_type, blend_width, columns, rows, frames_to_draw)
+    blur_frames(directory, frames_to_draw, gaussian)  # the drawn frames only: an in-between frame is a blend of blurred frames
     write_interpolated_frames(directory, values.shape[0], interpolate)
 
 

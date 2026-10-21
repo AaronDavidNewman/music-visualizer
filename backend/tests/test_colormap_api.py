@@ -9,6 +9,7 @@ import pytest
 
 from app.services.colormaps import COLORMAPS, DEFAULT_COLORMAP, lookup_table
 
+from .blended_expected import same_middles
 from .frame_size import HEIGHT, WIDTH
 from .colormap_names import DECODABLE, FIRST, INVALID, MESSAGE, SECOND, WITHOUT_BLACK
 
@@ -103,7 +104,7 @@ def test_the_response_has_the_colormap_and_none_of_the_removed_settings(client):
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
         "smoothing", "smoothing_window", "threshold", "image_type", "blend_width", "colormap", "resolution", "note_count", "interpolate",
-        "circle_unit", "circle_memory", "circle_notes", "circle_radius", "circle_resize", "window_spacing",
+        "circle_unit", "circle_memory", "circle_notes", "circle_radius", "circle_resize", "gaussian", "window_spacing",
         "step_samples", "window_count", "spacing_raised", "frame_url_template",
     }  # fmt: skip
 
@@ -189,7 +190,7 @@ def test_blended_and_tiles_pictures_have_the_same_tile_middles_for_every_colorma
     blended = post_colormap(client, data, image_type="blended", blend_width="15", **other).json()
     assert tiles["frame_count"] == blended["frame_count"]
     for i in range(0, tiles["frame_count"], 2):
-        assert (frame_rgb(client, tiles, i) == frame_rgb(client, blended, i)).all(), (name, i)
+        assert same_middles(frame_rgb(client, tiles, i), frame_rgb(client, blended, i), name).all(), (name, i)  # hidden: black flat, background blended
 
 
 @pytest.mark.parametrize("name", COLORMAPS)

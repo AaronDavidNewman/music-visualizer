@@ -11,6 +11,7 @@ import {
   DEFAULT_CIRCLE_RADIUS,
   DEFAULT_CIRCLE_UNIT,
   DEFAULT_IMAGE_TYPE,
+  DEFAULT_GAUSSIAN,
   DEFAULT_INTERPOLATE,
   DEFAULT_NOTE_COUNT,
   DEFAULT_RESOLUTION,
@@ -23,6 +24,7 @@ import {
   CIRCLE_RADIUS_RANGE,
   CIRCLE_UNIT_RANGE,
   IMAGE_TYPES,
+  GAUSSIAN_RANGE,
   INTERPOLATE_RANGE,
   NOTE_COUNT_RANGE,
   RESOLUTION_RANGE,
@@ -36,6 +38,7 @@ import {
   formatCircleResize,
   formatCircleRadius,
   formatCircleUnit,
+  formatGaussian,
   formatInterpolate,
   formatNoteCount,
   formatResolution,
@@ -50,6 +53,7 @@ import {
   validateCircleRadius,
   validateCircleUnit,
   validateImageType,
+  validateGaussian,
   validateInterpolate,
   validateNoteCount,
   validateResolution,
@@ -77,6 +81,7 @@ import {
   circleRadiusHelp,
   circleUnitHelp,
   imageTypeHelp,
+  gaussianHelp,
   interpolateHelp,
   noteCountHelp,
   resolutionHelp,
@@ -105,6 +110,7 @@ const blendWidth = ref<number>(DEFAULT_BLEND_WIDTH);
 const resolution = ref<number>(DEFAULT_RESOLUTION);
 const noteCount = ref<number>(DEFAULT_NOTE_COUNT);
 const interpolate = ref<number>(DEFAULT_INTERPOLATE);
+const gaussian = ref<number>(DEFAULT_GAUSSIAN);
 const circleUnit = ref<number>(DEFAULT_CIRCLE_UNIT);
 const circleMemory = ref<number>(DEFAULT_CIRCLE_MEMORY);
 const circleNotes = ref<number>(DEFAULT_CIRCLE_NOTES);
@@ -137,6 +143,7 @@ const colormapError = computed(() => validateColormap(colormap.value));
 const resolutionError = computed(() => validateResolution(resolution.value));
 const noteCountError = computed(() => validateNoteCount(noteCount.value));
 const interpolateError = computed(() => validateInterpolate(interpolate.value));
+const gaussianError = computed(() => validateGaussian(gaussian.value));
 const circleUnitError = computed(() => validateCircleUnit(circleUnit.value));
 const circleMemoryError = computed(() => validateCircleMemory(circleMemory.value));
 const circleNotesError = computed(() => validateCircleNotes(circleNotes.value));
@@ -156,6 +163,7 @@ const canSubmit = computed(
     !resolutionError.value &&
     !noteCountError.value &&
     !interpolateError.value &&
+    !gaussianError.value &&
     !circleUnitError.value &&
     !circleMemoryError.value &&
     !circleNotesError.value &&
@@ -193,7 +201,7 @@ const typeGroupProblem = computed(
     (inTypeGroup("circle-notes") && !!circleNotesError.value),
 );
 const dataSmoothingProblem = computed(() => !!(smoothingWindowError.value || smoothingError.value));
-const imageSmoothingProblem = computed(() => !!(resolutionError.value || interpolateError.value));
+const imageSmoothingProblem = computed(() => !!(resolutionError.value || interpolateError.value || gaussianError.value));
 
 const belowMinimum = computed(
   () => !spacingError.value && isBelowMinimum(Number(spacingText.value), windowSize.value),
@@ -221,6 +229,7 @@ function onSubmit() {
     resolution: resolution.value,
     noteCount: noteCount.value,
     interpolate: interpolate.value,
+    gaussian: gaussian.value,
     circleUnit: circleUnit.value,
     circleMemory: circleMemory.value,
     circleNotes: circleNotes.value,
@@ -547,6 +556,24 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="interpolateError" class="error">{{ interpolateError }}</small>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="gaussian">Gaussian smoothing</label>
+          <InfoPopover label="gaussian smoothing" :text="gaussianHelp" />
+          <output class="slider-value" for="gaussian">{{ formatGaussian(gaussian) }}</output>
+        </div>
+        <input
+          id="gaussian"
+          v-model.number="gaussian"
+          type="range"
+          :min="GAUSSIAN_RANGE.min"
+          :max="GAUSSIAN_RANGE.max"
+          :step="GAUSSIAN_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="gaussianError" class="error">{{ gaussianError }}</small>
       </div>
     </SettingsGroup>
 

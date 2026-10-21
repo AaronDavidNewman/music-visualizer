@@ -21,6 +21,10 @@ import {
   formatSmoothing,
   imageTypeLabel,
   isCirclesType,
+  GAUSSIAN_RANGE,
+  DEFAULT_GAUSSIAN,
+  formatGaussian,
+  validateGaussian,
   formatThreshold,
   formatThresholdSummary,
   validateFile,
@@ -362,6 +366,28 @@ describe("interpolate", () => {
     expect(formatInterpolate(1).trim()).toBe("1");
     expect(formatInterpolate(3)).toBe("(1/3 frames)");
     expect(formatInterpolate(5)).toBe("(1/5 frames)");
+  });
+});
+
+describe("gaussian smoothing", () => {
+  it("ranges from 0 to 5 in steps of one half and starts at 0, which is off", () => {
+    expect(GAUSSIAN_RANGE).toEqual({ min: 0, max: 5, step: 0.5 });
+    expect(DEFAULT_GAUSSIAN).toBe(0);
+  });
+
+  it.each([0, 0.5, 1, 2.5, 4, 5, "3", " 4 ", 4.0, "0.5", "1e0"])("accepts %j", (v) => {
+    expect(validateGaussian(v)).toBeNull();
+  });
+
+  it.each([-0.5, -1, 5.5, 6, "", "  ", "abc", "NaN", "Infinity", "-Infinity", "1e9", NaN, Infinity, "2,5"])("refuses %j with the server's message", (v) => {
+    expect(validateGaussian(v)).toBe("The gaussian smoothing must be a number from 0 to 5.");
+  });
+
+  it("shows Off at zero and the number otherwise, in the readout and in the summary", () => {
+    expect(formatGaussian(0)).toBe("Off");
+    expect(formatGaussian(0.5)).toBe("0.5");
+    expect(formatGaussian(4)).toBe("4");
+    expect(formatGaussian(5)).toBe("5");
   });
 });
 

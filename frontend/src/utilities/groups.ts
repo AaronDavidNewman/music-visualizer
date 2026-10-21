@@ -27,7 +27,7 @@ export const GROUPS: readonly GroupDefinition[] = [
   // the same circles with no memory (feature 022): so no Memory control
   { id: "circles_paint", title: "Circles paint", controls: ["circle-unit", "circle-radius", "circle-resize", "circle-notes"] },
   { id: "data-smoothing", title: "Data smoothing", controls: ["smoothing-window", "smoothing"] },
-  { id: "image-smoothing", title: "Image smoothing", controls: ["resolution", "interpolate"] },
+  { id: "image-smoothing", title: "Image smoothing", controls: ["resolution", "interpolate", "gaussian"] },
 ];
 
 /** The ids of the groups that belong to one image type: exactly one of them follows the Image type group. */

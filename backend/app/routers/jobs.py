@@ -40,6 +40,7 @@ from ..services.circles import (
     MIN_CIRCLE_UNIT,
 )
 from ..services.frame_interpolation import DEFAULT_INTERPOLATE, MAX_INTERPOLATE, MIN_INTERPOLATE
+from ..services.gaussian import DEFAULT_GAUSSIAN, MAX_GAUSSIAN, MIN_GAUSSIAN
 from ..services.image_types import (
     DEFAULT_BLEND_WIDTH,
     DEFAULT_IMAGE_TYPE,
@@ -126,6 +127,21 @@ def _parse_smoothing(text: str | None, sent: bool) -> float:
     except ValueError:
         raise HTTPException(status_code=400, detail=message) from None
     if not math.isfinite(value) or not MIN_SMOOTHING <= value <= MAX_SMOOTHING:
+        raise HTTPException(status_code=400, detail=message)
+    return value + 0.0  # turns -0.0 into 0.0
+
+
+def _parse_gaussian(text: str | None, sent: bool) -> float:
+    """The requested gaussian smoothing. Not sent means the default (off); anything sent must be a number 0..5."""
+    if text is None and not sent:
+        return DEFAULT_GAUSSIAN
+    text = text or ""
+    message = f"The gaussian smoothing must be a number from {MIN_GAUSSIAN:g} to {MAX_GAUSSIAN:g}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not MIN_GAUSSIAN <= value <= MAX_GAUSSIAN:
         raise HTTPException(status_code=400, detail=message)
     return value + 0.0  # turns -0.0 into 0.0
 
@@ -357,6 +373,7 @@ def create_job(
     circle_notes: str | None = Form(None),
     circle_radius: str | None = Form(None),
     circle_resize: str | None = Form(None),
+    gaussian: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -376,6 +393,7 @@ def create_job(
     circle_notes_value = _parse_circle_notes(circle_notes, "circle_notes" in sent)
     circle_radius_value = _parse_circle_radius(circle_radius, "circle_radius" in sent)
     circle_resize_value = _parse_circle_resize(circle_resize, "circle_resize" in sent)
+    gaussian_value = _parse_gaussian(gaussian, "gaussian" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -437,6 +455,7 @@ def create_job(
             circle_notes=circle_notes_value,
             circle_radius=circle_radius_value,
             circle_resize=circle_resize_value,
+            gaussian=gaussian_value,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -471,6 +490,7 @@ def create_job(
         "circle_notes": circle_notes_value,
         "circle_radius": circle_radius_value,
         "circle_resize": circle_resize_value,
+        "gaussian": gaussian_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

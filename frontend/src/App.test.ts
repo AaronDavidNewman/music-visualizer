@@ -26,7 +26,7 @@ describe("the result summary", () => {
   const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
 
   it("shows the settings that describe a grid of tiles only for the image types that use a grid", () => {
-    for (const label of ["Threshold:", "Notes:", "Interpolate:", "Oversampling:"]) {
+    for (const label of ["Threshold:", "Notes:", "Interpolate:", "Oversampling:", "Gaussian smoothing:"]) {
       const line = summary.split("\n").find((l) => l.includes(label)) ?? "";
       expect(line, label).toContain("gridSettingsApply(result.image_type)");
     }
@@ -48,6 +48,11 @@ describe("the result summary", () => {
     expect(circles).toContain("formatCircleMemory(result.circle_memory)");
     expect(circles).toContain("Notes:");
     expect(circles).toContain("formatCircleNotes(result.circle_notes)");
+  });
+
+  it("shows the Gaussian smoothing with the readout Off or its number", () => {
+    const line = summary.split("\n").find((l) => l.includes("Gaussian smoothing:")) ?? "";
+    expect(line).toContain("formatGaussian(result.gaussian)");
   });
 
   it("uses the new names and none of the old ones", () => {

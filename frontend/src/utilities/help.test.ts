@@ -4,6 +4,7 @@ import {
   colormapHelp,
   frameRateHelp,
   imageTypeHelp,
+  gaussianHelp,
   interpolateHelp,
   circleMemoryHelp,
   circleResizeHelp,
@@ -37,8 +38,11 @@ describe("setting explanations", () => {
     );
   });
 
-  it("explains the threshold: black below it, a share of the loudest note in the file, left end off, right end 10%", () => {
-    expect(thresholdHelp).toContain("drawn black");
+  it("explains the threshold: not drawn below it (black for Tiles, the background for Blended tiles), a share of the loudest note in the file, left end off, right end 10%", () => {
+    expect(thresholdHelp).toContain("is not drawn");
+    expect(thresholdHelp).toContain("Tiles its tile is black");
+    expect(thresholdHelp).toContain("Blended tiles");
+    expect(thresholdHelp).toContain("middle color of the colormap");
     expect(thresholdHelp).toContain("loudest note in the whole file");
     expect(thresholdHelp).toContain("left end");
     expect(thresholdHelp).toContain("off");
@@ -57,6 +61,15 @@ describe("setting explanations", () => {
     expect(smoothingWindowHelp).toContain("earlier frames are mixed into each frame");
     expect(smoothingWindowHelp).toContain("gone that many frames later");
     expect(smoothingWindowHelp).toContain("no effect while Smoothing is 0");
+  });
+
+  it("explains the gaussian smoothing: 0 to 5, off at 0, a 3:2 radius, which image types", () => {
+    expect(gaussianHelp).toContain("0 to 5");
+    expect(gaussianHelp).toContain("0 is off");
+    expect(gaussianHelp).toContain("3:2");
+    expect(gaussianHelp).toContain("6 pixels across and 4 down"); // the example of a setting of 4
+    expect(gaussianHelp).toContain("Only used by");
+    expect(gaussianHelp).toContain("Tiles");
   });
 
   it("explains Circles paint: no memory, a copy of the previous picture, solid circles that never fade", () => {

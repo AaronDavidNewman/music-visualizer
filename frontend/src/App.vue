@@ -13,6 +13,7 @@ import {
   formatCircleResize,
   formatCircleRadius,
   formatCircleUnit,
+  formatGaussian,
   gridSettingsApply,
   isCirclesType,
   formatNoteCountSummary,
@@ -71,6 +72,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li v-if="gridSettingsApply(result.image_type)">Interpolate: {{ result.interpolate }}</li>
             <li>Image type: {{ imageTypeLabel(result.image_type) }}</li>
             <li v-if="gridSettingsApply(result.image_type)">Oversampling: {{ formatResolution(result.resolution) }}</li>
+            <li v-if="gridSettingsApply(result.image_type)">Gaussian smoothing: {{ formatGaussian(result.gaussian) }}</li>
             <template v-if="isCirclesType(result.image_type)">
               <li>Movement: {{ formatCircleUnit(result.circle_unit) }}</li>
               <li>Radius: {{ formatCircleRadius(result.circle_radius) }}</li>

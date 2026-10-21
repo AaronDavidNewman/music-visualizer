@@ -357,7 +357,7 @@ const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
     ["image-type", "Image type", ["image-type"]],
     ["tiles", "Tiles", ["threshold", "notes"]],
     ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
-    ["image-smoothing", "Image smoothing", ["resolution", "interpolate"]],
+    ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
   ],
   contour: [
     ["analysis", "Analysis", TOP],
@@ -365,7 +365,7 @@ const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
     ["image-type", "Image type", ["image-type"]],
     ["contour", "Contour", ["threshold", "notes"]],
     ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
-    ["image-smoothing", "Image smoothing", ["resolution", "interpolate"]],
+    ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
   ],
   blended: [
     ["analysis", "Analysis", TOP],
@@ -373,7 +373,7 @@ const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
     ["image-type", "Image type", ["image-type"]],
     ["blended", "Blended Tiles", ["threshold", "notes", "blend-width"]],
     ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
-    ["image-smoothing", "Image smoothing", ["resolution", "interpolate"]],
+    ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
   ],
   circles: [
     ["analysis", "Analysis", TOP],
@@ -515,6 +515,40 @@ describe("the groups of the chosen image type (Story 2)", () => {
   it("starts at Tiles unless it is given another starting image type", async () => {
     expect(groupsOf(await render())[3].id).toBe("tiles");
     expect(formSource).toContain("initialImageType");
+  });
+});
+
+describe("the gaussian smoothing slider", () => {
+  const slider = (html: string) => html.match(/<input id="gaussian"[^>]*>/)?.[0] ?? "";
+
+  it("is a slider from 0 to 5 in steps of one half, starting at 0 with the readout Off, in the Image smoothing group", async () => {
+    const html = await render();
+    const tag = slider(html);
+    expect(tag).toContain('type="range"');
+    expect(tag).toContain('min="0"');
+    expect(tag).toContain('max="5"');
+    expect(tag).toContain('step="0.5"');
+    expect(tag).toContain('value="0"');
+    expect(html).toMatch(/<output[^>]*for="gaussian"[^>]*>Off<\/output>/);
+    expect(html).toMatch(/<label for="gaussian"[^>]*>Gaussian smoothing<\/label>/);
+    expect(html).toContain('aria-label="About gaussian smoothing"');
+    const group = groupsOf(html).find((g) => g.id === "image-smoothing");
+    expect(group?.controls).toEqual(["resolution", "interpolate", "gaussian"]);
+  });
+
+  it("is shown for the grid types and not for the two circle types", async () => {
+    for (const type of ["tiles", "contour", "blended"]) expect(await renderType(type), type).toContain('id="gaussian"');
+    for (const type of ["circles", "circles_paint"]) expect(await renderType(type), type).not.toContain('id="gaussian"');
+  });
+
+  it("is disabled only while a job runs, and its value is sent", async () => {
+    expect(slider(await render(false))).not.toContain("disabled");
+    expect(slider(await render(true))).toContain("disabled");
+    expect(formSource).toMatch(/const gaussian = ref<number>\(DEFAULT_GAUSSIAN\)/);
+    expect(formSource).toContain("gaussian: gaussian.value");
+    expect(formSource).toContain("gaussianError");
+    expect(formSource).toMatch(/const imageSmoothingProblem = computed\([^;]*resolutionError\.value[^;]*interpolateError\.value[^;]*gaussianError\.value/);
+    expect(formSource).toMatch(/!gaussianError\.value/); // and Create frames waits for it too
   });
 });
 

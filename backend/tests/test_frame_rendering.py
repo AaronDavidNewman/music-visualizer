@@ -22,6 +22,7 @@ from app.services.note_analysis import NOTE_COUNT, AnalysisResult
 
 from app.services.image_types import DEFAULT_BLEND_WIDTH, IMAGE_TYPES
 
+from .blended_expected import middle_color, same_middles
 from .frame_size import COLUMN_EDGES, HEIGHT, WIDTH, tile_center
 from .colormap_names import FIRST, INVALID, MESSAGE, SECOND, TRACEABLE
 
@@ -553,7 +554,7 @@ def test_the_middle_of_every_tile_of_a_blended_frame_is_the_tiles_colour(tmp_pat
     for i in range(6):
         flat = tile_rgb(tmp_path / "tiles" / f"frame_{i:06d}.png")
         soft = tile_rgb(tmp_path / "blended" / f"frame_{i:06d}.png")
-        assert (flat == soft).all(), i
+        assert same_middles(flat, soft, colormap).all(), i  # a tile the threshold hides is black when flat and the background when blended
 
 
 def test_blended_frames_differ_from_tiles_frames_where_colours_meet(tmp_path):
@@ -595,26 +596,30 @@ def test_every_blended_pixel_lies_between_the_tile_colours_around_it(tmp_path, c
         # the fade never reaches farther than the reach (12.5 pixels at the default blend width), so every pixel is within the
         # range of the tile colours within one pixel more than that
         window = 2 * (math.ceil(DEFAULT_BLEND_WIDTH / 100.0 * (WIDTH / GRID_COLUMNS)) + 1) + 1
-        low = ndimage.minimum_filter(flat, size=(window, window, 1), mode="nearest")
-        high = ndimage.maximum_filter(flat, size=(window, window, 1), mode="nearest")
+        # a tile that the threshold hides is black in the flat picture and the background (the middle color) in the blended one
+        alternative = np.where((flat == 0).all(axis=2, keepdims=True), middle_color(colormap), flat)
+        low = np.minimum(ndimage.minimum_filter(flat, size=(window, window, 1), mode="nearest"), ndimage.minimum_filter(alternative, size=(window, window, 1), mode="nearest"))
+        high = np.maximum(ndimage.maximum_filter(flat, size=(window, window, 1), mode="nearest"), ndimage.maximum_filter(alternative, size=(window, window, 1), mode="nearest"))
         assert (soft >= low).all() and (soft <= high).all(), (options, i)
 
 
-def test_a_hidden_tile_next_to_a_coloured_one_fades_toward_black(tmp_path):
+def test_a_hidden_tile_next_to_a_coloured_one_fades_toward_the_background_when_blended_and_is_black_when_flat(tmp_path):
     values = np.zeros((1, 88))
     values[0, 26] = 1.0  # tile (row 2, column 2); every other tile has no value and the threshold hides them
     write_frames(values, tmp_path / "tiles", image_type="tiles", threshold=5)
     write_frames(values, tmp_path / "blended", image_type="blended", threshold=5)
     flat = tile_rgb(tmp_path / "tiles" / "frame_000000.png")
-    assert flat[26].any() and not flat[25].any() and not flat[27].any()
+    assert flat[26].any() and not flat[25].any() and not flat[27].any()  # flat: the hidden neighbours are black
+    background = middle_color(DEFAULT_COLORMAP)
     soft = np.asarray(Image.open(tmp_path / "blended" / "frame_000000.png")).astype(int)
     y = tile_center(26)[0]
     left, right = int(COLUMN_EDGES[2]), int(COLUMN_EDGES[3])  # the left and the right edge of the coloured tile
     for edge_x in (left, right):
         average = (soft[y, edge_x - 1] + soft[y, edge_x]) / 2
-        assert np.abs(average - flat[26] / 2).max() <= 1
+        assert np.abs(average - (flat[26] + background) / 2).max() <= 1  # blended: an even mix with the background
     reach = math.ceil(DEFAULT_BLEND_WIDTH / 100.0 * (WIDTH / GRID_COLUMNS)) + 2  # the fade ends at the reach from an edge
     assert (soft[y, left + reach : right - reach] == flat[26]).all()  # the middle stays flat
+    assert (soft[tile_center(25)] == background).all() and (soft[tile_center(27)] == background).all()  # and the hidden tiles are the background
 
 
 def test_threaded_writing_gives_exactly_the_plain_blend_of_each_frames_tile_colours(tmp_path):

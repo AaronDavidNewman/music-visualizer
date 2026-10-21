@@ -10,6 +10,7 @@ from PIL import Image
 
 from app.services.image_types import IMAGE_TYPES
 
+from .blended_expected import same_middles
 from .frame_size import HEIGHT, WIDTH
 from .colormap_names import SECOND
 from .test_jobs_api import chord_wav, client, frame_rgb, leftovers, wav_bytes  # noqa: F401
@@ -150,6 +151,6 @@ def test_the_middles_agree_with_tiles_for_a_combination_of_other_settings(client
     blended = post_type(client, data, image_type="blended", blend_width="12", **other).json()
     assert tiles["frame_count"] == blended["frame_count"]
     for i in range(0, tiles["frame_count"], 2):
-        assert (frame_rgb(client, tiles, i) == frame_rgb(client, blended, i)).all(), i
+        assert same_middles(frame_rgb(client, tiles, i), frame_rgb(client, blended, i), SECOND).all(), i
     # and the fades really are there: the pictures are not the same
     assert any(frame_bytes(client, tiles, i) != frame_bytes(client, blended, i) for i in range(tiles["frame_count"]))

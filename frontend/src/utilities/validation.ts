@@ -224,6 +224,23 @@ export function formatInterpolate(value: number): string {
   return value === INTERPOLATE_RANGE.min ? `${value} ` : `(1/${value} frames)`;
 }
 
+/** The Gaussian smoothing of the finished picture: a number from 0 (off) to 5, in steps of one half. */
+export const GAUSSIAN_RANGE = { min: 0, max: 5, step: 0.5 } as const;
+export const DEFAULT_GAUSSIAN = 0;
+
+const gaussianMessage = `The gaussian smoothing must be a number from ${GAUSSIAN_RANGE.min} to ${GAUSSIAN_RANGE.max}.`;
+
+/** Returns an error message, or null when the Gaussian smoothing is a finite number from 0 to 5. */
+export function validateGaussian(value: string | number): string | null {
+  const n = parseNumber(value);
+  return Number.isFinite(n) && n >= GAUSSIAN_RANGE.min && n <= GAUSSIAN_RANGE.max ? null : gaussianMessage;
+}
+
+/** The readout beside the slider and the result summary item: "Off" at 0, otherwise the number, such as "2.5". */
+export function formatGaussian(value: number): string {
+  return value === 0 ? "Off" : String(value);
+}
+
 /** The settings of the Circles image type: the unit in pixels, the size (circumference) in pixels, the memory in circles, the strongest notes per frame. */
 export const CIRCLE_UNIT_RANGE = { min: 1, max: 10, step: 1 } as const;
 export const DEFAULT_CIRCLE_UNIT = 4;

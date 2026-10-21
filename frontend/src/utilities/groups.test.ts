@@ -7,9 +7,9 @@ const TYPES = IMAGE_TYPES.map((t) => t.value);
 // What each image type must show, written out here independently of the module under test (spec FR-003 to FR-009).
 const COMMON_TOP = ["window-size", "frame-rate", "window-spacing", "colormap", "image-type"];
 const EXPECTED: Record<string, string[]> = {
-  tiles: [...COMMON_TOP, "threshold", "notes", "smoothing-window", "smoothing", "resolution", "interpolate"],
-  contour: [...COMMON_TOP, "threshold", "notes", "smoothing-window", "smoothing", "resolution", "interpolate"],
-  blended: [...COMMON_TOP, "threshold", "notes", "blend-width", "smoothing-window", "smoothing", "resolution", "interpolate"],
+  tiles: [...COMMON_TOP, "threshold", "notes", "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
+  contour: [...COMMON_TOP, "threshold", "notes", "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
+  blended: [...COMMON_TOP, "threshold", "notes", "blend-width", "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
   circles: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes", "smoothing-window", "smoothing"],
   circles_paint: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-notes", "smoothing-window", "smoothing"],
 };
@@ -26,7 +26,7 @@ describe("the groups", () => {
       ["circles", "Circles", ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"]],
       ["circles_paint", "Circles paint", ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
-      ["image-smoothing", "Image smoothing", ["resolution", "interpolate"]],
+      ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
     ]);
   });
 
@@ -55,7 +55,7 @@ describe("the groups shown for each image type", () => {
 
   it("show no control of another type: Threshold, Notes and Blend width are not in Circles; the circle controls are not in the grid types", () => {
     const circles = groupsFor("circles").flatMap((id) => [...controlsIn(id)]);
-    for (const c of ["threshold", "notes", "blend-width", "resolution", "interpolate"]) expect(circles).not.toContain(c);
+    for (const c of ["threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian"]) expect(circles).not.toContain(c);
     for (const type of ["tiles", "contour", "blended"]) {
       const grid = groupsFor(type).flatMap((id) => [...controlsIn(id)]);
       for (const c of ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"]) expect(grid).not.toContain(c);
@@ -76,6 +76,12 @@ describe("the groups shown for each image type", () => {
 
   it("keep Threshold and Blend width in the type groups and not in Data smoothing (the clarification)", () => {
     expect([...controlsIn("data-smoothing")]).toEqual(["smoothing-window", "smoothing"]);
+  });
+
+  it("put the Gaussian smoothing in Image smoothing, last, for the grid types only", () => {
+    expect([...controlsIn("image-smoothing")]).toEqual(["resolution", "interpolate", "gaussian"]);
+    for (const type of ["tiles", "contour", "blended"]) expect(groupOf("gaussian", type), type).toBe("image-smoothing");
+    for (const type of ["circles", "circles_paint"]) expect(groupOf("gaussian", type), type).toBeUndefined();
   });
 
   it("find the group of a control for a type, and none for a control that is not shown", () => {
@@ -126,6 +132,7 @@ describe("rowsOf", () => {
     expect(rowsOf(controlsIn("analysis").length)).toEqual([2, 1]);
     expect(rowsOf(controlsIn("circles").length)).toEqual([2, 2, 1]);
     expect(rowsOf(controlsIn("circles_paint").length)).toEqual([2, 2]);
+    expect(rowsOf(controlsIn("image-smoothing").length)).toEqual([2, 1]); // Gaussian smoothing alone on the second row
     expect(rowsOf(controlsIn("blended").length)).toEqual([2, 1]);
     expect(rowsOf(controlsIn("colormap").length)).toEqual([1]);
   });
