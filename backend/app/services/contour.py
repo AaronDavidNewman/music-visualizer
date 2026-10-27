@@ -42,6 +42,35 @@ def _flat_frame(colormap: str, value: float, peak: float, width: int, height: in
     colour = tuple(int(c) for c in lookup_table(colormap)[row])
     return Image.new("RGB", (width, height), colour)
 
+def directionalSmoothing(Z: np.ndarray, xix: int, yix: int, rows: int, cols: int):
+  if xix < 2 or yix < 2:
+    return
+  ix1 = xix - 1
+  iy1 = yix - 1
+  ix2 = xix - 2
+  iy2 = yix - 2
+  Zxy = Z[xix, yix]
+  Zdx1 = Z[ix1, yix]
+  Zdx2 = Z[ix2, yix]
+  Zdy1 = Z[xix, iy1]
+  Zdy2 = Z[xix, iy2]
+  Zdz1 = Z[ix1, iy1]
+  Zdz2 = Z[ix2, iy2]
+  dz1 = np.abs(Zxy - Zdz1)
+  dz2 = np.abs(Zdz1 - Zdz2)
+  dx1 = np.abs(Zxy - Zdx1)
+  dx2 = np.abs(Zdx1 - Zdx2)
+  dy1 = np.abs(Zxy - Zdy1)
+  dy2 = np.abs(Zdy1 - Zdy2)
+  if dz1 > dz2:
+    Z[xix, yix] = (Zxy + Zdz1 + Zdz2) / 3
+    return
+  if dy1 > dy2:
+    Z[xix, yix] = (Zxy + Zdy1) / 2
+    return
+  if dx1 > dx2:
+    Z[xix, yix] = (Zxy + Zdx1) / 2
+    return
 
 def write_contour_frames(
     values: np.ndarray,
@@ -89,8 +118,12 @@ def write_contour_frames(
                 top = float(frame.max())
                 x = np.linspace(0, top, columns)
                 y = np.linspace(0, top, rows)
-                # no `levels`: matplotlib chooses them. vmin and vmax are 0 and this frame's largest value (the scale follows the frame).
-                axes.contourf(x, y, frame.reshape(rows, columns)[::-1], cmap=colormap, vmin=0, vmax=top)
+                Z = frame.reshape(rows, columns)[::-1].copy()  # a copy: the smoothing below works in place and must not change the caller's array
+                for ix in [idx for idx in np.ndindex(Z.shape)]:
+                 directionalSmoothing(Z, ix[0], ix[1], rows, columns)
+                # ADN I added levels
+                levels = np.linspace(Z.min(), Z.max(), 12)
+                axes.contourf(x, y, Z, levels=levels, cmap=colormap, vmin=0, vmax=top)
                 pyplot.savefig(path)
         finally:
             pyplot.close(figure)

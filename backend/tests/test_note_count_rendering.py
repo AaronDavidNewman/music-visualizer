@@ -12,6 +12,7 @@ from PIL import Image
 from app.services.colormaps import COLORMAPS, DEFAULT_COLORMAP, lookup_table
 from app.services.frame_rendering import SHOWN_NOTES, smooth_frames, write_frames
 
+from .contour_expected import smoothed_flat
 from .frame_size import HEIGHT, WIDTH
 from .colormap_names import INVALID, WITHOUT_BLACK
 from .test_note_selection import MESSAGE as NOTE_COUNT_MESSAGE
@@ -140,7 +141,7 @@ def test_blended_and_contour_use_the_same_spread_values(tmp_path, monkeypatch, n
     far = far_from_inner_edges(1, 25)
     for t, b in zip(tiles, blended):
         assert (rgb(t)[far] == rgb(b)[far]).all()
-    # the grid that the contour receives is the spread values
+    # the grid that the contour receives is the spread values, after the contour's own smoothing
     grids = []
     original = Axes.contourf
 
@@ -152,7 +153,7 @@ def test_blended_and_contour_use_the_same_spread_values(tmp_path, monkeypatch, n
     write(frames, tmp_path / "c", note_count=n, image_type="contour", threshold=5)
     values, peak = expected_values(frames, n)
     for got, want in zip(grids, np.where(values < 0.05 * peak, 0.0, values)):
-        assert np.allclose(got, want, atol=1e-12)
+        assert np.allclose(got, smoothed_flat(want, 7, 12), atol=1e-12)
 
 
 @pytest.mark.parametrize("image_type", TYPES)

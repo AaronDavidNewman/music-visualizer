@@ -20,6 +20,7 @@ from app.services.frame_rendering import (
     write_frames,
 )
 
+from .contour_expected import smoothed_flat
 from .frame_size import HEIGHT, WIDTH
 from .colormap_names import DECODABLE, INVALID, WITHOUT_BLACK
 from .test_resolution import MESSAGE as RESOLUTION_MESSAGE
@@ -233,7 +234,8 @@ def test_the_contour_is_drawn_from_the_interpolated_grid(tmp_path, monkeypatch, 
     expected = with_np_interp(frames[:, :SHOWN_NOTES], r)
     for i, (x, y, z) in enumerate(seen):
         assert len(x) == 12 * r and len(y) == 7 * r and z.shape == (7 * r, 12 * r)
-        assert np.allclose(z[::-1].reshape(-1), expected[i], atol=1e-12)  # drawn top row first, so the data is flipped
+        # drawn top row first, so the data is flipped; it is the interpolated grid after the contour's own smoothing
+        assert np.allclose(z[::-1].reshape(-1), smoothed_flat(expected[i], 7 * r, 12 * r), atol=1e-12)
         assert x[-1] == pytest.approx(expected[i].max()) and y[-1] == pytest.approx(expected[i].max())
     for f in files:
         picture = np.asarray(Image.open(f))
@@ -353,8 +355,8 @@ def test_the_threshold_zeroes_the_hidden_values_of_the_contour_grid(tmp_path, mo
     write(frames, tmp_path, image_type="contour", resolution=r, threshold=10)
     values = with_np_interp(frames[:, :SHOWN_NOTES], r)[0]
     expected = np.where(values < 0.10 * 1.0, 0.0, values)
-    assert np.allclose(grids[0], expected, atol=1e-12)
-    assert (grids[0] == 0).any() and (values < 0.10).any()
+    assert np.allclose(grids[0], smoothed_flat(expected, 7 * r, 12 * r), atol=1e-12)  # the hidden values are zero before the smoothing
+    assert (expected == 0).any() and (values < 0.10).any()
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
