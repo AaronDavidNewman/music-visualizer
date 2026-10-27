@@ -176,3 +176,23 @@ describe("circles explanations", () => {
     expect(circleMemoryHelp).toContain("middle color");
   });
 });
+
+import { beatColoringHelp, peakDistanceHelp, peakProminenceHelp } from "./help";
+
+describe("the Local peaks explanations (feature 024)", () => {
+  it("explain the half and half, that it is off by default and that hidden tiles are unchanged", () => {
+    expect(beatColoringHelp).toContain("Off by default");
+    expect(beatColoringHelp).toContain("half");
+    expect(beatColoringHelp).toContain("100%");
+    expect(beatColoringHelp).toContain("Tiles and Blended tiles");
+    expect(beatColoringHelp).toMatch(/hidden/i);
+  });
+
+  it("give the ranges and defaults of the two settings", () => {
+    expect(peakDistanceHelp).toContain("100 to 2000");
+    expect(peakDistanceHelp).toContain("default 100");
+    expect(peakProminenceHelp).toContain("0 to 100");
+    expect(peakProminenceHelp).toContain("default 50");
+    for (const text of [beatColoringHelp, peakDistanceHelp, peakProminenceHelp]) expect(text.length).toBeGreaterThan(60);
+  });
+});

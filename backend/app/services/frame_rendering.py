@@ -44,7 +44,7 @@ from .circles import (
     write_circle_frames,
 )
 from .circles_paint import write_paint_frames
-from .colormaps import DEFAULT_COLORMAP, check_colormap, colorize, lookup_table
+from .colormaps import DEFAULT_COLORMAP, check_beat, check_colormap, colorize, lookup_table
 from .contour import write_contour_frames
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
 from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
@@ -255,6 +255,7 @@ def write_frames(
     circle_radius: int = DEFAULT_CIRCLE_RADIUS,
     circle_resize: bool = DEFAULT_CIRCLE_RESIZE,
     gaussian: float = DEFAULT_GAUSSIAN,
+    beat: np.ndarray | None = None,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -314,6 +315,12 @@ def write_frames(
     ``threshold`` and ``blend_width`` describe a grid of tiles or skipped frames and are accepted and ignored. The three
     circle settings are checked for every image type and have no effect for the others.
 
+    ``beat`` (feature 024; ``None`` or one number from 0 to 1 for each frame, the frame's place in the local energy peak,
+    see ``local_peaks``) changes the colors of ``tiles`` and ``blended`` only: a tile's place on the colormap becomes half
+    its note strength (as before) plus half the frame's beat, so the strongest tile has the colormap's middle color at a beat
+    of 0 and the last color at a beat of 1. Every tile of a frame uses the frame's beat; hidden tiles are drawn as before.
+    With ``None`` the colors are 100 % harmonic, exactly as before. The other image types ignore it.
+
     Every argument is checked before anything is written.
     """
     colormap = check_colormap(colormap)
@@ -330,6 +337,8 @@ def write_frames(
     circle_radius = check_circle_radius(circle_radius)
     circle_resize = check_circle_resize(circle_resize)
     gaussian = check_gaussian(gaussian)
+    if beat is not None:
+        beat = check_beat(beat, len(frames))  # checked for every image type, used by tiles and blended only
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
     peak = float(smoothed.max()) if smoothed.size else 0.0
     if image_type == "circles":
@@ -372,7 +381,7 @@ def write_frames(
             values, peak, colormap, directory, columns, rows, IMAGE_WIDTH, IMAGE_HEIGHT, indices=frames_to_draw
         )
     else:
-        colours = colorize(values, colormap, columns * rows, peak)
+        colours = colorize(values, colormap, columns * rows, peak, beat=beat)  # beat None: the colors are 100 % harmonic
         # A tile that the threshold hides: black for the flat tiles (the testing mode). A blended picture draws no tile there: it stays the
         # background, the middle color of the colormap, and the tiles that are drawn fade into it.
         colours[hidden] = lookup_table(colormap)[MIDDLE_COLOR_ROW] if image_type == "blended" else 0

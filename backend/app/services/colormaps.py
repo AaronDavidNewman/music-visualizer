@@ -42,7 +42,19 @@ def lookup_table(name: str) -> np.ndarray:
     return table
 
 
-def colorize(smoothed, colormap: str, shown: int, peak: float | None = None) -> np.ndarray:
+def check_beat(beat, frames: int) -> np.ndarray:
+    """Return ``beat`` as a float64 array when it is one number from 0 to 1 for each of ``frames`` frames; else refuse it."""
+    message = f"The beat must be one number from 0 to 1 for each of the {frames} frames."
+    array = np.asarray(beat)
+    if array.ndim != 1 or array.shape[0] != frames or array.dtype.kind not in "iuf":
+        raise ValueError(message)
+    array = array.astype(np.float64)
+    if not np.all(np.isfinite(array)) or array.min(initial=0.0) < 0.0 or array.max(initial=1.0) > 1.0:
+        raise ValueError(message)
+    return array
+
+
+def colorize(smoothed, colormap: str, shown: int, peak: float | None = None, beat=None) -> np.ndarray:
     """The color of every drawn tile in every frame: a ``uint8`` array of shape ``(frames, shown, 3)``.
 
     ``smoothed`` has one row per frame and one column per note (88), after smoothing. ``peak`` is the largest value
@@ -54,6 +66,11 @@ def colorize(smoothed, colormap: str, shown: int, peak: float | None = None) -> 
     ``peak`` is the reference value for the scale; leave it out to use the largest value of ``smoothed``. A caller whose
     array does not hold every note (for instance a finer grid made by interpolation, which has no undrawn notes) passes
     the peak of the whole file; a value above it gets the last color.
+
+    ``beat`` (feature 024) is ``None`` for the colors above, or one number from 0 to 1 for each row of ``smoothed``: the
+    frame's place in the local energy peak. A tile's position is then half its strength position plus half the frame's
+    beat, ``rint((0.5 * sqrt(share) + 0.5 * beat) * 255)``: the strongest tile has the middle color at a beat of 0 and the
+    last color at a beat of 1. Every tile of a frame has the same beat.
     """
     table = lookup_table(colormap)
     smoothed = np.asarray(smoothed, dtype=np.float64)
@@ -66,5 +83,9 @@ def colorize(smoothed, colormap: str, shown: int, peak: float | None = None) -> 
     elif isinstance(peak, bool) or not isinstance(peak, numbers.Real) or not math.isfinite(peak) or peak < 0:
         raise ValueError("The peak must be a finite number, 0 or more.")
     share = np.minimum(smoothed[:, :shown] / peak, 1.0) if peak > 0 else np.zeros((smoothed.shape[0], shown))
-    index = np.rint(np.sqrt(share) * (COLORMAP_STEPS - 1)).astype(np.intp)
+    if beat is None:
+        index = np.rint(np.sqrt(share) * (COLORMAP_STEPS - 1)).astype(np.intp)
+    else:
+        beat = check_beat(beat, smoothed.shape[0])
+        index = np.rint((0.5 * np.sqrt(share) + 0.5 * beat[:, None]) * (COLORMAP_STEPS - 1)).astype(np.intp)
     return table[index]

@@ -278,3 +278,115 @@ def test_a_bad_peak_is_refused(bad):
 def test_a_bad_colormap_name_is_refused():
     with pytest.raises(ValueError, match=re.escape(MESSAGE)):
         colorize(np.ones((2, 88)), INVALID[0], SHOWN)
+
+
+# --- the beat: half the note strength, half the frame's position in the local peak (feature 024) ---------------------------
+
+
+def beat_message(frames):
+    return f"The beat must be one number from 0 to 1 for each of the {frames} frames."
+
+
+@pytest.mark.parametrize("name", COLORMAPS)
+def test_the_strongest_tile_is_the_middle_colour_at_position_0_and_the_last_at_position_1(name):
+    values = notes({0: 100.0, 1: 25.0}, {0: 100.0, 1: 25.0}, {0: 100.0, 1: 25.0})
+    got = colorize(values, name, SHOWN, beat=np.array([0.0, 0.5, 1.0]))
+    table = lookup_table(name)
+    assert (got[0, 0] == table[128]).all()  # 0.5 * 1 + 0.5 * 0 = 0.5 -> row 127.5 -> 128
+    assert (got[1, 0] == table[round(0.75 * 255)]).all()  # three quarters of the way along the colormap
+    assert (got[2, 0] == table[255]).all()
+    # a quarter of the peak (share 0.25, square root 0.5): 0.25, 0.5 and 0.75 of the way
+    assert (got[0, 1] == table[round(0.25 * 255)]).all()
+    assert (got[1, 1] == table[round(0.5 * 255)]).all()
+    assert (got[2, 1] == table[round(0.75 * 255)]).all()
+
+
+@pytest.mark.parametrize("name", COLORMAPS)
+def test_every_tile_is_the_table_entry_of_half_the_square_root_plus_half_the_beat(name):
+    rng = np.random.default_rng(31)
+    values = rng.random((40, 88)) ** 2
+    values[7, 3] = 1.5  # the largest value of the file
+    beat = rng.random(40)
+    got = colorize(values, name, SHOWN, beat=beat)
+    share = np.minimum(values[:, :SHOWN] / values.max(), 1.0)
+    rows = np.rint((0.5 * np.sqrt(share) + 0.5 * beat[:, None]) * 255).astype(int)
+    assert (got == lookup_table(name)[rows]).all()
+
+
+def test_a_tile_with_no_energy_has_half_the_beat():
+    values = notes({0: 100.0}, {0: 100.0}, {0: 100.0})
+    got = colorize(values, DEFAULT_COLORMAP, SHOWN, beat=np.array([0.0, 0.5, 1.0]))
+    table = lookup_table(DEFAULT_COLORMAP)
+    assert (got[:, 5] == table[[0, round(127.5 * 0.5), 128]]).all()  # rint(127.5 * beat)
+
+
+def test_the_row_never_falls_when_the_strength_or_the_beat_rises():
+    name = DECODABLE[0]  # a colormap whose rows can all be told apart, so the row of a color can be read back
+    table = lookup_table(name)
+    strengths = np.linspace(0, 100, 51)
+    beats = np.linspace(0, 1, 51)
+    rows = np.empty((len(beats), len(strengths)), dtype=int)
+    for j, strength in enumerate(strengths):
+        values = np.zeros((len(beats), 88))
+        values[:, 0] = 100.0
+        values[:, 1] = strength
+        got = colorize(values, name, SHOWN, beat=beats)[:, 1]
+        rows[:, j] = [row_index(table, c) for c in got]
+    assert (np.diff(rows, axis=0) >= 0).all()  # a higher beat: the same row or later
+    assert (np.diff(rows, axis=1) >= 0).all()  # a stronger tile: the same row or later
+    assert rows[0, 0] == 0 and rows[-1, -1] == 255
+
+
+def test_within_a_frame_a_stronger_tile_never_has_an_earlier_row():
+    rng = np.random.default_rng(32)
+    values = rng.random((20, 88)) ** 3
+    beat = rng.random(20)
+    got = colorize(values, FIRST, SHOWN, beat=beat)
+    expected = np.rint((0.5 * np.sqrt(values[:, :SHOWN] / values.max()) + 0.5 * beat[:, None]) * 255)
+    order = np.argsort(values[:, :SHOWN], axis=1)
+    rows = np.take_along_axis(expected, order, axis=1)
+    assert (np.diff(rows, axis=1) >= 0).all()
+    assert got.shape == (20, SHOWN, 3)
+
+
+@pytest.mark.parametrize("name", COLORMAPS)
+def test_with_a_beat_of_zero_no_tile_is_past_the_middle_row(name):
+    rng = np.random.default_rng(33)
+    values = rng.random((10, 88))
+    got = colorize(values, name, SHOWN, beat=np.zeros(10))
+    table = lookup_table(name)
+    rows = np.rint(0.5 * np.sqrt(values[:, :SHOWN] / values.max()) * 255).astype(int)
+    assert rows.max() <= 128
+    assert (got == table[rows]).all()
+
+
+def test_without_a_beat_the_result_is_exactly_what_it_was():
+    rng = np.random.default_rng(34)
+    values = rng.random((12, 88)) ** 2
+    plain = colorize(values, FIRST, SHOWN)
+    assert (colorize(values, FIRST, SHOWN, beat=None) == plain).all()
+    assert (colorize(values, FIRST, SHOWN, None, None) == plain).all()
+    old = lookup_table(FIRST)[np.rint(np.sqrt(np.minimum(values[:, :SHOWN] / values.max(), 1.0)) * 255).astype(int)]
+    assert (plain == old).all()
+
+
+def test_a_beat_does_not_change_its_inputs_and_a_peak_of_zero_still_works():
+    values = np.random.default_rng(35).random((6, 88))
+    beat = np.linspace(0, 1, 6)
+    values0, beat0 = values.copy(), beat.copy()
+    colorize(values, FIRST, SHOWN, beat=beat)
+    assert (values == values0).all() and (beat == beat0).all()
+    got = colorize(np.zeros((3, 88)), FIRST, SHOWN, beat=np.array([0.0, 0.5, 1.0]))
+    assert (got[:, 0] == lookup_table(FIRST)[[0, round(127.5 * 0.5), 128]]).all()
+    assert colorize(np.zeros((0, 88)), FIRST, SHOWN, beat=np.zeros(0)).shape == (0, SHOWN, 3)
+
+
+@pytest.mark.parametrize(
+    "beat",
+    [np.zeros(4), np.zeros(6), np.zeros((5, 1)), np.zeros((5, 2)), np.array([0, 0, np.nan, 0, 0]), np.array([0, 0, np.inf, 0, 0]),
+     np.array([0, 0, 1.01, 0, 0]), np.array([0, 0, -0.01, 0, 0]), np.array(["a"] * 5), 0.5, [0.5] * 4, "abc"],
+)
+def test_a_beat_that_is_not_one_number_from_0_to_1_for_each_frame_is_refused(beat):
+    with pytest.raises(ValueError) as error:
+        colorize(np.zeros((5, 88)), FIRST, SHOWN, beat=beat)
+    assert str(error.value) == beat_message(5)

@@ -430,3 +430,60 @@ describe("circles settings", () => {
     expect(gridSettingsApply("circles")).toBe(false);
   });
 });
+
+import {
+  DEFAULT_BEAT_COLORING,
+  DEFAULT_PEAK_DISTANCE,
+  DEFAULT_PEAK_PROMINENCE,
+  PEAK_DISTANCE_RANGE,
+  PEAK_PROMINENCE_RANGE,
+  beatColoringApplies,
+  formatBeatColoring,
+  formatPeakDistance,
+  formatPeakProminence,
+  validatePeakDistance,
+  validatePeakProminence,
+} from "./validation";
+
+describe("beat coloring (feature 024)", () => {
+  const DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds.";
+  const PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent.";
+
+  it("is off by default, with a minimum distance of 100 ms and a prominence of 50 percent", () => {
+    expect(DEFAULT_BEAT_COLORING).toBe(false);
+    expect(DEFAULT_PEAK_DISTANCE).toBe(100);
+    expect(DEFAULT_PEAK_PROMINENCE).toBe(50);
+    expect(PEAK_DISTANCE_RANGE).toEqual({ min: 100, max: 2000, step: 50 });
+    expect(PEAK_PROMINENCE_RANGE).toEqual({ min: 0, max: 100, step: 5 });
+  });
+
+  it("accepts a minimum distance from 100 to 2000 milliseconds, as a number or as text", () => {
+    for (const v of [100, 2000, 100.5, 750, 1999.9, "100", "2000", "750.5"]) expect(validatePeakDistance(v), String(v)).toBeNull();
+  });
+
+  it("refuses a minimum distance outside that range or not a number, with the server's message", () => {
+    for (const v of [99.9, 0, -100, 2000.1, 5000, NaN, Infinity, -Infinity, "", "abc", "100 ms"]) {
+      expect(validatePeakDistance(v), String(v)).toBe(DISTANCE_MESSAGE);
+    }
+  });
+
+  it("accepts a prominence from 0 to 100 percent and refuses the rest, with the server's message", () => {
+    for (const v of [0, 100, 50, 50.5, "0", "100", "25"]) expect(validatePeakProminence(v), String(v)).toBeNull();
+    for (const v of [-0.1, 100.1, 101, NaN, Infinity, "", "abc", "50%"]) expect(validatePeakProminence(v), String(v)).toBe(PROMINENCE_MESSAGE);
+  });
+
+  it("applies to Tiles and Blended tiles only", () => {
+    expect(beatColoringApplies("tiles")).toBe(true);
+    expect(beatColoringApplies("blended")).toBe(true);
+    for (const t of ["contour", "circles", "circles_paint", "nonsense", ""]) expect(beatColoringApplies(t), t).toBe(false);
+  });
+
+  it("is shown as Off or On, a number of milliseconds and a percentage", () => {
+    expect(formatBeatColoring(false)).toBe("Off");
+    expect(formatBeatColoring(true)).toBe("On");
+    expect(formatPeakDistance(100)).toBe("100 ms");
+    expect(formatPeakDistance(1250)).toBe("1250 ms");
+    expect(formatPeakProminence(50)).toBe("50%");
+    expect(formatPeakProminence(0)).toBe("0%");
+  });
+});

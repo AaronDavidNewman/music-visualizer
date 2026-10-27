@@ -777,3 +777,135 @@ def test_more_distance_or_more_prominence_never_gives_more_peaks():
     by_prominence = [len(measure_local_peaks(left, right, RATE, prominence=p).peaks) for p in (0, 10, 30, 50, 80, 100)]
     assert by_distance == sorted(by_distance, reverse=True) and by_distance[0] > by_distance[-1]
     assert by_prominence == sorted(by_prominence, reverse=True) and by_prominence[0] > by_prominence[-1]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# the position of a frame in the local peak (feature 024)
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+def with_windows(*peaks, rate=1000, count=10000):
+    """A measurement from ``(sample, energy, window_min, window_max)`` peaks, so that the positions are known exactly."""
+    return LocalPeaks(tuple(LocalPeak(s, e, lo, hi, 60.0) for s, e, lo, hi in peaks), rate, count, 100.0, 50.0)
+
+
+WINDOWED = with_windows((1000, 0.4, 0.2, 1.0), (3000, 0.9, 0.3, 1.7), (4000, 0.5, 0.1, 0.9))
+
+
+def test_the_position_is_zero_before_the_first_peak_and_at_negative_points():
+    for point in (0, 1, 999, 999.9, -1, -1e9):
+        assert WINDOWED.position_at(point) == 0.0
+
+
+def test_the_position_at_a_peak_is_its_place_between_its_windows_minimum_and_maximum():
+    assert WINDOWED.position_at(1000) == pytest.approx((0.4 - 0.2) / (1.0 - 0.2))
+    assert WINDOWED.position_at(3000) == pytest.approx((0.9 - 0.3) / (1.7 - 0.3))
+    assert WINDOWED.position_at(4000) == pytest.approx((0.5 - 0.1) / (0.9 - 0.1))
+
+
+def test_between_peaks_the_energy_the_minimum_and_the_maximum_are_each_a_straight_line():
+    # a quarter of the way from the first peak to the second
+    energy, low, high = 0.4 + 0.25 * 0.5, 0.2 + 0.25 * 0.1, 1.0 + 0.25 * 0.7
+    assert WINDOWED.position_at(1500) == pytest.approx((energy - low) / (high - low))
+    # and it is not the line between the two positions
+    line_between_positions = 0.25 + 0.25 * ((0.9 - 0.3) / 1.4 - 0.25)
+    assert abs(WINDOWED.position_at(1500) - line_between_positions) > 0.01
+    energy, low, high = 0.9 - 0.5 * 0.4, 0.3 - 0.5 * 0.2, 1.7 - 0.5 * 0.8
+    assert WINDOWED.position_at(3500) == pytest.approx((energy - low) / (high - low))
+
+
+def test_after_the_last_peak_the_position_is_that_of_the_last_peak():
+    for point in (4001, 4000.5, 9999, 10000, 123456, 1e9):
+        assert WINDOWED.position_at(point) == pytest.approx(0.5)
+
+
+def test_the_position_is_held_between_0_and_1():
+    above = with_windows((2000, 1.5, 0.2, 1.0))
+    below = with_windows((2000, 0.05, 0.2, 1.0))
+    assert above.position_at(2000) == 1.0 and above.position_at(5000) == 1.0
+    assert below.position_at(2000) == 0.0 and below.position_at(5000) == 0.0
+    values = [WINDOWED.position_at(p) for p in range(-100, 6000, 13)]
+    assert min(values) >= 0.0 and max(values) <= 1.0
+
+
+def test_with_no_range_between_the_minimum_and_the_maximum_the_position_is_zero():
+    flat = with_windows((2000, 0.5, 0.5, 0.5))
+    assert flat.position_at(2000) == 0.0 and flat.position_at(9000) == 0.0
+    backwards = with_windows((2000, 0.5, 0.8, 0.2))  # a maximum below the minimum cannot be measured; it has no range either
+    assert backwards.position_at(2000) == 0.0
+
+
+def test_a_measurement_without_peaks_has_the_position_zero_everywhere():
+    left, right = silence(1)
+    result = measure_local_peaks(left, right, RATE)
+    assert result.peaks == ()
+    assert result.position_at(0) == 0.0 and result.position_at(RATE) == 0.0
+    assert result.position_at_time(0.5) == 0.0
+    assert result.position_at([1, 2, 3]).tolist() == [0.0, 0.0, 0.0]
+    assert result.frame_positions(30, 30).tolist() == [0.0] * 30
+
+
+def test_the_position_at_a_time_is_the_position_at_the_sample_and_sequences_give_arrays():
+    assert WINDOWED.position_at_time(1.5) == pytest.approx(WINDOWED.position_at(1500))
+    assert WINDOWED.position_at_time(0.25) == 0.0
+    for kind in (list, tuple, np.array):
+        got = WINDOWED.position_at(kind([0, 1000, 1500, 4000, 9000]))
+        assert isinstance(got, np.ndarray) and got.dtype == np.float64
+        assert got.tolist() == pytest.approx([0.0, 0.25, WINDOWED.position_at(1500), 0.5, 0.5])
+    assert WINDOWED.position_at(np.array([[0, 1000], [4000, 9000]])).shape == (2, 2)
+    for scalar in (WINDOWED.position_at(1500), WINDOWED.position_at_time(1.5), WINDOWED.position_at(np.int64(1500))):
+        assert type(scalar) is float
+
+
+def test_a_position_for_a_point_that_is_not_a_finite_number_is_refused():
+    for bad in (float("nan"), float("inf"), -float("inf"), "1000", None):
+        with pytest.raises(ValueError, match="The point must be a finite number."):
+            WINDOWED.position_at(bad)
+        with pytest.raises(ValueError, match="The point must be a finite number."):
+            WINDOWED.position_at_time(bad)
+
+
+def test_frame_positions_are_the_positions_in_the_middle_of_every_frame():
+    # frames of a tenth of a second; the middle of frame 14 is 1.45 s
+    got = WINDOWED.frame_positions(10, 60)
+    assert got.shape == (60,) and got.dtype == np.float64
+    assert got.tolist() == pytest.approx(WINDOWED.position_at_time((np.arange(60) + 0.5) / 10).tolist())
+    assert got[14] == pytest.approx(WINDOWED.position_at(1450))
+    assert got[0] == 0.0 and got[9] == 0.0  # before the first peak (1.0 s)
+    assert WINDOWED.frame_positions(30, 0).shape == (0,)
+    assert WINDOWED.frame_positions(24.0, 3).shape == (3,)
+
+
+@pytest.mark.parametrize("frame_rate", [0, -30, float("nan"), float("inf"), True, "30", None])
+def test_frame_positions_refuses_a_frame_rate_that_is_not_positive(frame_rate):
+    with pytest.raises(ValueError) as error:
+        WINDOWED.frame_positions(frame_rate, 10)
+    assert str(error.value) == "The frame rate must be a positive number."
+
+
+@pytest.mark.parametrize("frames", [-1, 2.5, True, "10", None, float("nan")])
+def test_frame_positions_refuses_a_count_that_is_not_a_whole_number_of_at_least_0(frames):
+    with pytest.raises(ValueError) as error:
+        WINDOWED.frame_positions(30, frames)
+    assert str(error.value) == "The number of frames must be a whole number of at least 0."
+
+
+def test_equal_clicks_keep_the_position_high_between_them_and_the_first_beat_is_zero():
+    left, right, clicks = click_track(20, 0.5)
+    result = measure_local_peaks(left, right, RATE)
+    positions = result.frame_positions(30, 600)
+    times = (np.arange(600) + 0.5) / 30
+    assert positions[times < 0.5].max() == 0.0  # before the first click
+    assert positions[times > 1.0].min() > 0.65  # the line joins equal peaks: no dip in the gaps
+    assert positions[times > 1.0].max() <= 1.0
+
+
+def test_the_position_is_higher_around_a_strong_click_than_around_a_weak_one():
+    starts = [aligned(0.5 * i) for i in range(1, 11)]
+    strengths = [0.3, 1.0, 0.3, 1.0, 0.3, 1.0, 0.3, 1.0, 0.3, 1.0]
+    left, right = bursts(starts, strengths, 5.6)
+    result = measure_local_peaks(left, right, RATE, prominence=10)
+    assert len(result.peaks) == 10
+    strong = [result.position_at(s) for s, k in zip(starts, strengths) if k == 1.0]
+    weak = [result.position_at(s) for s, k in zip(starts, strengths) if k == 0.3]
+    assert min(strong) > max(weak) + 0.3

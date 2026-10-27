@@ -28,6 +28,10 @@ export interface JobResult {
   circle_radius: number;
   circle_resize: boolean;
   gaussian: number;
+  /** Tiles and Blended tiles: half the color from the frame's place in the local energy peak (feature 024). */
+  beat_coloring: boolean;
+  peak_distance: number;
+  peak_prominence: number;
   circle_memory: number;
   circle_notes: number;
   window_spacing: number;
@@ -64,6 +68,10 @@ export interface JobSettings {
   circleRadius: number;
   circleResize: boolean;
   gaussian: number;
+  /** Beat coloring on or off; the minimum distance in milliseconds (100 to 2000) and the prominence in percent (0 to 100). */
+  beatColoring: boolean;
+  peakDistance: number;
+  peakProminence: number;
   circleMemory: number;
   circleNotes: number;
 }
@@ -88,6 +96,9 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("circle_radius", String(settings.circleRadius));
   body.append("circle_resize", String(settings.circleResize));
   body.append("gaussian", String(settings.gaussian));
+  body.append("beat_coloring", String(settings.beatColoring));
+  body.append("peak_distance", String(settings.peakDistance));
+  body.append("peak_prominence", String(settings.peakProminence));
   body.append("circle_memory", String(settings.circleMemory));
   body.append("circle_notes", String(settings.circleNotes));
 

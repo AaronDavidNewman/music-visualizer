@@ -41,6 +41,13 @@ from ..services.circles import (
 )
 from ..services.frame_interpolation import DEFAULT_INTERPOLATE, MAX_INTERPOLATE, MIN_INTERPOLATE
 from ..services.gaussian import DEFAULT_GAUSSIAN, MAX_GAUSSIAN, MIN_GAUSSIAN
+from ..services.local_peaks import (
+    DEFAULT_MIN_DISTANCE,
+    DEFAULT_PROMINENCE,
+    check_min_distance,
+    check_prominence,
+    measure_local_peaks,
+)
 from ..services.image_types import (
     DEFAULT_BLEND_WIDTH,
     DEFAULT_IMAGE_TYPE,
@@ -144,6 +151,32 @@ def _parse_gaussian(text: str | None, sent: bool) -> float:
     if not math.isfinite(value) or not MIN_GAUSSIAN <= value <= MAX_GAUSSIAN:
         raise HTTPException(status_code=400, detail=message)
     return value + 0.0  # turns -0.0 into 0.0
+
+
+def _parse_beat_coloring(text: str | None, sent: bool) -> bool:
+    """Whether the tiles are colored half by the beat. Not sent means off; anything sent must be true, false, 1 or 0 (any case)."""
+    if text is None and not sent:
+        return False
+    word = (text or "").strip().lower()
+    if word in ("true", "1"):
+        return True
+    if word in ("false", "0"):
+        return False
+    raise HTTPException(status_code=400, detail="The beat coloring must be true or false.")
+
+
+def _parse_peak_setting(text: str | None, sent: bool, default: float, check) -> float:
+    """A setting of the local peaks measurement. Not sent means the default; anything sent must pass the measurement's own check."""
+    if text is None and not sent:
+        return default
+    try:
+        value = float(text or "")
+    except ValueError:
+        value = float("nan")  # not a number: the check refuses it with its own message
+    try:
+        return check(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 def _parse_colormap(text: str | None, sent: bool) -> str:
@@ -374,6 +407,9 @@ def create_job(
     circle_radius: str | None = Form(None),
     circle_resize: str | None = Form(None),
     gaussian: str | None = Form(None),
+    beat_coloring: str | None = Form(None),
+    peak_distance: str | None = Form(None),
+    peak_prominence: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -394,6 +430,9 @@ def create_job(
     circle_radius_value = _parse_circle_radius(circle_radius, "circle_radius" in sent)
     circle_resize_value = _parse_circle_resize(circle_resize, "circle_resize" in sent)
     gaussian_value = _parse_gaussian(gaussian, "gaussian" in sent)
+    beat_coloring_value = _parse_beat_coloring(beat_coloring, "beat_coloring" in sent)
+    peak_distance_value = _parse_peak_setting(peak_distance, "peak_distance" in sent, DEFAULT_MIN_DISTANCE, check_min_distance)
+    peak_prominence_value = _parse_peak_setting(peak_prominence, "peak_prominence" in sent, DEFAULT_PROMINENCE, check_prominence)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -432,6 +471,13 @@ def create_job(
                 ),
             )
         result = analyze_channels(left, right, file_rate, window, step=step)
+        # the beat coloring (tiles and blended tiles only): the position of the middle of each frame in the local energy peak
+        # of the whole file, from the local peaks measurement; the other pictures and the box off never measure it
+        beat = None
+        if beat_coloring_value and image_type_value in ("tiles", "blended"):
+            beat = measure_local_peaks(
+                left, right, file_rate, peak_distance_value, peak_prominence_value
+            ).frame_positions(fps, frames)
         # write_frames smooths the note values (each frame is mixed with the earlier frames of the window), colors every
         # tile from the colormap at its own note's strength, blacks the tiles of notes below the threshold, and writes
         # the finished tile colors as the chosen image type; a resolution above 1 first interpolates the grid of smoothed
@@ -456,6 +502,7 @@ def create_job(
             circle_radius=circle_radius_value,
             circle_resize=circle_resize_value,
             gaussian=gaussian_value,
+            beat=beat,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -491,6 +538,9 @@ def create_job(
         "circle_radius": circle_radius_value,
         "circle_resize": circle_resize_value,
         "gaussian": gaussian_value,
+        "beat_coloring": beat_coloring_value,
+        "peak_distance": peak_distance_value,
+        "peak_prominence": peak_prominence_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

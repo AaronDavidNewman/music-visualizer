@@ -57,3 +57,12 @@ export const circleMemoryHelp =
 
 export const circleNotesHelp =
   "5 to 12. Notes: how many of the strongest notes of each frame put a circle down; the circle of the strongest continues from the strongest circle of the previous frame, and so on down the ranks. More notes make a busier picture. Only used by Circles.";
+
+export const beatColoringHelp =
+  "Off by default. When off, the color of a tile comes 100% from the energy of its note, as it always has. When on, half of its place on the colormap comes from the energy of its note and the other half from where the music is in its beat: the frame's place between the minimum (0) and the maximum (1) of the local energy peak around it, found by the Local peaks measurement of the whole file. The strongest tile then has the middle color of the colormap at the minimum of the peak and the last color at its maximum. The place follows how strong the beats are, rising and falling from beat to beat; before the first beat it is 0. A tile hidden by the threshold is drawn as before. Only used by Tiles and Blended tiles.";
+
+export const peakDistanceHelp =
+  "100 to 2000 milliseconds (default 100). The shortest time between two beats: of two peaks closer than this only the stronger counts. A short time follows fast music; a long one keeps only the main beats of slow music. Only used when Beat coloring is on, by Tiles and Blended tiles.";
+
+export const peakProminenceHelp =
+  "0 to 100 percent (default 50). How much a bump in the overall energy must stand out from its surroundings to count as a beat, as a share of the loudest energy in the stretch of about three seconds around it. A low value finds soft beats and also small bumps; a high value keeps only the clearest beats. Only used when Beat coloring is on, by Tiles and Blended tiles.";

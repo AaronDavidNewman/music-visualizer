@@ -350,12 +350,14 @@ function groupsOf(html: string): RenderedGroup[] {
 }
 
 const TOP = ["window-size", "frame-rate", "window-spacing"];
+const BEAT_CONTROLS = ["beat-coloring", "peak-distance", "peak-prominence"];
 const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
   tiles: [
     ["analysis", "Analysis", TOP],
     ["colormap", "Colormap", ["colormap"]],
     ["image-type", "Image type", ["image-type"]],
     ["tiles", "Tiles", ["threshold", "notes"]],
+    ["local-peaks", "Local peaks", BEAT_CONTROLS],
     ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
   ],
@@ -372,6 +374,7 @@ const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
     ["colormap", "Colormap", ["colormap"]],
     ["image-type", "Image type", ["image-type"]],
     ["blended", "Blended Tiles", ["threshold", "notes", "blend-width"]],
+    ["local-peaks", "Local peaks", BEAT_CONTROLS],
     ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
   ],
@@ -425,11 +428,11 @@ describe("the form is a list of titled groups (Story 1)", () => {
     }
   });
 
-  it("ties the open state and the problem flag of each of the six groups to the form", () => {
-    expect((formSource.match(/<SettingsGroup\b/g) ?? []).length).toBe(6); // top, Colormap, Image type, the type's group, Data smoothing, Image smoothing
-    expect((formSource.match(/:open="isOpen\(/g) ?? []).length).toBe(6);
-    expect((formSource.match(/:problem="/g) ?? []).length).toBe(6);
-    expect((formSource.match(/@toggle="/g) ?? []).length).toBe(6);
+  it("ties the open state and the problem flag of each of the seven groups to the form", () => {
+    expect((formSource.match(/<SettingsGroup\b/g) ?? []).length).toBe(7); // top, Colormap, Image type, the type's group, Local peaks, Data smoothing, Image smoothing
+    expect((formSource.match(/:open="isOpen\(/g) ?? []).length).toBe(7);
+    expect((formSource.match(/:problem="/g) ?? []).length).toBe(7);
+    expect((formSource.match(/@toggle="/g) ?? []).length).toBe(7);
   });
 
   it("collapses with the open state that the group reports, so that no value is touched by it", () => {
@@ -441,7 +444,7 @@ describe("the form is a list of titled groups (Story 1)", () => {
   });
 
   it("flags a group when one of its controls has a value that is not allowed", () => {
-    for (const name of ["analysisProblem", "colormapProblem", "imageTypeProblem", "typeGroupProblem", "dataSmoothingProblem", "imageSmoothingProblem"]) {
+    for (const name of ["analysisProblem", "colormapProblem", "imageTypeProblem", "typeGroupProblem", "localPeaksProblem", "dataSmoothingProblem", "imageSmoothingProblem"]) {
       expect(formSource, name).toContain(name);
     }
     expect(formSource).toMatch(/windowError\.value\s*\|\|\s*frameRateError\.value\s*\|\|\s*spacingError\.value/);
@@ -596,5 +599,66 @@ describe("the smoothing groups and the new names (Story 3)", () => {
     const sourceLabels = [...formSource.matchAll(/<label[^>]*>([^<{]*)<\/label>/g)].map((m) => m[1].trim());
     for (const l of sourceLabels) expect(l).not.toMatch(oldLabel);
     expect(formSource).not.toMatch(/label="(circle unit|circle size|circles per frame|resolution)"/);
+  });
+});
+
+describe("the Local peaks group (feature 024)", () => {
+  const tag = (html: string, id: string) => html.match(new RegExp(`<input id="${id}"[^>]*>`))?.[0] ?? "";
+
+  it("has an unchecked checkbox Beat coloring, a label and an info button", async () => {
+    const html = await renderType("tiles");
+    const box = tag(html, "beat-coloring");
+    expect(box).toContain('type="checkbox"');
+    expect(box).not.toContain("checked");
+    expect(html).toMatch(/<label for="beat-coloring"[^>]*>Beat coloring<\/label>/);
+    expect(html).toContain('aria-label="About beat coloring"');
+    expect(html).toMatch(/<output[^>]*for="beat-coloring"[^>]*>Off<\/output>/);
+  });
+
+  it("has the Minimum distance slider from 100 to 2000 in steps of 50, at 100 ms", async () => {
+    const html = await renderType("blended");
+    const slider = tag(html, "peak-distance");
+    expect(slider).toContain('type="range"');
+    for (const part of ['min="100"', 'max="2000"', 'step="50"', 'value="100"']) expect(slider).toContain(part);
+    expect(html).toMatch(/<label for="peak-distance"[^>]*>Minimum distance<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="peak-distance"[^>]*>100 ms<\/output>/);
+    expect(html).toContain('aria-label="About minimum distance"');
+  });
+
+  it("has the Prominence slider from 0 to 100 in steps of 5, at 50%", async () => {
+    const html = await renderType("tiles");
+    const slider = tag(html, "peak-prominence");
+    expect(slider).toContain('type="range"');
+    for (const part of ['min="0"', 'max="100"', 'step="5"', 'value="50"']) expect(slider).toContain(part);
+    expect(html).toMatch(/<label for="peak-prominence"[^>]*>Prominence<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="peak-prominence"[^>]*>50%<\/output>/);
+    expect(html).toContain('aria-label="About prominence"');
+  });
+
+  it("is shown for Tiles and Blended tiles, after their group and before Data smoothing, and for no other type", async () => {
+    for (const type of ["tiles", "blended"]) {
+      const html = await renderType(type);
+      expect(html, type).toContain('data-group="local-peaks"');
+      expect(html.indexOf('data-group="local-peaks"')).toBeGreaterThan(html.indexOf(`data-group="${type}"`));
+      expect(html.indexOf('data-group="local-peaks"')).toBeLessThan(html.indexOf('data-group="data-smoothing"'));
+    }
+    for (const type of ["contour", "circles", "circles_paint"]) {
+      const html = await renderType(type);
+      for (const id of ["beat-coloring", "peak-distance", "peak-prominence"]) expect(html, type + id).not.toContain(`id="${id}"`);
+      expect(html, type).not.toContain('data-group="local-peaks"');
+    }
+  });
+
+  it("keeps the values in refs, sends them, checks them and lets an error mark the group and block Create frames", () => {
+    expect(formSource).toMatch(/const beatColoring = ref<boolean>\(DEFAULT_BEAT_COLORING\)/);
+    expect(formSource).toMatch(/const peakDistance = ref<number>\(DEFAULT_PEAK_DISTANCE\)/);
+    expect(formSource).toMatch(/const peakProminence = ref<number>\(DEFAULT_PEAK_PROMINENCE\)/);
+    for (const part of ["beatColoring: beatColoring.value", "peakDistance: peakDistance.value", "peakProminence: peakProminence.value"]) {
+      expect(formSource).toContain(part);
+    }
+    expect(formSource).toMatch(/const localPeaksProblem = computed\([^;]*peakDistanceError\.value[^;]*peakProminenceError\.value/);
+    expect(formSource).toMatch(/!peakDistanceError\.value/);
+    expect(formSource).toMatch(/!peakProminenceError\.value/);
+    expect(formSource).toContain(':problem="localPeaksProblem"');
   });
 });

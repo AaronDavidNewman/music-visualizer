@@ -4,7 +4,12 @@ import {
   BLEND_WIDTH_RANGE,
   COLORMAPS,
   DEFAULT_COLORMAP,
+  DEFAULT_BEAT_COLORING,
   DEFAULT_BLEND_WIDTH,
+  DEFAULT_PEAK_DISTANCE,
+  DEFAULT_PEAK_PROMINENCE,
+  PEAK_DISTANCE_RANGE,
+  PEAK_PROMINENCE_RANGE,
   DEFAULT_CIRCLE_MEMORY,
   DEFAULT_CIRCLE_NOTES,
   DEFAULT_CIRCLE_RESIZE,
@@ -32,7 +37,10 @@ import {
   SMOOTHING_WINDOW_RANGE,
   THRESHOLD_RANGE,
   WINDOW_SIZES,
+  formatBeatColoring,
   formatBlendWidth,
+  formatPeakDistance,
+  formatPeakProminence,
   formatCircleMemory,
   formatCircleNotes,
   formatCircleResize,
@@ -45,6 +53,8 @@ import {
   formatSmoothing,
   formatThreshold,
   validateBlendWidth,
+  validatePeakDistance,
+  validatePeakProminence,
   validateColormap,
   validateFile,
   validateFrameRate,
@@ -82,6 +92,9 @@ import {
   circleUnitHelp,
   imageTypeHelp,
   gaussianHelp,
+  beatColoringHelp,
+  peakDistanceHelp,
+  peakProminenceHelp,
   interpolateHelp,
   noteCountHelp,
   resolutionHelp,
@@ -116,6 +129,9 @@ const circleMemory = ref<number>(DEFAULT_CIRCLE_MEMORY);
 const circleNotes = ref<number>(DEFAULT_CIRCLE_NOTES);
 const circleRadius = ref<number>(DEFAULT_CIRCLE_RADIUS);
 const circleResize = ref<boolean>(DEFAULT_CIRCLE_RESIZE);
+const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
+const peakDistance = ref<number>(DEFAULT_PEAK_DISTANCE);
+const peakProminence = ref<number>(DEFAULT_PEAK_PROMINENCE);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
 function defaultSpacingText(sampleRate: number, frameRate: string, size: number): string | null {
@@ -148,6 +164,8 @@ const circleUnitError = computed(() => validateCircleUnit(circleUnit.value));
 const circleMemoryError = computed(() => validateCircleMemory(circleMemory.value));
 const circleNotesError = computed(() => validateCircleNotes(circleNotes.value));
 const circleRadiusError = computed(() => validateCircleRadius(circleRadius.value));
+const peakDistanceError = computed(() => validatePeakDistance(peakDistance.value));
+const peakProminenceError = computed(() => validatePeakProminence(peakProminence.value));
 const canSubmit = computed(
   () =>
     !fileError.value &&
@@ -167,7 +185,9 @@ const canSubmit = computed(
     !circleUnitError.value &&
     !circleMemoryError.value &&
     !circleNotesError.value &&
-    !circleRadiusError.value,
+    !circleRadiusError.value &&
+    !peakDistanceError.value &&
+    !peakProminenceError.value,
 );
 
 // The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
@@ -176,6 +196,7 @@ const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
+const showLocalPeaks = computed(() => shownGroups.value.includes("local-peaks"));
 function inTypeGroup(control: string): boolean {
   return typeGroup.value !== undefined && controlsIn(typeGroup.value).includes(control);
 }
@@ -200,6 +221,7 @@ const typeGroupProblem = computed(
     (inTypeGroup("circle-memory") && !!circleMemoryError.value) ||
     (inTypeGroup("circle-notes") && !!circleNotesError.value),
 );
+const localPeaksProblem = computed(() => !!(peakDistanceError.value || peakProminenceError.value));
 const dataSmoothingProblem = computed(() => !!(smoothingWindowError.value || smoothingError.value));
 const imageSmoothingProblem = computed(() => !!(resolutionError.value || interpolateError.value || gaussianError.value));
 
@@ -235,6 +257,9 @@ function onSubmit() {
     circleNotes: circleNotes.value,
     circleRadius: circleRadius.value,
     circleResize: circleResize.value,
+    beatColoring: beatColoring.value,
+    peakDistance: peakDistance.value,
+    peakProminence: peakProminence.value,
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -467,6 +492,60 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="circleNotesError" class="error">{{ circleNotesError }}</small>
+      </div>
+    </SettingsGroup>
+
+    <SettingsGroup
+      v-if="showLocalPeaks"
+      id="local-peaks"
+      :title="groupTitle('local-peaks')"
+      :open="isOpen(openState, 'local-peaks')"
+      :problem="localPeaksProblem"
+      @toggle="onToggle('local-peaks', $event)"
+    >
+      <div class="field">
+        <div class="field-head">
+          <label for="beat-coloring">Beat coloring</label>
+          <InfoPopover label="beat coloring" :text="beatColoringHelp" />
+          <output class="slider-value" for="beat-coloring">{{ formatBeatColoring(beatColoring) }}</output>
+        </div>
+        <input id="beat-coloring" v-model="beatColoring" type="checkbox" :disabled="busy" />
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="peak-distance">Minimum distance</label>
+          <InfoPopover label="minimum distance" :text="peakDistanceHelp" />
+          <output class="slider-value" for="peak-distance">{{ formatPeakDistance(peakDistance) }}</output>
+        </div>
+        <input
+          id="peak-distance"
+          v-model.number="peakDistance"
+          type="range"
+          :min="PEAK_DISTANCE_RANGE.min"
+          :max="PEAK_DISTANCE_RANGE.max"
+          :step="PEAK_DISTANCE_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="peakDistanceError" class="error">{{ peakDistanceError }}</small>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="peak-prominence">Prominence</label>
+          <InfoPopover label="prominence" :text="peakProminenceHelp" />
+          <output class="slider-value" for="peak-prominence">{{ formatPeakProminence(peakProminence) }}</output>
+        </div>
+        <input
+          id="peak-prominence"
+          v-model.number="peakProminence"
+          type="range"
+          :min="PEAK_PROMINENCE_RANGE.min"
+          :max="PEAK_PROMINENCE_RANGE.max"
+          :step="PEAK_PROMINENCE_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="peakProminenceError" class="error">{{ peakProminenceError }}</small>
       </div>
     </SettingsGroup>
 

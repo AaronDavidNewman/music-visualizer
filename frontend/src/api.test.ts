@@ -20,6 +20,9 @@ const SETTINGS: JobSettings = {
   gaussian: 2.5,
   circleMemory: 250,
   circleNotes: 9,
+  beatColoring: true,
+  peakDistance: 450,
+  peakProminence: 25,
 };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -56,6 +59,9 @@ describe("the request that submitJob sends", () => {
       circle_radius: "6",
       circle_resize: "true",
       gaussian: "2.5",
+      beat_coloring: "true",
+      peak_distance: "450",
+      peak_prominence: "25",
       circle_memory: "250",
       circle_notes: "9",
     });
@@ -75,5 +81,19 @@ describe("the request that submitJob sends", () => {
   it("rejects with the server's message when it refuses the request", async () => {
     vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The gaussian smoothing must be a number from 0 to 5." }) }));
     await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The gaussian smoothing must be a number from 0 to 5.");
+  });
+});
+
+describe("the beat coloring fields of the request (feature 024)", () => {
+  it("sends the checkbox as true or false and the two settings as numbers", async () => {
+    const on = await posted(SETTINGS);
+    expect([on.beat_coloring, on.peak_distance, on.peak_prominence]).toEqual(["true", "450", "25"]);
+    const off = await posted({ ...SETTINGS, beatColoring: false, peakDistance: 100, peakProminence: 50 });
+    expect([off.beat_coloring, off.peak_distance, off.peak_prominence]).toEqual(["false", "100", "50"]);
+  });
+
+  it("shows the server's message for a refused setting", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The prominence must be a number from 0 to 100 percent." }) }));
+    await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The prominence must be a number from 0 to 100 percent.");
   });
 });

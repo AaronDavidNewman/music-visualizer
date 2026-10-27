@@ -114,6 +114,14 @@ class LocalPeaks:
     def _rates(self) -> np.ndarray:
         return np.array([p.rate for p in self.peaks], dtype=np.float64)
 
+    @cached_property
+    def _window_mins(self) -> np.ndarray:
+        return np.array([p.window_min for p in self.peaks], dtype=np.float64)
+
+    @cached_property
+    def _window_maxs(self) -> np.ndarray:
+        return np.array([p.window_max for p in self.peaks], dtype=np.float64)
+
     def energy_at(self, point):
         """The interpolated energy at a sample number, or at each of a sequence of them.
 
@@ -140,6 +148,38 @@ class LocalPeaks:
             before = np.searchsorted(self._samples, points, side="right") - 1
             answer = np.where(before < 0, DEFAULT_RATE, self._rates[np.maximum(before, 0)])
         return float(answer) if scalar else answer
+
+    def position_at(self, point):
+        """The place of a sample number (or of each of a sequence) in the local energy peak, from 0 to 1.
+
+        The interpolated energy (see :meth:`energy_at`) between the smallest and the largest energy of the peaks windows of
+        the neighbouring peaks, those two interpolated in the same straight line from the previous peak to the next. 0 is the
+        minimum, 1 the maximum; a value outside is held at the nearest end. It is 0 before the first peak, for a file without
+        peaks and where the smallest and the largest energy leave no range; after the last peak it is worked out from the
+        last peak's own values.
+        """
+        points, scalar = _points(point)
+        if not len(self.peaks):
+            answer = np.zeros(points.shape)
+        else:
+            energy = np.interp(points, self._samples, self._energies, left=0.0, right=self._energies[-1])
+            low = np.interp(points, self._samples, self._window_mins, left=0.0, right=self._window_mins[-1])
+            high = np.interp(points, self._samples, self._window_maxs, left=0.0, right=self._window_maxs[-1])
+            span = high - low
+            answer = np.where(span > 0.0, np.clip((energy - low) / np.where(span > 0.0, span, 1.0), 0.0, 1.0), 0.0)
+        return float(answer) if scalar else answer
+
+    def position_at_time(self, seconds):
+        """:meth:`position_at` at a time in seconds (or at each of a sequence of them)."""
+        return self.position_at(_times(seconds, self.file_rate))
+
+    def frame_positions(self, frame_rate, frames) -> np.ndarray:
+        """The position in the local peak of the middle of each of ``frames`` frames of ``frame_rate`` frames per second."""
+        if isinstance(frame_rate, bool) or not isinstance(frame_rate, numbers.Real) or not math.isfinite(frame_rate) or frame_rate <= 0:
+            raise ValueError("The frame rate must be a positive number.")
+        if isinstance(frames, bool) or not isinstance(frames, numbers.Integral) or frames < 0:
+            raise ValueError("The number of frames must be a whole number of at least 0.")
+        return np.atleast_1d(self.position_at_time((np.arange(int(frames)) + 0.5) / float(frame_rate)))
 
     def energy_at_time(self, seconds):
         """The interpolated energy at a time in seconds (or at each of a sequence of them)."""

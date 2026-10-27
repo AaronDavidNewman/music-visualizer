@@ -74,3 +74,22 @@ describe("the result summary", () => {
     expect(summary.split("\n").find((l) => l.includes("Blend width:")) ?? "").toContain("result.image_type === 'blended'");
   });
 });
+
+describe("the result summary: beat coloring (feature 024)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows the checkbox for Tiles and Blended tiles only", () => {
+    expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
+    expect(line("Beat coloring:")).toContain("formatBeatColoring(result.beat_coloring)");
+  });
+
+  it("shows the two settings only for those types and only when the box is on", () => {
+    for (const label of ["Minimum distance:", "Prominence:"]) {
+      expect(line(label), label).toContain("beatColoringApplies(result.image_type)");
+      expect(line(label), label).toContain("result.beat_coloring");
+    }
+    expect(line("Minimum distance:")).toContain("formatPeakDistance(result.peak_distance)");
+    expect(line("Prominence:")).toContain("formatPeakProminence(result.peak_prominence)");
+  });
+});

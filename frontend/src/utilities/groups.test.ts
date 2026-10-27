@@ -6,16 +6,17 @@ const TYPES = IMAGE_TYPES.map((t) => t.value);
 
 // What each image type must show, written out here independently of the module under test (spec FR-003 to FR-009).
 const COMMON_TOP = ["window-size", "frame-rate", "window-spacing", "colormap", "image-type"];
+const BEAT = ["beat-coloring", "peak-distance", "peak-prominence"];
 const EXPECTED: Record<string, string[]> = {
-  tiles: [...COMMON_TOP, "threshold", "notes", "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
+  tiles: [...COMMON_TOP, "threshold", "notes", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
   contour: [...COMMON_TOP, "threshold", "notes", "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
-  blended: [...COMMON_TOP, "threshold", "notes", "blend-width", "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
+  blended: [...COMMON_TOP, "threshold", "notes", "blend-width", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
   circles: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes", "smoothing-window", "smoothing"],
   circles_paint: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-notes", "smoothing-window", "smoothing"],
 };
 
 describe("the groups", () => {
-  it("are the nine groups of the data model, with their titles and controls in order", () => {
+  it("are the eleven groups of the data model, with their titles and controls in order", () => {
     expect(GROUPS.map((g) => [g.id, g.title, [...g.controls]])).toEqual([
       ["analysis", "Analysis", ["window-size", "frame-rate", "window-spacing"]],
       ["colormap", "Colormap", ["colormap"]],
@@ -25,6 +26,7 @@ describe("the groups", () => {
       ["blended", "Blended Tiles", ["threshold", "notes", "blend-width"]],
       ["circles", "Circles", ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"]],
       ["circles_paint", "Circles paint", ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]],
+      ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance", "peak-prominence"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
       ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
     ]);
@@ -41,7 +43,9 @@ describe("the groups", () => {
 
 describe("the groups shown for each image type", () => {
   it.each(TYPES)("are, for %s, in this order: the top group, Colormap, Image type, the type's group, Data smoothing, Image smoothing", (type) => {
-    const want = ["analysis", "colormap", "image-type", type, "data-smoothing"];
+    const want = ["analysis", "colormap", "image-type", type];
+    if (type === "tiles" || type === "blended") want.push("local-peaks");
+    want.push("data-smoothing");
     if (type !== "circles" && type !== "circles_paint") want.push("image-smoothing");
     expect(groupsFor(type)).toEqual(want);
   });
@@ -166,5 +170,33 @@ describe("the open state of a group", () => {
     state = setOpen(state, "circles", true);
     expect(isOpen(state, "blended")).toBe(false);
     expect(isOpen(state, "tiles")).toBe(true); // a group shown for the first time starts open
+  });
+});
+
+describe("the Local peaks group (feature 024)", () => {
+  it("has the checkbox and the two settings of the measurement, in this order, and a title", () => {
+    expect([...controlsIn("local-peaks")]).toEqual(["beat-coloring", "peak-distance", "peak-prominence"]);
+    expect(groupTitle("local-peaks")).toBe("Local peaks");
+  });
+
+  it("follows the group of Tiles and of Blended Tiles, before Data smoothing, and is shown for no other type", () => {
+    for (const type of ["tiles", "blended"]) {
+      const ids = groupsFor(type);
+      expect(ids.indexOf("local-peaks"), type).toBe(ids.indexOf(type) + 1);
+      expect(ids.indexOf("local-peaks"), type).toBeLessThan(ids.indexOf("data-smoothing"));
+    }
+    for (const type of ["contour", "circles", "circles_paint", "nonsense"]) expect(groupsFor(type), type).not.toContain("local-peaks");
+  });
+
+  it("puts each control in the group, for Tiles and Blended tiles only", () => {
+    for (const control of ["beat-coloring", "peak-distance", "peak-prominence"]) {
+      expect(groupOf(control, "tiles"), control).toBe("local-peaks");
+      expect(groupOf(control, "blended"), control).toBe("local-peaks");
+      for (const type of ["contour", "circles", "circles_paint"]) expect(groupOf(control, type), control + type).toBeUndefined();
+    }
+  });
+
+  it("is laid out as one row of two and a single control last", () => {
+    expect(rowsOf(controlsIn("local-peaks").length)).toEqual([2, 1]);
   });
 });

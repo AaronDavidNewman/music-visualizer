@@ -308,3 +308,41 @@ export function isCirclesType(imageType: string): boolean {
 export function gridSettingsApply(imageType: string): boolean {
   return !isCirclesType(imageType);
 }
+
+/** Beat coloring (feature 024): half the color of a tile comes from the frame's place in the local energy peak. */
+export const DEFAULT_BEAT_COLORING = false;
+export const PEAK_DISTANCE_RANGE = { min: 100, max: 2000, step: 50 } as const;
+export const DEFAULT_PEAK_DISTANCE = 100;
+export const PEAK_PROMINENCE_RANGE = { min: 0, max: 100, step: 5 } as const;
+export const DEFAULT_PEAK_PROMINENCE = 50;
+
+const peakDistanceMessage = `The minimum distance must be a number from ${PEAK_DISTANCE_RANGE.min} to ${PEAK_DISTANCE_RANGE.max} milliseconds.`;
+const peakProminenceMessage = `The prominence must be a number from ${PEAK_PROMINENCE_RANGE.min} to ${PEAK_PROMINENCE_RANGE.max} percent.`;
+
+/** Returns an error message, or null when the minimum distance is a finite number of milliseconds from 100 to 2000. */
+export function validatePeakDistance(value: string | number): string | null {
+  const n = parseNumber(value);
+  return Number.isFinite(n) && n >= PEAK_DISTANCE_RANGE.min && n <= PEAK_DISTANCE_RANGE.max ? null : peakDistanceMessage;
+}
+
+/** Returns an error message, or null when the prominence is a finite percentage from 0 to 100. */
+export function validatePeakProminence(value: string | number): string | null {
+  const n = parseNumber(value);
+  return Number.isFinite(n) && n >= PEAK_PROMINENCE_RANGE.min && n <= PEAK_PROMINENCE_RANGE.max ? null : peakProminenceMessage;
+}
+
+/** The readouts and the result summary items: "Off" or "On", "100 ms", "50%". */
+export function formatBeatColoring(value: boolean): string {
+  return value ? "On" : "Off";
+}
+export function formatPeakDistance(value: number): string {
+  return `${value} ms`;
+}
+export function formatPeakProminence(value: number): string {
+  return `${value}%`;
+}
+
+/** Whether the beat coloring means anything: only for Tiles and Blended tiles. */
+export function beatColoringApplies(imageType: string): boolean {
+  return imageType === "tiles" || imageType === "blended";
+}

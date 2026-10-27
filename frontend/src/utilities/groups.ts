@@ -1,4 +1,4 @@
-import { gridSettingsApply } from "./validation";
+import { beatColoringApplies, gridSettingsApply } from "./validation";
 
 /**
  * The groups of the settings form (feature 020): which groups there are, what is in each, which are shown for an image type, and
@@ -26,6 +26,8 @@ export const GROUPS: readonly GroupDefinition[] = [
   },
   // the same circles with no memory (feature 022): so no Memory control
   { id: "circles_paint", title: "Circles paint", controls: ["circle-unit", "circle-radius", "circle-resize", "circle-notes"] },
+  // the beat coloring of Tiles and Blended tiles (feature 024): its own group, after the group of the type
+  { id: "local-peaks", title: "Local peaks", controls: ["beat-coloring", "peak-distance", "peak-prominence"] },
   { id: "data-smoothing", title: "Data smoothing", controls: ["smoothing-window", "smoothing"] },
   { id: "image-smoothing", title: "Image smoothing", controls: ["resolution", "interpolate", "gaussian"] },
 ];
@@ -45,11 +47,13 @@ export function controlsIn(id: string): readonly string[] {
 
 /**
  * The ids of the groups shown for an image type, top to bottom: the top group, Colormap, Image type, the group of the type
- * (none for a type that is not one of the four), Data smoothing, and Image smoothing when the type draws a grid.
+ * (none for a type that is not one of the five), Local peaks for Tiles and Blended tiles, Data smoothing, and Image smoothing
+ * when the type draws a grid.
  */
 export function groupsFor(imageType: string): string[] {
   const ids = ["analysis", "colormap", "image-type"];
   if (TYPE_GROUPS.includes(imageType)) ids.push(imageType);
+  if (beatColoringApplies(imageType)) ids.push("local-peaks");
   ids.push("data-smoothing");
   if (gridSettingsApply(imageType)) ids.push("image-smoothing");
   return ids;
