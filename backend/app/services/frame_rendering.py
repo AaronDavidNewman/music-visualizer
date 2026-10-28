@@ -45,6 +45,7 @@ from .circles import (
 )
 from .circles_paint import write_paint_frames
 from .colormaps import DEFAULT_COLORMAP, check_beat, check_colormap, colorize, lookup_table
+from .concentric import write_concentric_frames
 from .contour import write_contour_frames
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
 from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
@@ -57,6 +58,7 @@ from .image_types import (
     tile_edges,
 )
 from .note_analysis import NOTE_COUNT, AnalysisResult
+from .note_layout import DEFAULT_NOTE_LAYOUT, arrange_notes, check_note_layout
 from .note_selection import DEFAULT_NOTE_COUNT, check_note_count, spread_notes
 from .resolution import DEFAULT_RESOLUTION, check_resolution, interpolate_grid
 
@@ -256,6 +258,7 @@ def write_frames(
     circle_resize: bool = DEFAULT_CIRCLE_RESIZE,
     gaussian: float = DEFAULT_GAUSSIAN,
     beat: np.ndarray | None = None,
+    note_layout: str = DEFAULT_NOTE_LAYOUT,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -315,11 +318,20 @@ def write_frames(
     ``threshold`` and ``blend_width`` describe a grid of tiles or skipped frames and are accepted and ignored. The three
     circle settings are checked for every image type and have no effect for the others.
 
+    ``image_type="concentric"`` draws 84 circles on the 12 x 7 grid, each of up to twelve flat rings (see ``concentric``): the step of a
+    note (1 to 12, from its volume against the loudest note of the frame) is the number of rings and the color of ring ``k`` runs from the
+    colormap's first color to the one at ``0.5 + 0.5 * beat`` of the way along it, on a background of the colormap's middle color.
+    Smoothing and the colormap apply, and ``beat`` (``None`` is 0 for every frame); every other setting is checked and ignored.
+
     ``beat`` (feature 024; ``None`` or one number from 0 to 1 for each frame, the frame's place in the local energy peak,
-    see ``local_peaks``) changes the colors of ``tiles`` and ``blended`` only: a tile's place on the colormap becomes half
+    see ``local_peaks``) changes the colors of ``tiles`` and ``blended`` only (and is the colors of ``concentric``): a tile's place on the colormap becomes half
     its note strength (as before) plus half the frame's beat, so the strongest tile has the colormap's middle color at a beat
     of 0 and the last color at a beat of 1. Every tile of a frame uses the frame's beat; hidden tiles are drawn as before.
     With ``None`` the colors are 100 % harmonic, exactly as before. The other image types ignore it.
+
+    ``note_layout`` (``"rows"``, the default, or ``"spiral"``, see ``note_layout``) says which note is drawn in which cell of the 12 x 7 grid
+    for ``tiles``, ``blended`` and ``concentric``; the other image types check it and ignore it. With ``rows`` the pictures are what
+    they always were. Only the place of a note changes: its value, strength, hiding and color are those of the note.
 
     Every argument is checked before anything is written.
     """
@@ -337,6 +349,7 @@ def write_frames(
     circle_radius = check_circle_radius(circle_radius)
     circle_resize = check_circle_resize(circle_resize)
     gaussian = check_gaussian(gaussian)
+    note_layout = check_note_layout(note_layout)
     if beat is not None:
         beat = check_beat(beat, len(frames))  # checked for every image type, used by tiles and blended only
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
@@ -370,8 +383,13 @@ def write_frames(
             circle_resize,
         )
         return
+    if image_type == "concentric":  # 84 circles of rings; the grid settings above are checked and not used, the beat is optional here
+        write_concentric_frames(arrange_notes(smoothed, note_layout), colormap, directory, beat, IMAGE_WIDTH, IMAGE_HEIGHT)
+        return
     columns, rows = GRID_COLUMNS * resolution, GRID_ROWS * resolution
     shown = spread_notes(smoothed[:, :SHOWN_NOTES], note_count)
+    if image_type in ("tiles", "blended"):  # the 84 values in the cells of the layout (the contour always has the rows layout)
+        shown = arrange_notes(shown, note_layout)
     values = interpolate_grid(shown, GRID_COLUMNS, GRID_ROWS, resolution)
     hidden = hidden_below(values, peak, threshold)
     frames_to_draw = key_frames(values.shape[0], interpolate)

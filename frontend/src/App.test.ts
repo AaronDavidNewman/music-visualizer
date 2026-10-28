@@ -86,10 +86,32 @@ describe("the result summary: beat coloring (feature 024)", () => {
 
   it("shows the two settings only for those types and only when the box is on", () => {
     for (const label of ["Minimum distance:", "Prominence:"]) {
-      expect(line(label), label).toContain("beatColoringApplies(result.image_type)");
-      expect(line(label), label).toContain("result.beat_coloring");
+      expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
     }
     expect(line("Minimum distance:")).toContain("formatPeakDistance(result.peak_distance)");
     expect(line("Prominence:")).toContain("formatPeakProminence(result.peak_prominence)");
+  });
+});
+
+describe("the result summary for Concentric (feature 025)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows Minimum distance and Prominence through the one rule that includes Concentric and the box", () => {
+    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+  });
+
+  it("shows Beat coloring only where the checkbox applies, which is not for Concentric", () => {
+    expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
+  });
+});
+
+describe("the result summary: note layout (feature 026)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows the layout, by its label, for the pictures that have the choice only", () => {
+    expect(line("Note layout:")).toContain("noteLayoutApplies(result.image_type)");
+    expect(line("Note layout:")).toContain("noteLayoutLabel(result.note_layout)");
   });
 });

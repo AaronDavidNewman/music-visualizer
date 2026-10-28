@@ -49,8 +49,8 @@ def steady_note(seconds=3.0, changing=True):
 # --- choosing it ---------------------------------------------------------------------------------------------------------------
 
 
-def test_circles_is_the_fourth_image_type_circles_paint_the_fifth_and_tiles_stays_the_first():
-    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles", "circles_paint")
+def test_circles_is_the_fourth_image_type_circles_paint_the_fifth_concentric_the_sixth_and_tiles_stays_the_first():
+    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles", "circles_paint", "concentric")
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
@@ -168,7 +168,7 @@ def test_the_response_has_the_usual_keys_and_the_four_circle_keys(client):
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
         "smoothing", "smoothing_window", "threshold", "image_type", "blend_width", "colormap", "resolution", "note_count",
-        "interpolate", "circle_unit", "circle_memory", "circle_notes", "circle_radius", "circle_resize", "gaussian", "beat_coloring", "peak_distance", "peak_prominence", "window_spacing",
+        "interpolate", "circle_unit", "circle_memory", "circle_notes", "circle_radius", "circle_resize", "gaussian", "beat_coloring", "peak_distance", "peak_prominence", "note_layout", "window_spacing",
         "step_samples", "window_count", "spacing_raised", "frame_url_template",
     }  # fmt: skip
     for key in REMOVED:

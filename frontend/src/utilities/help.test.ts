@@ -196,3 +196,33 @@ describe("the Local peaks explanations (feature 024)", () => {
     for (const text of [beatColoringHelp, peakDistanceHelp, peakProminenceHelp]) expect(text.length).toBeGreaterThan(60);
   });
 });
+
+describe("the Image type help for Concentric (feature 025)", () => {
+  it("describes the circles, the twelve rings, the sizes from the volume, the colors from the beat and the background", () => {
+    expect(imageTypeHelp).toContain("Concentric:");
+    expect(imageTypeHelp).toContain("84 circles");
+    expect(imageTypeHelp).toContain("12 rings");
+    expect(imageTypeHelp).toContain("a full circle is 12 rings");
+    expect(imageTypeHelp).toContain("loudest note");
+    expect(imageTypeHelp).toContain("beat");
+    expect(imageTypeHelp).toContain("middle color");
+    for (const earlier of ["Tiles:", "Blended tiles:", "Contour:", "Circles:", "Circles paint:"]) expect(imageTypeHelp).toContain(earlier);
+  });
+});
+
+import { noteLayoutHelp } from "./help";
+
+describe("the Note layout help (feature 026)", () => {
+  it("explains the two layouts, where middle C is, the two directions and which pictures have it", () => {
+    expect(noteLayoutHelp).toContain("Rows");
+    expect(noteLayoutHelp).toContain("Spiral");
+    expect(noteLayoutHelp).toContain("default"); // Rows is the default
+    expect(noteLayoutHelp).toContain("middle C");
+    expect(noteLayoutHelp).toContain("3rd row");
+    expect(noteLayoutHelp).toContain("6th column");
+    expect(noteLayoutHelp).toContain("clockwise");
+    expect(noteLayoutHelp).toContain("counterclockwise");
+    expect(noteLayoutHelp).toContain("Tiles");
+    expect(noteLayoutHelp).toContain("Concentric");
+  });
+});

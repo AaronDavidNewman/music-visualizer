@@ -86,7 +86,8 @@ export function validateSmoothingWindow(value: string | number): string | null {
 
 /**
  * The kinds of picture: Tiles (flat tiles with hard edges, the default), Blended tiles (colors fade across the tile
- * edges) and Contour (the notes drawn as a filled contour map).
+ * edges) and Contour (the notes drawn as a filled contour map), then Circles, Circles paint and Concentric (a circle of up to
+ * twelve rings for each of the 84 notes).
  */
 export const IMAGE_TYPES = [
   { value: "tiles", label: "Tiles" },
@@ -94,6 +95,7 @@ export const IMAGE_TYPES = [
   { value: "contour", label: "Contour" },
   { value: "circles", label: "Circles" },
   { value: "circles_paint", label: "Circles paint" },
+  { value: "concentric", label: "Concentric" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -304,9 +306,14 @@ export function isCirclesType(imageType: string): boolean {
   return imageType === "circles" || imageType === "circles_paint";
 }
 
-/** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate) mean anything: not for circles. */
+/** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate, Gaussian) mean anything: not for circles and not for Concentric. */
 export function gridSettingsApply(imageType: string): boolean {
-  return !isCirclesType(imageType);
+  return !isCirclesType(imageType) && imageType !== "concentric";
+}
+
+/** Whether Minimum distance and Prominence are used: always by Concentric (the beat colors it), by Tiles and Blended tiles with the Beat coloring box on, never by the others. */
+export function peakSettingsShown(imageType: string, beatColoring: boolean): boolean {
+  return imageType === "concentric" || (beatColoringApplies(imageType) && beatColoring);
 }
 
 /** Beat coloring (feature 024): half the color of a tile comes from the frame's place in the local energy peak. */
@@ -345,4 +352,28 @@ export function formatPeakProminence(value: number): string {
 /** Whether the beat coloring means anything: only for Tiles and Blended tiles. */
 export function beatColoringApplies(imageType: string): boolean {
   return imageType === "tiles" || imageType === "blended";
+}
+
+/** The note layout (feature 026): which note is drawn in which cell of the 12 x 7 grid. Rows lists the notes in order, like text. */
+export const NOTE_LAYOUTS = [
+  { value: "rows", label: "Rows" },
+  { value: "spiral", label: "Spiral" },
+] as const;
+export const DEFAULT_NOTE_LAYOUT = "rows";
+
+const noteLayoutMessage = `The note layout must be one of ${NOTE_LAYOUTS.map((l) => l.value).join(", ")}.`;
+
+/** Returns an error message, or null when the layout is exactly one of the offered values. */
+export function validateNoteLayout(value: string): string | null {
+  return NOTE_LAYOUTS.some((l) => l.value === value) ? null : noteLayoutMessage;
+}
+
+/** The name shown for a layout value such as "spiral". */
+export function noteLayoutLabel(value: string): string {
+  return NOTE_LAYOUTS.find((l) => l.value === value)?.label ?? value;
+}
+
+/** Whether the note layout does anything: for the pictures with one shape for each note, Tiles, Blended tiles and Concentric. */
+export function noteLayoutApplies(imageType: string): boolean {
+  return imageType === "tiles" || imageType === "blended" || imageType === "concentric";
 }

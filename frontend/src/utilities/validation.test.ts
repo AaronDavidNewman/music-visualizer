@@ -199,13 +199,14 @@ describe("smoothing window", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Tiles, Blended tiles, Contour, Circles and Circles paint in that order and starts at tiles", () => {
+  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint and Concentric in that order and starts at tiles", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["tiles", "Tiles"],
       ["blended", "Blended tiles"],
       ["contour", "Contour"],
       ["circles", "Circles"],
       ["circles_paint", "Circles paint"],
+      ["concentric", "Concentric"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
     expect(imageTypeLabel("tiles")).toBe("Tiles");
@@ -213,14 +214,15 @@ describe("image type", () => {
     expect(imageTypeLabel("contour")).toBe("Contour");
     expect(imageTypeLabel("circles")).toBe("Circles");
     expect(imageTypeLabel("circles_paint")).toBe("Circles paint");
+    expect(imageTypeLabel("concentric")).toBe("Concentric");
   });
 
   it.each(values)("accepts %j", (v) => {
     expect(validateImageType(v)).toBeNull();
   });
 
-  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint.");
+  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric "])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric.");
   });
 
   it("knows the two circle types, and the grid settings apply to neither", () => {
@@ -485,5 +487,56 @@ describe("beat coloring (feature 024)", () => {
     expect(formatPeakDistance(1250)).toBe("1250 ms");
     expect(formatPeakProminence(50)).toBe("50%");
     expect(formatPeakProminence(0)).toBe("0%");
+  });
+});
+
+import { peakSettingsShown } from "./validation";
+
+describe("Concentric (feature 025)", () => {
+  it("is not a grid type and not a circles type, and the beat coloring checkbox does not apply to it", () => {
+    expect(gridSettingsApply("concentric")).toBe(false);
+    expect(isCirclesType("concentric")).toBe(false);
+    expect(beatColoringApplies("concentric")).toBe(false);
+  });
+
+  it("shows the Local peaks settings always for Concentric, for Tiles and Blended tiles only with the box on, and for no other type", () => {
+    for (const box of [true, false]) expect(peakSettingsShown("concentric", box), String(box)).toBe(true);
+    for (const type of ["tiles", "blended"]) {
+      expect(peakSettingsShown(type, true), type).toBe(true);
+      expect(peakSettingsShown(type, false), type).toBe(false);
+    }
+    for (const type of ["contour", "circles", "circles_paint", "nonsense"]) {
+      for (const box of [true, false]) expect(peakSettingsShown(type, box), type).toBe(false);
+    }
+  });
+});
+
+import { DEFAULT_NOTE_LAYOUT, NOTE_LAYOUTS, noteLayoutApplies, noteLayoutLabel, validateNoteLayout } from "./validation";
+
+describe("note layout (feature 026)", () => {
+  const MESSAGE = "The note layout must be one of rows, spiral.";
+
+  it("offers Rows and Spiral in that order and starts at rows", () => {
+    expect(NOTE_LAYOUTS.map((l) => [l.value, l.label])).toEqual([
+      ["rows", "Rows"],
+      ["spiral", "Spiral"],
+    ]);
+    expect(DEFAULT_NOTE_LAYOUT).toBe("rows");
+    expect(noteLayoutLabel("rows")).toBe("Rows");
+    expect(noteLayoutLabel("spiral")).toBe("Spiral");
+    expect(noteLayoutLabel("other")).toBe("other");
+  });
+
+  it.each(["rows", "spiral"])("accepts %j", (v) => {
+    expect(validateNoteLayout(v)).toBeNull();
+  });
+
+  it.each(["", "Rows", "SPIRAL", " rows", "spiral ", "row", "spirals", "circle", "1"])("rejects %j with the server's message", (v) => {
+    expect(validateNoteLayout(v)).toBe(MESSAGE);
+  });
+
+  it("applies to Tiles, Blended tiles and Concentric only", () => {
+    for (const type of ["tiles", "blended", "concentric"]) expect(noteLayoutApplies(type), type).toBe(true);
+    for (const type of ["contour", "circles", "circles_paint", "nonsense", ""]) expect(noteLayoutApplies(type), type).toBe(false);
   });
 });

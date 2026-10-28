@@ -32,6 +32,8 @@ export interface JobResult {
   beat_coloring: boolean;
   peak_distance: number;
   peak_prominence: number;
+  /** Tiles, Blended tiles and Concentric: which note is in which cell of the grid, rows or spiral (feature 026). */
+  note_layout: string;
   circle_memory: number;
   circle_notes: number;
   window_spacing: number;
@@ -72,6 +74,8 @@ export interface JobSettings {
   beatColoring: boolean;
   peakDistance: number;
   peakProminence: number;
+  /** "rows" (the default) or "spiral". */
+  noteLayout: string;
   circleMemory: number;
   circleNotes: number;
 }
@@ -99,6 +103,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("beat_coloring", String(settings.beatColoring));
   body.append("peak_distance", String(settings.peakDistance));
   body.append("peak_prominence", String(settings.peakProminence));
+  body.append("note_layout", settings.noteLayout);
   body.append("circle_memory", String(settings.circleMemory));
   body.append("circle_notes", String(settings.circleNotes));
 

@@ -498,7 +498,7 @@ def test_two_runs_give_byte_identical_files(tmp_path):
 
 
 def test_circles_is_the_fourth_image_type_and_circles_paint_the_fifth():
-    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles", "circles_paint")
+    assert IMAGE_TYPES[:5] == ("tiles", "blended", "contour", "circles", "circles_paint")  # concentric (feature 025) follows
 
 
 @pytest.mark.parametrize("image_type", TYPES)

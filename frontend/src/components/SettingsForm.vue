@@ -5,6 +5,8 @@ import {
   COLORMAPS,
   DEFAULT_COLORMAP,
   DEFAULT_BEAT_COLORING,
+  DEFAULT_NOTE_LAYOUT,
+  NOTE_LAYOUTS,
   DEFAULT_BLEND_WIDTH,
   DEFAULT_PEAK_DISTANCE,
   DEFAULT_PEAK_PROMINENCE,
@@ -54,6 +56,8 @@ import {
   formatThreshold,
   validateBlendWidth,
   validatePeakDistance,
+  validateNoteLayout,
+  noteLayoutApplies,
   validatePeakProminence,
   validateColormap,
   validateFile,
@@ -93,6 +97,7 @@ import {
   imageTypeHelp,
   gaussianHelp,
   beatColoringHelp,
+  noteLayoutHelp,
   peakDistanceHelp,
   peakProminenceHelp,
   interpolateHelp,
@@ -129,6 +134,7 @@ const circleMemory = ref<number>(DEFAULT_CIRCLE_MEMORY);
 const circleNotes = ref<number>(DEFAULT_CIRCLE_NOTES);
 const circleRadius = ref<number>(DEFAULT_CIRCLE_RADIUS);
 const circleResize = ref<boolean>(DEFAULT_CIRCLE_RESIZE);
+const noteLayout = ref<string>(DEFAULT_NOTE_LAYOUT);
 const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
 const peakDistance = ref<number>(DEFAULT_PEAK_DISTANCE);
 const peakProminence = ref<number>(DEFAULT_PEAK_PROMINENCE);
@@ -164,6 +170,7 @@ const circleUnitError = computed(() => validateCircleUnit(circleUnit.value));
 const circleMemoryError = computed(() => validateCircleMemory(circleMemory.value));
 const circleNotesError = computed(() => validateCircleNotes(circleNotes.value));
 const circleRadiusError = computed(() => validateCircleRadius(circleRadius.value));
+const noteLayoutError = computed(() => validateNoteLayout(noteLayout.value));
 const peakDistanceError = computed(() => validatePeakDistance(peakDistance.value));
 const peakProminenceError = computed(() => validatePeakProminence(peakProminence.value));
 const canSubmit = computed(
@@ -186,6 +193,7 @@ const canSubmit = computed(
     !circleMemoryError.value &&
     !circleNotesError.value &&
     !circleRadiusError.value &&
+    !noteLayoutError.value &&
     !peakDistanceError.value &&
     !peakProminenceError.value,
 );
@@ -196,7 +204,9 @@ const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
-const showLocalPeaks = computed(() => shownGroups.value.includes("local-peaks"));
+// the Local peaks group has one of two ids: local-peaks (Tiles and Blended tiles: with the checkbox) or concentric-peaks (Concentric: without)
+const showNoteLayout = computed(() => noteLayoutApplies(imageType.value));
+const peaksGroup = computed(() => shownGroups.value.find((id) => id === "local-peaks" || id === "concentric-peaks") ?? "");
 function inTypeGroup(control: string): boolean {
   return typeGroup.value !== undefined && controlsIn(typeGroup.value).includes(control);
 }
@@ -221,6 +231,7 @@ const typeGroupProblem = computed(
     (inTypeGroup("circle-memory") && !!circleMemoryError.value) ||
     (inTypeGroup("circle-notes") && !!circleNotesError.value),
 );
+const noteLayoutProblem = computed(() => !!noteLayoutError.value);
 const localPeaksProblem = computed(() => !!(peakDistanceError.value || peakProminenceError.value));
 const dataSmoothingProblem = computed(() => !!(smoothingWindowError.value || smoothingError.value));
 const imageSmoothingProblem = computed(() => !!(resolutionError.value || interpolateError.value || gaussianError.value));
@@ -257,6 +268,7 @@ function onSubmit() {
     circleNotes: circleNotes.value,
     circleRadius: circleRadius.value,
     circleResize: circleResize.value,
+    noteLayout: noteLayout.value,
     beatColoring: beatColoring.value,
     peakDistance: peakDistance.value,
     peakProminence: peakProminence.value,
@@ -496,14 +508,34 @@ function onSubmit() {
     </SettingsGroup>
 
     <SettingsGroup
-      v-if="showLocalPeaks"
-      id="local-peaks"
-      :title="groupTitle('local-peaks')"
-      :open="isOpen(openState, 'local-peaks')"
-      :problem="localPeaksProblem"
-      @toggle="onToggle('local-peaks', $event)"
+      v-if="showNoteLayout"
+      id="note-layout"
+      :title="groupTitle('note-layout')"
+      :open="isOpen(openState, 'note-layout')"
+      :problem="noteLayoutProblem"
+      @toggle="onToggle('note-layout', $event)"
     >
       <div class="field">
+        <div class="field-head">
+          <label for="note-layout">Note layout</label>
+          <InfoPopover label="note layout" :text="noteLayoutHelp" />
+        </div>
+        <select id="note-layout" v-model="noteLayout" :disabled="busy">
+          <option v-for="layout in NOTE_LAYOUTS" :key="layout.value" :value="layout.value">{{ layout.label }}</option>
+        </select>
+        <small v-if="noteLayoutError" class="error">{{ noteLayoutError }}</small>
+      </div>
+    </SettingsGroup>
+
+    <SettingsGroup
+      v-if="peaksGroup"
+      :id="peaksGroup"
+      :title="groupTitle(peaksGroup)"
+      :open="isOpen(openState, peaksGroup)"
+      :problem="localPeaksProblem"
+      @toggle="onToggle(peaksGroup, $event)"
+    >
+      <div v-if="peaksGroup === 'local-peaks'" class="field">
         <div class="field-head">
           <label for="beat-coloring">Beat coloring</label>
           <InfoPopover label="beat coloring" :text="beatColoringHelp" />

@@ -8,15 +8,16 @@ const TYPES = IMAGE_TYPES.map((t) => t.value);
 const COMMON_TOP = ["window-size", "frame-rate", "window-spacing", "colormap", "image-type"];
 const BEAT = ["beat-coloring", "peak-distance", "peak-prominence"];
 const EXPECTED: Record<string, string[]> = {
-  tiles: [...COMMON_TOP, "threshold", "notes", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
+  tiles: [...COMMON_TOP, "threshold", "notes", "note-layout", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
   contour: [...COMMON_TOP, "threshold", "notes", "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
-  blended: [...COMMON_TOP, "threshold", "notes", "blend-width", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
+  blended: [...COMMON_TOP, "threshold", "notes", "blend-width", "note-layout", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
   circles: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes", "smoothing-window", "smoothing"],
   circles_paint: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-notes", "smoothing-window", "smoothing"],
+  concentric: [...COMMON_TOP, "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
 };
 
 describe("the groups", () => {
-  it("are the eleven groups of the data model, with their titles and controls in order", () => {
+  it("are the thirteen groups of the data model, with their titles and controls in order", () => {
     expect(GROUPS.map((g) => [g.id, g.title, [...g.controls]])).toEqual([
       ["analysis", "Analysis", ["window-size", "frame-rate", "window-spacing"]],
       ["colormap", "Colormap", ["colormap"]],
@@ -26,7 +27,9 @@ describe("the groups", () => {
       ["blended", "Blended Tiles", ["threshold", "notes", "blend-width"]],
       ["circles", "Circles", ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"]],
       ["circles_paint", "Circles paint", ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]],
+      ["note-layout", "Note layout", ["note-layout"]],
       ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance", "peak-prominence"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
       ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
     ]);
@@ -43,10 +46,13 @@ describe("the groups", () => {
 
 describe("the groups shown for each image type", () => {
   it.each(TYPES)("are, for %s, in this order: the top group, Colormap, Image type, the type's group, Data smoothing, Image smoothing", (type) => {
-    const want = ["analysis", "colormap", "image-type", type];
+    const want = ["analysis", "colormap", "image-type"];
+    if (type !== "concentric") want.push(type); // Concentric has no group of its own
+    if (type === "tiles" || type === "blended" || type === "concentric") want.push("note-layout");
     if (type === "tiles" || type === "blended") want.push("local-peaks");
+    if (type === "concentric") want.push("concentric-peaks");
     want.push("data-smoothing");
-    if (type !== "circles" && type !== "circles_paint") want.push("image-smoothing");
+    if (type !== "circles" && type !== "circles_paint" && type !== "concentric") want.push("image-smoothing");
     expect(groupsFor(type)).toEqual(want);
   });
 
@@ -85,7 +91,7 @@ describe("the groups shown for each image type", () => {
   it("put the Gaussian smoothing in Image smoothing, last, for the grid types only", () => {
     expect([...controlsIn("image-smoothing")]).toEqual(["resolution", "interpolate", "gaussian"]);
     for (const type of ["tiles", "contour", "blended"]) expect(groupOf("gaussian", type), type).toBe("image-smoothing");
-    for (const type of ["circles", "circles_paint"]) expect(groupOf("gaussian", type), type).toBeUndefined();
+    for (const type of ["circles", "circles_paint", "concentric"]) expect(groupOf("gaussian", type), type).toBeUndefined();
   });
 
   it("find the group of a control for a type, and none for a control that is not shown", () => {
@@ -179,10 +185,10 @@ describe("the Local peaks group (feature 024)", () => {
     expect(groupTitle("local-peaks")).toBe("Local peaks");
   });
 
-  it("follows the group of Tiles and of Blended Tiles, before Data smoothing, and is shown for no other type", () => {
+  it("follows the group of Tiles and of Blended Tiles (and the Note layout group), before Data smoothing, and is shown for no other type", () => {
     for (const type of ["tiles", "blended"]) {
       const ids = groupsFor(type);
-      expect(ids.indexOf("local-peaks"), type).toBe(ids.indexOf(type) + 1);
+      expect(ids.indexOf("local-peaks"), type).toBe(ids.indexOf(type) + 2); // the Note layout group is between them
       expect(ids.indexOf("local-peaks"), type).toBeLessThan(ids.indexOf("data-smoothing"));
     }
     for (const type of ["contour", "circles", "circles_paint", "nonsense"]) expect(groupsFor(type), type).not.toContain("local-peaks");
@@ -198,5 +204,54 @@ describe("the Local peaks group (feature 024)", () => {
 
   it("is laid out as one row of two and a single control last", () => {
     expect(rowsOf(controlsIn("local-peaks").length)).toEqual([2, 1]);
+  });
+});
+
+describe("the Local peaks group of Concentric (feature 025)", () => {
+  it("has the two settings of the measurement and no checkbox, under the same title as the group of Tiles", () => {
+    expect([...controlsIn("concentric-peaks")]).toEqual(["peak-distance", "peak-prominence"]);
+    expect(groupTitle("concentric-peaks")).toBe("Local peaks");
+    expect(rowsOf(controlsIn("concentric-peaks").length)).toEqual([2]);
+  });
+
+  it("is shown for Concentric only, after Image type and before Data smoothing, with no group of its own", () => {
+    expect(groupsFor("concentric")).toEqual(["analysis", "colormap", "image-type", "note-layout", "concentric-peaks", "data-smoothing"]);
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "nonsense"]) expect(groupsFor(type), type).not.toContain("concentric-peaks");
+    expect(groupsFor("concentric")).not.toContain("concentric");
+    expect(groupsFor("concentric")).not.toContain("local-peaks");
+  });
+
+  it("puts Minimum distance and Prominence in it for Concentric, and none of the grid or checkbox controls in any group", () => {
+    expect(groupOf("peak-distance", "concentric")).toBe("concentric-peaks");
+    expect(groupOf("peak-prominence", "concentric")).toBe("concentric-peaks");
+    for (const control of ["beat-coloring", "threshold", "notes", "resolution", "interpolate", "gaussian", "circle-unit", "blend-width"]) {
+      expect(groupOf(control, "concentric"), control).toBeUndefined();
+    }
+    expect(groupOf("peak-distance", "tiles")).toBe("local-peaks");
+  });
+});
+
+describe("the Note layout group (feature 026)", () => {
+  it("has the one dropdown and a title", () => {
+    expect([...controlsIn("note-layout")]).toEqual(["note-layout"]);
+    expect(groupTitle("note-layout")).toBe("Note layout");
+    expect(rowsOf(controlsIn("note-layout").length)).toEqual([1]);
+  });
+
+  it("is shown for Tiles, Blended tiles and Concentric, after the group of the type and before Local peaks, and for no other type", () => {
+    for (const type of ["tiles", "blended"]) {
+      const ids = groupsFor(type);
+      expect(ids.indexOf("note-layout"), type).toBe(ids.indexOf(type) + 1);
+      expect(ids.indexOf("local-peaks"), type).toBe(ids.indexOf("note-layout") + 1);
+    }
+    const concentric = groupsFor("concentric");
+    expect(concentric.indexOf("note-layout")).toBe(concentric.indexOf("image-type") + 1);
+    expect(concentric.indexOf("concentric-peaks")).toBe(concentric.indexOf("note-layout") + 1);
+    for (const type of ["contour", "circles", "circles_paint", "nonsense"]) expect(groupsFor(type), type).not.toContain("note-layout");
+  });
+
+  it("puts the control in the group for those three types only", () => {
+    for (const type of ["tiles", "blended", "concentric"]) expect(groupOf("note-layout", type), type).toBe("note-layout");
+    for (const type of ["contour", "circles", "circles_paint"]) expect(groupOf("note-layout", type), type).toBeUndefined();
   });
 });

@@ -41,6 +41,7 @@ from ..services.circles import (
 )
 from ..services.frame_interpolation import DEFAULT_INTERPOLATE, MAX_INTERPOLATE, MIN_INTERPOLATE
 from ..services.gaussian import DEFAULT_GAUSSIAN, MAX_GAUSSIAN, MIN_GAUSSIAN
+from ..services.note_layout import DEFAULT_NOTE_LAYOUT, check_note_layout
 from ..services.local_peaks import (
     DEFAULT_MIN_DISTANCE,
     DEFAULT_PROMINENCE,
@@ -175,6 +176,16 @@ def _parse_peak_setting(text: str | None, sent: bool, default: float, check) -> 
         value = float("nan")  # not a number: the check refuses it with its own message
     try:
         return check(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+def _parse_note_layout(text: str | None, sent: bool) -> str:
+    """The requested note layout. Not sent means rows; anything sent must be exactly ``rows`` or ``spiral``."""
+    if text is None and not sent:
+        return DEFAULT_NOTE_LAYOUT
+    try:
+        return check_note_layout(text or "")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
 
@@ -410,6 +421,7 @@ def create_job(
     beat_coloring: str | None = Form(None),
     peak_distance: str | None = Form(None),
     peak_prominence: str | None = Form(None),
+    note_layout: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -433,6 +445,7 @@ def create_job(
     beat_coloring_value = _parse_beat_coloring(beat_coloring, "beat_coloring" in sent)
     peak_distance_value = _parse_peak_setting(peak_distance, "peak_distance" in sent, DEFAULT_MIN_DISTANCE, check_min_distance)
     peak_prominence_value = _parse_peak_setting(peak_prominence, "peak_prominence" in sent, DEFAULT_PROMINENCE, check_prominence)
+    note_layout_value = _parse_note_layout(note_layout, "note_layout" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -471,10 +484,11 @@ def create_job(
                 ),
             )
         result = analyze_channels(left, right, file_rate, window, step=step)
-        # the beat coloring (tiles and blended tiles only): the position of the middle of each frame in the local energy peak
-        # of the whole file, from the local peaks measurement; the other pictures and the box off never measure it
+        # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local peaks
+        # measurement. Concentric is always colored by it; tiles and blended tiles only with the beat coloring box on; the
+        # other pictures and the box off never measure it
         beat = None
-        if beat_coloring_value and image_type_value in ("tiles", "blended"):
+        if image_type_value == "concentric" or (beat_coloring_value and image_type_value in ("tiles", "blended")):
             beat = measure_local_peaks(
                 left, right, file_rate, peak_distance_value, peak_prominence_value
             ).frame_positions(fps, frames)
@@ -503,6 +517,7 @@ def create_job(
             circle_resize=circle_resize_value,
             gaussian=gaussian_value,
             beat=beat,
+            note_layout=note_layout_value,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -541,6 +556,7 @@ def create_job(
         "beat_coloring": beat_coloring_value,
         "peak_distance": peak_distance_value,
         "peak_prominence": peak_prominence_value,
+        "note_layout": note_layout_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

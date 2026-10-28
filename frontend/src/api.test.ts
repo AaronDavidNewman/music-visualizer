@@ -23,6 +23,7 @@ const SETTINGS: JobSettings = {
   beatColoring: true,
   peakDistance: 450,
   peakProminence: 25,
+  noteLayout: "spiral",
 };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -62,6 +63,7 @@ describe("the request that submitJob sends", () => {
       beat_coloring: "true",
       peak_distance: "450",
       peak_prominence: "25",
+      note_layout: "spiral",
       circle_memory: "250",
       circle_notes: "9",
     });
@@ -95,5 +97,17 @@ describe("the beat coloring fields of the request (feature 024)", () => {
   it("shows the server's message for a refused setting", async () => {
     vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The prominence must be a number from 0 to 100 percent." }) }));
     await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The prominence must be a number from 0 to 100 percent.");
+  });
+});
+
+describe("the note layout field of the request (feature 026)", () => {
+  it("sends rows and spiral as the lowercase names", async () => {
+    expect((await posted({ ...SETTINGS, noteLayout: "rows" })).note_layout).toBe("rows");
+    expect((await posted({ ...SETTINGS, noteLayout: "spiral" })).note_layout).toBe("spiral");
+  });
+
+  it("shows the server's message for a refused layout", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The note layout must be one of rows, spiral." }) }));
+    await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The note layout must be one of rows, spiral.");
   });
 });

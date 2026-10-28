@@ -18,6 +18,9 @@ import {
   formatPeakDistance,
   formatPeakProminence,
   beatColoringApplies,
+  peakSettingsShown,
+  noteLayoutApplies,
+  noteLayoutLabel,
   gridSettingsApply,
   isCirclesType,
   formatNoteCountSummary,
@@ -84,9 +87,10 @@ async function onSubmit(chosen: File, settings: JobSettings) {
               <li v-if="result.image_type === 'circles'">Memory: {{ formatCircleMemory(result.circle_memory) }}</li>
               <li>Notes: {{ formatCircleNotes(result.circle_notes) }}</li>
             </template>
+            <li v-if="noteLayoutApplies(result.image_type)">Note layout: {{ noteLayoutLabel(result.note_layout) }}</li>
             <li v-if="beatColoringApplies(result.image_type)">Beat coloring: {{ formatBeatColoring(result.beat_coloring) }}</li>
-            <li v-if="beatColoringApplies(result.image_type) && result.beat_coloring">Minimum distance: {{ formatPeakDistance(result.peak_distance) }}</li>
-            <li v-if="beatColoringApplies(result.image_type) && result.beat_coloring">Prominence: {{ formatPeakProminence(result.peak_prominence) }}</li>
+            <li v-if="peakSettingsShown(result.image_type, result.beat_coloring)">Minimum distance: {{ formatPeakDistance(result.peak_distance) }}</li>
+            <li v-if="peakSettingsShown(result.image_type, result.beat_coloring)">Prominence: {{ formatPeakProminence(result.peak_prominence) }}</li>
             <li v-if="result.image_type === 'blended'">Blend width: {{ formatBlendWidthSummary(result.blend_width) }}</li>
             <li>Window spacing: {{ formatSpacing(result.window_spacing) }}</li>
             <li>Step: {{ Number(result.step_samples.toFixed(2)) }} samples</li>

@@ -77,9 +77,9 @@ describe("the image type controls", () => {
   const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
   const blended = (busy = false) => renderType("blended", busy);
 
-  it("offer Tiles, Blended tiles, Contour, Circles and Circles paint in a dropdown that starts at Tiles", async () => {
+  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint and Concentric in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -357,6 +357,7 @@ const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
     ["colormap", "Colormap", ["colormap"]],
     ["image-type", "Image type", ["image-type"]],
     ["tiles", "Tiles", ["threshold", "notes"]],
+    ["note-layout", "Note layout", ["note-layout"]],
     ["local-peaks", "Local peaks", BEAT_CONTROLS],
     ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
@@ -374,6 +375,7 @@ const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
     ["colormap", "Colormap", ["colormap"]],
     ["image-type", "Image type", ["image-type"]],
     ["blended", "Blended Tiles", ["threshold", "notes", "blend-width"]],
+    ["note-layout", "Note layout", ["note-layout"]],
     ["local-peaks", "Local peaks", BEAT_CONTROLS],
     ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
@@ -428,11 +430,11 @@ describe("the form is a list of titled groups (Story 1)", () => {
     }
   });
 
-  it("ties the open state and the problem flag of each of the seven groups to the form", () => {
-    expect((formSource.match(/<SettingsGroup\b/g) ?? []).length).toBe(7); // top, Colormap, Image type, the type's group, Local peaks, Data smoothing, Image smoothing
-    expect((formSource.match(/:open="isOpen\(/g) ?? []).length).toBe(7);
-    expect((formSource.match(/:problem="/g) ?? []).length).toBe(7);
-    expect((formSource.match(/@toggle="/g) ?? []).length).toBe(7);
+  it("ties the open state and the problem flag of each of the eight groups (the Local peaks group is one of them for either id) to the form", () => {
+    expect((formSource.match(/<SettingsGroup\b/g) ?? []).length).toBe(8); // top, Colormap, Image type, the type's group, Note layout, Local peaks, Data smoothing, Image smoothing
+    expect((formSource.match(/:open="isOpen\(/g) ?? []).length).toBe(8);
+    expect((formSource.match(/:problem="/g) ?? []).length).toBe(8);
+    expect((formSource.match(/@toggle="/g) ?? []).length).toBe(8);
   });
 
   it("collapses with the open state that the group reports, so that no value is touched by it", () => {
@@ -444,7 +446,7 @@ describe("the form is a list of titled groups (Story 1)", () => {
   });
 
   it("flags a group when one of its controls has a value that is not allowed", () => {
-    for (const name of ["analysisProblem", "colormapProblem", "imageTypeProblem", "typeGroupProblem", "localPeaksProblem", "dataSmoothingProblem", "imageSmoothingProblem"]) {
+    for (const name of ["analysisProblem", "colormapProblem", "imageTypeProblem", "typeGroupProblem", "noteLayoutProblem", "localPeaksProblem", "dataSmoothingProblem", "imageSmoothingProblem"]) {
       expect(formSource, name).toContain(name);
     }
     expect(formSource).toMatch(/windowError\.value\s*\|\|\s*frameRateError\.value\s*\|\|\s*spacingError\.value/);
@@ -660,5 +662,86 @@ describe("the Local peaks group (feature 024)", () => {
     expect(formSource).toMatch(/!peakDistanceError\.value/);
     expect(formSource).toMatch(/!peakProminenceError\.value/);
     expect(formSource).toContain(':problem="localPeaksProblem"');
+  });
+});
+
+describe("the page for Concentric (feature 025)", () => {
+  it("shows Analysis, Colormap, Image type, Local peaks and Data smoothing, in this order, and no group of its own", async () => {
+    const groups = groupsOf(await renderType("concentric"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+      ["note-layout", "Note layout", ["note-layout"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
+    ]);
+  });
+
+  it("has the two Local peaks sliders and no Beat coloring checkbox, and none of the grid controls", async () => {
+    const html = await renderType("concentric");
+    expect(html).toContain('id="peak-distance"');
+    expect(html).toContain('id="peak-prominence"');
+    for (const id of ["beat-coloring", "threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "circle-memory"]) {
+      expect(html, id).not.toContain(`id="${id}"`);
+    }
+    expect(html).not.toContain('data-group="image-smoothing"');
+    expect(html).not.toContain('data-group="local-peaks"');
+  });
+
+  it("keeps the checkbox for Tiles and Blended tiles, where the group is local-peaks", async () => {
+    for (const type of ["tiles", "blended"]) {
+      const html = await renderType(type);
+      expect(html, type).toContain('id="beat-coloring"');
+      expect(html, type).toContain('data-group="local-peaks"');
+      expect(html, type).not.toContain('data-group="concentric-peaks"');
+    }
+  });
+
+  it("builds the one Local peaks group for whichever of the two ids is shown, with the checkbox only for local-peaks", () => {
+    expect(formSource).toContain("concentric-peaks");
+    expect(formSource).toMatch(/<SettingsGroup[^>]*v-if="peaksGroup"/);
+    expect(formSource).toMatch(/:id="peaksGroup"/);
+    expect(formSource).toMatch(/v-if="peaksGroup === 'local-peaks'"/);
+  });
+});
+
+describe("the Note layout dropdown (feature 026)", () => {
+  const select = (html: string) => html.match(/<select id="note-layout"[^>]*>[\s\S]*?<\/select>/)?.[0] ?? "";
+
+  it.each(["tiles", "blended", "concentric"])("is a dropdown of Rows and Spiral with Rows selected, with a label and an info button, for %s", async (type) => {
+    const html = await renderType(type);
+    expect(options(html, "note-layout")).toEqual(["Rows", "Spiral"]);
+    const rows = select(html).match(/<option[^>]*value="rows"[^>]*>/)?.[0] ?? "";
+    expect(rows).toContain("selected");
+    expect(select(html).match(/<option[^>]*value="spiral"[^>]*>/)?.[0] ?? "").not.toContain("selected");
+    expect(html).toMatch(/<label for="note-layout"[^>]*>Note layout<\/label>/);
+    expect(html).toContain('aria-label="About note layout"');
+  });
+
+  it.each(["contour", "circles", "circles_paint"])("is not shown for %s", async (type) => {
+    const html = await renderType(type);
+    expect(html).not.toContain('id="note-layout"');
+    expect(html).not.toContain('data-group="note-layout"');
+  });
+
+  it("is in a group of its own after the group of the type and before Local peaks", async () => {
+    for (const type of ["tiles", "blended", "concentric"]) {
+      const html = await renderType(type);
+      const at = html.indexOf('data-group="note-layout"');
+      expect(at, type).toBeGreaterThan(html.indexOf('data-group="image-type"'));
+      expect(at, type).toBeLessThan(html.indexOf('data-group="data-smoothing"'));
+      const peaks = html.indexOf('data-group="local-peaks"') >= 0 ? html.indexOf('data-group="local-peaks"') : html.indexOf('data-group="concentric-peaks"');
+      expect(at, type).toBeLessThan(peaks);
+    }
+  });
+
+  it("keeps the value in a ref, sends it, checks it and lets an error mark the group and block Create frames", () => {
+    expect(formSource).toMatch(/const noteLayout = ref<string>\(DEFAULT_NOTE_LAYOUT\)/);
+    expect(formSource).toContain("noteLayout: noteLayout.value");
+    expect(formSource).toMatch(/const noteLayoutProblem = computed\([^;]*noteLayoutError\.value/);
+    expect(formSource).toMatch(/&&\s+!noteLayoutError\.value/); // Create frames waits for it too
+    expect(formSource).toContain(':problem="noteLayoutProblem"');
+    expect(formSource).toContain("noteLayoutApplies");
   });
 });
