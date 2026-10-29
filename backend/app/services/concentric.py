@@ -87,6 +87,11 @@ def ring_colors(colormap: str, beat) -> np.ndarray:
     return table[rows]
 
 
+def full_radius(width: int, height: int) -> float:
+    """The radius at which circles in neighbouring cells just touch: half the narrower side of a cell (25 pixels on 600 x 400)."""
+    return min(np.diff(tile_edges(GRID_COLUMNS, width)).min(), np.diff(tile_edges(GRID_ROWS, height)).min()) / 2
+
+
 @lru_cache(maxsize=4)
 def _geometry(width: int, height: int):
     """What never changes between frames: ``(cell, ring_a, ring_b, weight_b)`` flattened, for the frame size.
@@ -96,7 +101,7 @@ def _geometry(width: int, height: int):
     """
     column_edges = tile_edges(GRID_COLUMNS, width)
     row_edges = tile_edges(GRID_ROWS, height)
-    radius = min(np.diff(column_edges).min(), np.diff(row_edges).min()) / 2  # half the narrower side of a cell
+    radius = full_radius(width, height)
     ring_width = radius / RINGS
     scale = SUPERSAMPLE
     cell = np.zeros((height, width), dtype=np.int32)

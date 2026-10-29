@@ -10,6 +10,7 @@ import {
   circleResizeHelp,
   circleRadiusHelp,
   circleNotesHelp,
+  decayRateHelp,
   circleUnitHelp,
   noteCountHelp,
   resolutionHelp,
@@ -224,5 +225,29 @@ describe("the Note layout help (feature 026)", () => {
     expect(noteLayoutHelp).toContain("counterclockwise");
     expect(noteLayoutHelp).toContain("Tiles");
     expect(noteLayoutHelp).toContain("Concentric");
+  });
+});
+
+describe("the Decay help (feature 027)", () => {
+  it("describes the Decay picture in the Image type help", () => {
+    expect(imageTypeHelp).toContain("Decay:");
+    expect(imageTypeHelp).toContain("84 circles");
+    expect(imageTypeHelp).toContain("0 to 64");
+    expect(imageTypeHelp).toContain("5 loudest notes");
+    expect(imageTypeHelp).toContain("decay rate");
+    expect(imageTypeHelp).toContain("24");
+    expect(imageTypeHelp).toContain("32");
+    expect(imageTypeHelp).toContain("12 rings");
+    expect(imageTypeHelp).toContain("rings like Concentric");
+    for (const earlier of ["Tiles:", "Blended tiles:", "Contour:", "Circles:", "Circles paint:", "Concentric:"]) expect(imageTypeHelp).toContain(earlier);
+  });
+
+  it("explains the decay rate: the range, the default, what happens every so many frames and that it counts frames", () => {
+    expect(decayRateHelp).toContain("1 to 10");
+    expect(decayRateHelp).toContain("default 5");
+    expect(decayRateHelp).toContain("2 points");
+    expect(decayRateHelp).toContain("16 points");
+    expect(decayRateHelp).toContain("frames");
+    expect(decayRateHelp.length).toBeGreaterThan(60);
   });
 });

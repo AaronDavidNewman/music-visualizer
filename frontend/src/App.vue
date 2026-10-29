@@ -9,6 +9,7 @@ import {
   colormapLabel,
   formatBlendWidthSummary,
   formatCircleMemory,
+  formatDecayRate,
   formatCircleNotes,
   formatCircleResize,
   formatCircleRadius,
@@ -87,6 +88,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
               <li v-if="result.image_type === 'circles'">Memory: {{ formatCircleMemory(result.circle_memory) }}</li>
               <li>Notes: {{ formatCircleNotes(result.circle_notes) }}</li>
             </template>
+            <li v-if="result.image_type === 'decay'">Decay rate: {{ formatDecayRate(result.decay_rate) }}</li>
             <li v-if="noteLayoutApplies(result.image_type)">Note layout: {{ noteLayoutLabel(result.note_layout) }}</li>
             <li v-if="beatColoringApplies(result.image_type)">Beat coloring: {{ formatBeatColoring(result.beat_coloring) }}</li>
             <li v-if="peakSettingsShown(result.image_type, result.beat_coloring)">Minimum distance: {{ formatPeakDistance(result.peak_distance) }}</li>

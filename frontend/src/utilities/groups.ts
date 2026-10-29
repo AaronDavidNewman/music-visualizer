@@ -1,4 +1,4 @@
-import { beatColoringApplies, gridSettingsApply, noteLayoutApplies } from "./validation";
+import { beatColoringApplies, gridSettingsApply, isRingsType, noteLayoutApplies } from "./validation";
 
 /**
  * The groups of the settings form (feature 020): which groups there are, what is in each, which are shown for an image type, and
@@ -26,18 +26,20 @@ export const GROUPS: readonly GroupDefinition[] = [
   },
   // the same circles with no memory (feature 022): so no Memory control
   { id: "circles_paint", title: "Circles paint", controls: ["circle-unit", "circle-radius", "circle-resize", "circle-notes"] },
-  // which note is in which cell (feature 026), for the three pictures with one shape for each note
+  // the decay rate of the Decay picture (feature 027): the frames between two decay steps
+  { id: "decay", title: "Decay", controls: ["decay-rate"] },
+  // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
   // the beat coloring of Tiles and Blended tiles (feature 024): its own group, after the group of the type
   { id: "local-peaks", title: "Local peaks", controls: ["beat-coloring", "peak-distance", "peak-prominence"] },
-  // the same two settings for Concentric (feature 025): the beat always colors it, so no checkbox, and no group of its own
+  // the same two settings for Concentric (feature 025) and Decay (feature 027): the beat always colors or charges them, so no checkbox
   { id: "concentric-peaks", title: "Local peaks", controls: ["peak-distance", "peak-prominence"] },
   { id: "data-smoothing", title: "Data smoothing", controls: ["smoothing-window", "smoothing"] },
   { id: "image-smoothing", title: "Image smoothing", controls: ["resolution", "interpolate", "gaussian"] },
 ];
 
 /** The ids of the groups that belong to one image type: exactly one of them follows the Image type group. */
-const TYPE_GROUPS = ["tiles", "contour", "blended", "circles", "circles_paint"];
+const TYPE_GROUPS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay"];
 
 const byId = new Map(GROUPS.map((g) => [g.id, g]));
 
@@ -51,16 +53,16 @@ export function controlsIn(id: string): readonly string[] {
 
 /**
  * The ids of the groups shown for an image type, top to bottom: the top group, Colormap, Image type, the group of the type
- * (none for Concentric, which has no controls of its own, nor for a type that is not one of the six), Note layout for Tiles, Blended
- * tiles and Concentric, Local peaks for Tiles and
- * Blended tiles (with the checkbox) and for Concentric (without it), Data smoothing, and Image smoothing when the type draws a grid.
+ * (none for Concentric, which has no controls of its own, nor for a type that is not one of the seven), Note layout for Tiles, Blended
+ * tiles, Concentric and Decay, Local peaks for Tiles and
+ * Blended tiles (with the checkbox) and for Concentric and Decay (without it), Data smoothing, and Image smoothing when the type draws a grid.
  */
 export function groupsFor(imageType: string): string[] {
   const ids = ["analysis", "colormap", "image-type"];
   if (TYPE_GROUPS.includes(imageType)) ids.push(imageType);
   if (noteLayoutApplies(imageType)) ids.push("note-layout");
   if (beatColoringApplies(imageType)) ids.push("local-peaks");
-  if (imageType === "concentric") ids.push("concentric-peaks");
+  if (isRingsType(imageType)) ids.push("concentric-peaks");
   ids.push("data-smoothing");
   if (gridSettingsApply(imageType)) ids.push("image-smoothing");
   return ids;

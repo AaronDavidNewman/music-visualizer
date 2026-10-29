@@ -24,6 +24,7 @@ const SETTINGS: JobSettings = {
   peakDistance: 450,
   peakProminence: 25,
   noteLayout: "spiral",
+  decayRate: 3,
 };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -64,6 +65,7 @@ describe("the request that submitJob sends", () => {
       peak_distance: "450",
       peak_prominence: "25",
       note_layout: "spiral",
+      decay_rate: "3",
       circle_memory: "250",
       circle_notes: "9",
     });
@@ -109,5 +111,17 @@ describe("the note layout field of the request (feature 026)", () => {
   it("shows the server's message for a refused layout", async () => {
     vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The note layout must be one of rows, spiral." }) }));
     await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The note layout must be one of rows, spiral.");
+  });
+});
+
+describe("the decay rate field of the request (feature 027)", () => {
+  it("sends the rate as a whole number in text, and the image type decay", async () => {
+    expect((await posted({ ...SETTINGS, imageType: "decay", decayRate: 10 })).decay_rate).toBe("10");
+    expect((await posted({ ...SETTINGS, imageType: "decay", decayRate: 1 })).image_type).toBe("decay");
+  });
+
+  it("shows the server's message for a refused rate", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The decay rate must be a whole number from 1 to 10." }) }));
+    await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The decay rate must be a whole number from 1 to 10.");
   });
 });

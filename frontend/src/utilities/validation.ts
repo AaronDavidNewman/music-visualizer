@@ -87,7 +87,7 @@ export function validateSmoothingWindow(value: string | number): string | null {
 /**
  * The kinds of picture: Tiles (flat tiles with hard edges, the default), Blended tiles (colors fade across the tile
  * edges) and Contour (the notes drawn as a filled contour map), then Circles, Circles paint and Concentric (a circle of up to
- * twelve rings for each of the 84 notes).
+ * twelve rings for each of the 84 notes) and Decay (the same circles, each a disc that keeps points and fades into its neighbours).
  */
 export const IMAGE_TYPES = [
   { value: "tiles", label: "Tiles" },
@@ -96,6 +96,7 @@ export const IMAGE_TYPES = [
   { value: "circles", label: "Circles" },
   { value: "circles_paint", label: "Circles paint" },
   { value: "concentric", label: "Concentric" },
+  { value: "decay", label: "Decay" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -306,14 +307,40 @@ export function isCirclesType(imageType: string): boolean {
   return imageType === "circles" || imageType === "circles_paint";
 }
 
-/** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate, Gaussian) mean anything: not for circles and not for Concentric. */
+/** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate, Gaussian) mean anything: not for circles, Concentric and Decay. */
 export function gridSettingsApply(imageType: string): boolean {
-  return !isCirclesType(imageType) && imageType !== "concentric";
+  return !isCirclesType(imageType) && !isRingsType(imageType);
 }
 
-/** Whether Minimum distance and Prominence are used: always by Concentric (the beat colors it), by Tiles and Blended tiles with the Beat coloring box on, never by the others. */
+/** Whether the picture is one of the two with a circle for each of the 84 notes that the beat always colors: Concentric and Decay (feature 027). */
+export function isRingsType(imageType: string): boolean {
+  return imageType === "concentric" || imageType === "decay";
+}
+
+/** Whether Minimum distance and Prominence are used: always by Concentric and Decay (the beat colors or charges them), by Tiles and Blended tiles with the Beat coloring box on, never by the others. */
 export function peakSettingsShown(imageType: string, beatColoring: boolean): boolean {
-  return imageType === "concentric" || (beatColoringApplies(imageType) && beatColoring);
+  return isRingsType(imageType) || (beatColoringApplies(imageType) && beatColoring);
+}
+
+/** The decay rate (feature 027): the number of frames between two decay steps of the Decay picture. */
+export const DECAY_RATE_RANGE = { min: 1, max: 10, step: 1 } as const;
+export const DEFAULT_DECAY_RATE = 5;
+
+const decayRateMessage = `The decay rate must be a whole number from ${DECAY_RATE_RANGE.min} to ${DECAY_RATE_RANGE.max}.`;
+
+/** Returns an error message, or null when the decay rate is a whole number from 1 to 10. */
+export function validateDecayRate(value: string | number): string | null {
+  return validateWhole(value, DECAY_RATE_RANGE.min, DECAY_RATE_RANGE.max, decayRateMessage);
+}
+
+/** The readout beside the slider and the summary item: "1 frame", "5 frames". */
+export function formatDecayRate(value: number): string {
+  return value === 1 ? "1 frame" : `${value} frames`;
+}
+
+/** Whether the decay rate does anything: only for Decay. */
+export function decayRateApplies(imageType: string): boolean {
+  return imageType === "decay";
 }
 
 /** Beat coloring (feature 024): half the color of a tile comes from the frame's place in the local energy peak. */
@@ -373,7 +400,7 @@ export function noteLayoutLabel(value: string): string {
   return NOTE_LAYOUTS.find((l) => l.value === value)?.label ?? value;
 }
 
-/** Whether the note layout does anything: for the pictures with one shape for each note, Tiles, Blended tiles and Concentric. */
+/** Whether the note layout does anything: for the pictures with one shape for each note, Tiles, Blended tiles, Concentric and Decay. */
 export function noteLayoutApplies(imageType: string): boolean {
-  return imageType === "tiles" || imageType === "blended" || imageType === "concentric";
+  return imageType === "tiles" || imageType === "blended" || isRingsType(imageType);
 }

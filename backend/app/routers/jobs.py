@@ -41,6 +41,7 @@ from ..services.circles import (
 )
 from ..services.frame_interpolation import DEFAULT_INTERPOLATE, MAX_INTERPOLATE, MIN_INTERPOLATE
 from ..services.gaussian import DEFAULT_GAUSSIAN, MAX_GAUSSIAN, MIN_GAUSSIAN
+from ..services.decay import DEFAULT_DECAY_RATE, MAX_DECAY_RATE, MIN_DECAY_RATE
 from ..services.note_layout import DEFAULT_NOTE_LAYOUT, check_note_layout
 from ..services.local_peaks import (
     DEFAULT_MIN_DISTANCE,
@@ -253,6 +254,21 @@ def _parse_circle_memory(text: str | None, sent: bool) -> int:
     return int(value)
 
 
+def _parse_decay_rate(text: str | None, sent: bool) -> int:
+    """The requested number of frames between decay steps. Not sent means the default; anything sent must be a whole number 1..10."""
+    if text is None and not sent:
+        return DEFAULT_DECAY_RATE
+    text = text or ""
+    message = f"The decay rate must be a whole number from {MIN_DECAY_RATE} to {MAX_DECAY_RATE}."
+    try:
+        value = float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=message) from None
+    if not math.isfinite(value) or not value.is_integer() or not MIN_DECAY_RATE <= value <= MAX_DECAY_RATE:
+        raise HTTPException(status_code=400, detail=message)
+    return int(value)
+
+
 def _parse_circle_notes(text: str | None, sent: bool) -> int:
     """The requested number of circles per frame. Not sent means the default; anything sent must be a whole number 5..12."""
     if text is None and not sent:
@@ -422,6 +438,7 @@ def create_job(
     peak_distance: str | None = Form(None),
     peak_prominence: str | None = Form(None),
     note_layout: str | None = Form(None),
+    decay_rate: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -446,6 +463,7 @@ def create_job(
     peak_distance_value = _parse_peak_setting(peak_distance, "peak_distance" in sent, DEFAULT_MIN_DISTANCE, check_min_distance)
     peak_prominence_value = _parse_peak_setting(peak_prominence, "peak_prominence" in sent, DEFAULT_PROMINENCE, check_prominence)
     note_layout_value = _parse_note_layout(note_layout, "note_layout" in sent)
+    decay_rate_value = _parse_decay_rate(decay_rate, "decay_rate" in sent)
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -485,10 +503,10 @@ def create_job(
             )
         result = analyze_channels(left, right, file_rate, window, step=step)
         # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local peaks
-        # measurement. Concentric is always colored by it; tiles and blended tiles only with the beat coloring box on; the
+        # measurement. Concentric and Decay are always colored by it; tiles and blended tiles only with the beat coloring box on; the
         # other pictures and the box off never measure it
         beat = None
-        if image_type_value == "concentric" or (beat_coloring_value and image_type_value in ("tiles", "blended")):
+        if image_type_value in ("concentric", "decay") or (beat_coloring_value and image_type_value in ("tiles", "blended")):
             beat = measure_local_peaks(
                 left, right, file_rate, peak_distance_value, peak_prominence_value
             ).frame_positions(fps, frames)
@@ -518,6 +536,7 @@ def create_job(
             gaussian=gaussian_value,
             beat=beat,
             note_layout=note_layout_value,
+            decay_rate=decay_rate_value,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -557,6 +576,7 @@ def create_job(
         "peak_distance": peak_distance_value,
         "peak_prominence": peak_prominence_value,
         "note_layout": note_layout_value,
+        "decay_rate": decay_rate_value,
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

@@ -5,7 +5,9 @@ import {
   COLORMAPS,
   DEFAULT_COLORMAP,
   DEFAULT_BEAT_COLORING,
+  DEFAULT_DECAY_RATE,
   DEFAULT_NOTE_LAYOUT,
+  DECAY_RATE_RANGE,
   NOTE_LAYOUTS,
   DEFAULT_BLEND_WIDTH,
   DEFAULT_PEAK_DISTANCE,
@@ -41,6 +43,7 @@ import {
   WINDOW_SIZES,
   formatBeatColoring,
   formatBlendWidth,
+  formatDecayRate,
   formatPeakDistance,
   formatPeakProminence,
   formatCircleMemory,
@@ -56,6 +59,7 @@ import {
   formatThreshold,
   validateBlendWidth,
   validatePeakDistance,
+  validateDecayRate,
   validateNoteLayout,
   noteLayoutApplies,
   validatePeakProminence,
@@ -97,6 +101,7 @@ import {
   imageTypeHelp,
   gaussianHelp,
   beatColoringHelp,
+  decayRateHelp,
   noteLayoutHelp,
   peakDistanceHelp,
   peakProminenceHelp,
@@ -135,6 +140,7 @@ const circleNotes = ref<number>(DEFAULT_CIRCLE_NOTES);
 const circleRadius = ref<number>(DEFAULT_CIRCLE_RADIUS);
 const circleResize = ref<boolean>(DEFAULT_CIRCLE_RESIZE);
 const noteLayout = ref<string>(DEFAULT_NOTE_LAYOUT);
+const decayRate = ref<number>(DEFAULT_DECAY_RATE);
 const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
 const peakDistance = ref<number>(DEFAULT_PEAK_DISTANCE);
 const peakProminence = ref<number>(DEFAULT_PEAK_PROMINENCE);
@@ -171,6 +177,7 @@ const circleMemoryError = computed(() => validateCircleMemory(circleMemory.value
 const circleNotesError = computed(() => validateCircleNotes(circleNotes.value));
 const circleRadiusError = computed(() => validateCircleRadius(circleRadius.value));
 const noteLayoutError = computed(() => validateNoteLayout(noteLayout.value));
+const decayRateError = computed(() => validateDecayRate(decayRate.value));
 const peakDistanceError = computed(() => validatePeakDistance(peakDistance.value));
 const peakProminenceError = computed(() => validatePeakProminence(peakProminence.value));
 const canSubmit = computed(
@@ -194,17 +201,18 @@ const canSubmit = computed(
     !circleNotesError.value &&
     !circleRadiusError.value &&
     !noteLayoutError.value &&
+    !decayRateError.value &&
     !peakDistanceError.value &&
     !peakProminenceError.value,
 );
 
 // The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
 // shown. Every value stays in its ref, so it is kept when a group is folded or the type is changed, and is still sent.
-const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint"];
+const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay"];
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
-// the Local peaks group has one of two ids: local-peaks (Tiles and Blended tiles: with the checkbox) or concentric-peaks (Concentric: without)
+// the Local peaks group has one of two ids: local-peaks (Tiles and Blended tiles: with the checkbox) or concentric-peaks (Concentric and Decay: without)
 const showNoteLayout = computed(() => noteLayoutApplies(imageType.value));
 const peaksGroup = computed(() => shownGroups.value.find((id) => id === "local-peaks" || id === "concentric-peaks") ?? "");
 function inTypeGroup(control: string): boolean {
@@ -229,7 +237,8 @@ const typeGroupProblem = computed(
     (inTypeGroup("circle-unit") && !!circleUnitError.value) ||
     (inTypeGroup("circle-radius") && !!circleRadiusError.value) ||
     (inTypeGroup("circle-memory") && !!circleMemoryError.value) ||
-    (inTypeGroup("circle-notes") && !!circleNotesError.value),
+    (inTypeGroup("circle-notes") && !!circleNotesError.value) ||
+    (inTypeGroup("decay-rate") && !!decayRateError.value),
 );
 const noteLayoutProblem = computed(() => !!noteLayoutError.value);
 const localPeaksProblem = computed(() => !!(peakDistanceError.value || peakProminenceError.value));
@@ -269,6 +278,7 @@ function onSubmit() {
     circleRadius: circleRadius.value,
     circleResize: circleResize.value,
     noteLayout: noteLayout.value,
+    decayRate: decayRate.value,
     beatColoring: beatColoring.value,
     peakDistance: peakDistance.value,
     peakProminence: peakProminence.value,
@@ -504,6 +514,24 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="circleNotesError" class="error">{{ circleNotesError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('decay-rate')" class="field">
+        <div class="field-head">
+          <label for="decay-rate">Decay rate</label>
+          <InfoPopover label="decay rate" :text="decayRateHelp" />
+          <output class="slider-value" for="decay-rate">{{ formatDecayRate(decayRate) }}</output>
+        </div>
+        <input
+          id="decay-rate"
+          v-model.number="decayRate"
+          type="range"
+          :min="DECAY_RATE_RANGE.min"
+          :max="DECAY_RATE_RANGE.max"
+          :step="DECAY_RATE_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="decayRateError" class="error">{{ decayRateError }}</small>
       </div>
     </SettingsGroup>
 

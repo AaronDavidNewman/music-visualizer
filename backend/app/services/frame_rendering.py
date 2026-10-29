@@ -46,6 +46,7 @@ from .circles import (
 from .circles_paint import write_paint_frames
 from .colormaps import DEFAULT_COLORMAP, check_beat, check_colormap, colorize, lookup_table
 from .concentric import write_concentric_frames
+from .decay import DEFAULT_DECAY_RATE, check_decay_rate, circle_points, write_decay_frames
 from .contour import write_contour_frames
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
 from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
@@ -259,6 +260,7 @@ def write_frames(
     gaussian: float = DEFAULT_GAUSSIAN,
     beat: np.ndarray | None = None,
     note_layout: str = DEFAULT_NOTE_LAYOUT,
+    decay_rate: int = DEFAULT_DECAY_RATE,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -333,6 +335,13 @@ def write_frames(
     for ``tiles``, ``blended`` and ``concentric``; the other image types check it and ignore it. With ``rows`` the pictures are what
     they always were. Only the place of a note changes: its value, strength, hiding and color are those of the note.
 
+    ``image_type="decay"`` draws the same 84 circles as ``concentric`` (the same places and ``note_layout``) but each as one flat disc that
+    keeps points from 0 to 64 from frame to frame (see ``decay``): the five loudest notes of a frame gain 24, 20, 16, 12 and 8 points
+    plus up to 8 from ``beat``, every ``decay_rate`` frames (a whole number from 1 to 10, default 5) each circle gives 2 points to
+    each neighbour and loses 16 in all; the points set the size (full from 24) and the color (the last from 32). Smoothing, the colormap,
+    ``beat`` and ``note_layout`` apply; every other setting is checked and ignored. ``decay_rate`` is checked for every image type and
+    has no effect on the others.
+
     Every argument is checked before anything is written.
     """
     colormap = check_colormap(colormap)
@@ -350,6 +359,7 @@ def write_frames(
     circle_resize = check_circle_resize(circle_resize)
     gaussian = check_gaussian(gaussian)
     note_layout = check_note_layout(note_layout)
+    decay_rate = check_decay_rate(decay_rate)
     if beat is not None:
         beat = check_beat(beat, len(frames))  # checked for every image type, used by tiles and blended only
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
@@ -385,6 +395,10 @@ def write_frames(
         return
     if image_type == "concentric":  # 84 circles of rings; the grid settings above are checked and not used, the beat is optional here
         write_concentric_frames(arrange_notes(smoothed, note_layout), colormap, directory, beat, IMAGE_WIDTH, IMAGE_HEIGHT)
+        return
+    if image_type == "decay":  # 84 discs that keep points from frame to frame; the grid settings above are checked and not used
+        points = circle_points(smoothed, beat, note_layout, decay_rate)
+        write_decay_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
     columns, rows = GRID_COLUMNS * resolution, GRID_ROWS * resolution
     shown = spread_notes(smoothed[:, :SHOWN_NOTES], note_count)

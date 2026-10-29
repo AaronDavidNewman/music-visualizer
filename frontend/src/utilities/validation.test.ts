@@ -199,7 +199,7 @@ describe("smoothing window", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint and Concentric in that order and starts at tiles", () => {
+  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric and Decay in that order and starts at tiles", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["tiles", "Tiles"],
       ["blended", "Blended tiles"],
@@ -207,6 +207,7 @@ describe("image type", () => {
       ["circles", "Circles"],
       ["circles_paint", "Circles paint"],
       ["concentric", "Concentric"],
+      ["decay", "Decay"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
     expect(imageTypeLabel("tiles")).toBe("Tiles");
@@ -215,14 +216,15 @@ describe("image type", () => {
     expect(imageTypeLabel("circles")).toBe("Circles");
     expect(imageTypeLabel("circles_paint")).toBe("Circles paint");
     expect(imageTypeLabel("concentric")).toBe("Concentric");
+    expect(imageTypeLabel("decay")).toBe("Decay");
   });
 
   it.each(values)("accepts %j", (v) => {
     expect(validateImageType(v)).toBeNull();
   });
 
-  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric "])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric.");
+  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays"])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay.");
   });
 
   it("knows the two circle types, and the grid settings apply to neither", () => {
@@ -433,6 +435,7 @@ describe("circles settings", () => {
   });
 });
 
+import { DECAY_RATE_RANGE, DEFAULT_DECAY_RATE, decayRateApplies, formatDecayRate, isRingsType, validateDecayRate } from "./validation";
 import {
   DEFAULT_BEAT_COLORING,
   DEFAULT_PEAK_DISTANCE,
@@ -535,8 +538,41 @@ describe("note layout (feature 026)", () => {
     expect(validateNoteLayout(v)).toBe(MESSAGE);
   });
 
-  it("applies to Tiles, Blended tiles and Concentric only", () => {
-    for (const type of ["tiles", "blended", "concentric"]) expect(noteLayoutApplies(type), type).toBe(true);
+  it("applies to Tiles, Blended tiles, Concentric and Decay only", () => {
+    for (const type of ["tiles", "blended", "concentric", "decay"]) expect(noteLayoutApplies(type), type).toBe(true);
     for (const type of ["contour", "circles", "circles_paint", "nonsense", ""]) expect(noteLayoutApplies(type), type).toBe(false);
+  });
+});
+
+describe("Decay (feature 027)", () => {
+  it("is not a grid type, has no checkbox, uses the Local peaks settings always and has the note layout", () => {
+    expect(gridSettingsApply("decay")).toBe(false);
+    expect(isCirclesType("decay")).toBe(false);
+    expect(beatColoringApplies("decay")).toBe(false);
+    for (const box of [true, false]) expect(peakSettingsShown("decay", box), String(box)).toBe(true);
+    expect(noteLayoutApplies("decay")).toBe(true);
+    expect(isRingsType("decay") && isRingsType("concentric")).toBe(true);
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint"]) expect(isRingsType(type), type).toBe(false);
+  });
+
+  it("has a decay rate from 1 to 10 in steps of 1, 5 at the start, applying to Decay only", () => {
+    expect(DECAY_RATE_RANGE).toEqual({ min: 1, max: 10, step: 1 });
+    expect(DEFAULT_DECAY_RATE).toBe(5);
+    expect(decayRateApplies("decay")).toBe(true);
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", ""]) expect(decayRateApplies(type), type).toBe(false);
+  });
+
+  it.each([1, 2, 5, 9, 10, "3", " 4 ", 7.0])("accepts the decay rate %j", (v) => {
+    expect(validateDecayRate(v)).toBeNull();
+  });
+
+  it.each([0, 11, 2.5, -1, "", "abc", "1e3", NaN, Infinity, "0.5"])("refuses the decay rate %j with the message", (v) => {
+    expect(validateDecayRate(v)).toBe("The decay rate must be a whole number from 1 to 10.");
+  });
+
+  it("writes the rate in frames, one frame in the singular", () => {
+    expect(formatDecayRate(1)).toBe("1 frame");
+    expect(formatDecayRate(5)).toBe("5 frames");
+    expect(formatDecayRate(10)).toBe("10 frames");
   });
 });

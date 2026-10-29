@@ -17,7 +17,7 @@ from .frame_size import HEIGHT, WIDTH, tile_center
 
 ORDER = note_order("spiral")
 MESSAGE = "The note layout must be one of rows, spiral."
-ALL_TYPES = ["tiles", "blended", "contour", "circles", "circles_paint", "concentric"]
+ALL_TYPES = ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay"]
 LAID_OUT = ["tiles", "blended", "concentric"]
 
 

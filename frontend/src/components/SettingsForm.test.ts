@@ -77,9 +77,9 @@ describe("the image type controls", () => {
   const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
   const blended = (busy = false) => renderType("blended", busy);
 
-  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint and Concentric in a dropdown that starts at Tiles", async () => {
+  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric and Decay in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -488,7 +488,7 @@ describe("the groups of the chosen image type (Story 2)", () => {
   it("shares the values of Movement, Radius, Resize by volume and Notes between Circles and Circles paint", () => {
     // one ref each in the form, shown by either circle group, so that switching the type keeps what was entered
     for (const control of ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]) expect(formSource).toContain(`inTypeGroup('${control}')`);
-    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint"]');
+    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay"]');
     expect((formSource.match(/const circleUnit = ref/g) ?? []).length).toBe(1);
     expect((formSource.match(/const circleNotes = ref/g) ?? []).length).toBe(1);
   });
@@ -743,5 +743,54 @@ describe("the Note layout dropdown (feature 026)", () => {
     expect(formSource).toMatch(/&&\s+!noteLayoutError\.value/); // Create frames waits for it too
     expect(formSource).toContain(':problem="noteLayoutProblem"');
     expect(formSource).toContain("noteLayoutApplies");
+  });
+});
+
+describe("the page for Decay (feature 027)", () => {
+  it("shows Analysis, Colormap, Image type, Decay, Note layout, Local peaks and Data smoothing, in this order", async () => {
+    const groups = groupsOf(await renderType("decay"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+      ["decay", "Decay", ["decay-rate"]],
+      ["note-layout", "Note layout", ["note-layout"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
+    ]);
+  });
+
+  it("has the Decay rate slider from 1 to 10 in steps of 1, with a label and an info button", async () => {
+    const html = await renderType("decay");
+    const slider = html.match(/<input id="decay-rate"[^>]*>/)?.[0] ?? "";
+    expect(slider).toContain('type="range"');
+    expect(slider).toContain('min="1"');
+    expect(slider).toContain('max="10"');
+    expect(slider).toContain('step="1"');
+    expect(html).toMatch(/<label[^>]*for="decay-rate"[^>]*>Decay rate<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="decay-rate"[^>]*>5 frames<\/output>/);
+  });
+
+  it("has no Beat coloring checkbox and none of the grid controls", async () => {
+    const html = await renderType("decay");
+    for (const id of ["beat-coloring", "threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "circle-memory"]) {
+      expect(html, id).not.toContain(`id="${id}"`);
+    }
+    expect(html).not.toContain('data-group="image-smoothing"');
+    expect(html).not.toContain('data-group="local-peaks"');
+  });
+
+  it("does not show the Decay rate for any other type", async () => {
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric"]) {
+      expect(await renderType(type), type).not.toContain('id="decay-rate"');
+    }
+  });
+
+  it("flags the Decay group and blocks the form when the rate is not allowed, and sends the rate", () => {
+    expect(formSource).toContain('(inTypeGroup("decay-rate") && !!decayRateError.value)');
+    expect(formSource).toContain("!decayRateError.value");
+    expect(formSource).toContain("decayRate: decayRate.value");
+    expect(formSource).toContain("validateDecayRate(decayRate.value)");
+    expect(formSource).toContain("ref<number>(DEFAULT_DECAY_RATE)");
   });
 });

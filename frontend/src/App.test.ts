@@ -115,3 +115,20 @@ describe("the result summary: note layout (feature 026)", () => {
     expect(line("Note layout:")).toContain("noteLayoutLabel(result.note_layout)");
   });
 });
+
+describe("the result summary for Decay (feature 027)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows the decay rate in frames for Decay only", () => {
+    expect(line("Decay rate:")).toContain("result.image_type === 'decay'");
+    expect(line("Decay rate:")).toContain("formatDecayRate(result.decay_rate)");
+  });
+
+  it("shows the note layout and the Local peaks settings, and not Threshold, Notes, Interpolate, Oversampling, Gaussian smoothing or Beat coloring", () => {
+    expect(line("Note layout:")).toContain("noteLayoutApplies(result.image_type)");
+    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+    expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
+    for (const label of ["Oversampling:", "Gaussian smoothing:"]) expect(line(label), label).toContain("gridSettingsApply(result.image_type)");
+  });
+});

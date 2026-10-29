@@ -34,6 +34,8 @@ export interface JobResult {
   peak_prominence: number;
   /** Tiles, Blended tiles and Concentric: which note is in which cell of the grid, rows or spiral (feature 026). */
   note_layout: string;
+  /** Decay: the number of frames between two decay steps (feature 027). */
+  decay_rate: number;
   circle_memory: number;
   circle_notes: number;
   window_spacing: number;
@@ -76,6 +78,7 @@ export interface JobSettings {
   peakProminence: number;
   /** "rows" (the default) or "spiral". */
   noteLayout: string;
+  decayRate: number;
   circleMemory: number;
   circleNotes: number;
 }
@@ -104,6 +107,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("peak_distance", String(settings.peakDistance));
   body.append("peak_prominence", String(settings.peakProminence));
   body.append("note_layout", settings.noteLayout);
+  body.append("decay_rate", String(settings.decayRate));
   body.append("circle_memory", String(settings.circleMemory));
   body.append("circle_notes", String(settings.circleNotes));
 

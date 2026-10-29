@@ -19,7 +19,9 @@ A third kind, ``contour``, is not tile colors at all: the grid of note values is
 ``contour.py``, because it needs matplotlib's drawing; this module stays pure numpy and only lists its name. A fourth kind,
 ``circles``, is not made from the grid either: circles that wander as the music plays (``circles.py``). A fifth, ``circles_paint``,
 makes the same circles with no memory, painted onto a copy of the previous picture (``circles_paint.py``). A sixth,
-``concentric``, is a circle of up to twelve flat rings for each of the 84 notes on the 12 x 7 grid (``concentric.py``).
+``concentric``, is a circle of up to twelve flat rings for each of the 84 notes on the 12 x 7 grid (``concentric.py``). A seventh,
+``decay``, has the same circles but each is one flat disc that keeps points from frame to frame, charged by the loudest notes and
+spreading into its neighbours as time passes (``decay.py``).
 
 This module knows nothing about the note analysis or the grid of the application: the tile geometry is passed in.
 """
@@ -29,7 +31,7 @@ import numbers
 
 import numpy as np
 
-IMAGE_TYPES = ("tiles", "blended", "contour", "circles", "circles_paint", "concentric")
+IMAGE_TYPES = ("tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay")
 DEFAULT_IMAGE_TYPE = "tiles"
 
 # The blend width is a percentage of the tile width: the reach of the fade on each side of an edge.

@@ -12,7 +12,7 @@ from .test_peak_tile_colors_api import COLORMAP, ROWS, TONE_NOTE, all_frames, po
 from .test_resolution_api import picture, tiny
 
 MESSAGE = "The note layout must be one of rows, spiral."
-ALL_TYPES = ["tiles", "blended", "contour", "circles", "circles_paint", "concentric"]
+ALL_TYPES = ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay"]
 LAID_OUT = ["tiles", "blended", "concentric"]
 ORDER = note_order("spiral")
 TONE_CELL = int(np.flatnonzero(ORDER == TONE_NOTE)[0])  # the cell where the spiral puts the note of the tone
