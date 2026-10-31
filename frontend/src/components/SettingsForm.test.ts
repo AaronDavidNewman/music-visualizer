@@ -366,7 +366,8 @@ const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
     ["analysis", "Analysis", TOP],
     ["colormap", "Colormap", ["colormap"]],
     ["image-type", "Image type", ["image-type"]],
-    ["contour", "Contour", ["threshold", "notes"]],
+    ["contour", "Contour", ["threshold", "notes", "wave-count"]],
+    ["local-peaks", "Local peaks", BEAT_CONTROLS],
     ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
   ],
@@ -462,10 +463,11 @@ describe("the groups of the chosen image type (Story 2)", () => {
     expect(groups.filter((g) => TYPE_IDS.includes(g.id))).toHaveLength(1);
   });
 
-  it("has, for Tiles and Contour, the same two controls under the title of the chosen type", async () => {
+  it("has, for Tiles and Contour, Threshold and Notes first under the title of the chosen type, and for Contour the Wave count after them", async () => {
     const tiles = groupsOf(await renderType("tiles"))[3];
     const contour = groupsOf(await renderType("contour"))[3];
-    expect(tiles.controls).toEqual(contour.controls);
+    expect(contour.controls.slice(0, 2)).toEqual(tiles.controls);
+    expect(contour.controls).toEqual(["threshold", "notes", "wave-count"]);
     expect([tiles.title, contour.title]).toEqual(["Tiles", "Contour"]);
   });
 
@@ -637,14 +639,14 @@ describe("the Local peaks group (feature 024)", () => {
     expect(html).toContain('aria-label="About prominence"');
   });
 
-  it("is shown for Tiles and Blended tiles, after their group and before Data smoothing, and for no other type", async () => {
-    for (const type of ["tiles", "blended"]) {
+  it("is shown for Tiles, Blended tiles and Contour, after their group and before Data smoothing, and for no other type", async () => {
+    for (const type of ["tiles", "blended", "contour"]) {
       const html = await renderType(type);
       expect(html, type).toContain('data-group="local-peaks"');
       expect(html.indexOf('data-group="local-peaks"')).toBeGreaterThan(html.indexOf(`data-group="${type}"`));
       expect(html.indexOf('data-group="local-peaks"')).toBeLessThan(html.indexOf('data-group="data-smoothing"'));
     }
-    for (const type of ["contour", "circles", "circles_paint"]) {
+    for (const type of ["circles", "circles_paint"]) {
       const html = await renderType(type);
       for (const id of ["beat-coloring", "peak-distance", "peak-prominence"]) expect(html, type + id).not.toContain(`id="${id}"`);
       expect(html, type).not.toContain('data-group="local-peaks"');
@@ -792,5 +794,46 @@ describe("the page for Decay (feature 027)", () => {
     expect(formSource).toContain("decayRate: decayRate.value");
     expect(formSource).toContain("validateDecayRate(decayRate.value)");
     expect(formSource).toContain("ref<number>(DEFAULT_DECAY_RATE)");
+  });
+});
+
+describe("the page for Contour: the beat wave (feature 028)", () => {
+  it("shows Analysis, Colormap, Image type, Contour, Local peaks, Data smoothing and Image smoothing, in this order", async () => {
+    const groups = groupsOf(await renderType("contour"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+      ["contour", "Contour", ["threshold", "notes", "wave-count"]],
+      ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance", "peak-prominence"]],
+      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
+      ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
+    ]);
+  });
+
+  it("has the Wave count slider from 2 to 10 in steps of 1 with a label, an info button and a readout in waves", async () => {
+    const html = await renderType("contour");
+    const slider = html.match(/<input id="wave-count"[^>]*>/)?.[0] ?? "";
+    expect(slider).toContain('type="range"');
+    expect(slider).toContain('min="2"');
+    expect(slider).toContain('max="10"');
+    expect(slider).toContain('step="1"');
+    expect(html).toMatch(/<label[^>]*for="wave-count"[^>]*>Wave count<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="wave-count"[^>]*>4 waves<\/output>/);
+    expect(html).toContain('id="beat-coloring"'); // the checkbox that switches the wave on
+  });
+
+  it("does not show the Wave count for any other type", async () => {
+    for (const type of ["tiles", "blended", "circles", "circles_paint", "concentric", "decay"]) {
+      expect(await renderType(type), type).not.toContain('id="wave-count"');
+    }
+  });
+
+  it("flags the Contour group and blocks the form when the count is not allowed, keeps the value and sends it", () => {
+    expect(formSource).toContain('(inTypeGroup("wave-count") && !!waveCountError.value)');
+    expect(formSource).toContain("!waveCountError.value");
+    expect(formSource).toContain("waveCount: waveCount.value");
+    expect(formSource).toContain("validateWaveCount(waveCount.value)");
+    expect(formSource).toContain("ref<number>(DEFAULT_WAVE_COUNT)");
   });
 });

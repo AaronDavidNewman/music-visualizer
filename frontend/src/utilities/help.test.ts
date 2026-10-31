@@ -11,6 +11,7 @@ import {
   circleRadiusHelp,
   circleNotesHelp,
   decayRateHelp,
+  waveCountHelp,
   circleUnitHelp,
   noteCountHelp,
   resolutionHelp,
@@ -249,5 +250,23 @@ describe("the Decay help (feature 027)", () => {
     expect(decayRateHelp).toContain("16 points");
     expect(decayRateHelp).toContain("frames");
     expect(decayRateHelp.length).toBeGreaterThan(60);
+  });
+});
+
+describe("the beat wave help (feature 028)", () => {
+  it("explains the wave count: the range, the default, that it needs Beat coloring, the rings and the beat", () => {
+    expect(waveCountHelp).toContain("2 to 10");
+    expect(waveCountHelp).toContain("default 4");
+    expect(waveCountHelp).toContain("Contour");
+    expect(waveCountHelp).toContain("Beat coloring");
+    expect(waveCountHelp).toContain("rings");
+    expect(waveCountHelp).toContain("beat");
+    expect(waveCountHelp.length).toBeGreaterThan(60);
+  });
+
+  it("says in the Beat coloring help and the Image type help that Contour has the beat wave", () => {
+    expect(beatColoringHelp).toContain("Contour");
+    expect(beatColoringHelp).toContain("beat wave");
+    expect(imageTypeHelp).toContain("rings pulse over it with the beat");
   });
 });

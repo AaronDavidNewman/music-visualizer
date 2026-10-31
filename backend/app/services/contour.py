@@ -8,6 +8,11 @@ them for the data of each frame. The *color scale* runs from 0 to ``top`` too (`
 of every frame is at the end of the colormap; ``peak`` (the largest value in the whole file) is only used for a frame that
 has no contour to draw, below.
 
+With the **beat wave** (feature 028: ``beat`` given, the frame's position in the local energy peak from 0 to 1) the frame's grid is multiplied by
+``1 - pattern * k`` (see ``beat_wave``) after the grid smoothing and before the levels are chosen; the color scale stays the one of the frame
+*before* the wave (``vmax`` is the frame's own largest value), so a point that the wave dims is drawn darker, and at ``k = 0`` nothing is
+multiplied, so the frame is the plain one, byte for byte. If the wave leaves nothing to draw (every point equal) the frame is one flat color.
+
 A frame whose values are all the same (a quiet moment, a silent file, every note hidden) has no contour to draw and
 ``contourf`` draws a degenerate picture for it, so it is written as one flat color: the colormap's color at that value on
 the scale, which for 0 is the first color of the colormap.
@@ -26,7 +31,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .colormaps import COLORMAP_STEPS, check_colormap, lookup_table
+from .beat_wave import DEFAULT_WAVE_COUNT, check_wave_count, wave_modifier
+from .colormaps import COLORMAP_STEPS, check_beat, check_colormap, lookup_table
 
 # matplotlib sizes a figure in inches; at this many dots per inch a figure of width / DPI by height / DPI inches is
 # exactly width by height pixels
@@ -82,10 +88,16 @@ def write_contour_frames(
     width: int,
     height: int,
     indices: Sequence[int] | None = None,
+    beat: np.ndarray | None = None,
+    waves: int = DEFAULT_WAVE_COUNT,
 ) -> None:
     """Save one PNG of ``width`` x ``height`` pixels per row of ``values`` as ``frame_000000.png`` and up.
 
     ``indices`` are the numbers of the frames to draw (each into the file with its own number); ``None`` draws them all.
+
+    ``beat`` (``None`` or one number from 0 to 1 for each frame of ``values``, the frame's place in the local energy peak) switches the beat wave
+    on, with ``waves`` (a whole number from 2 to 10) waves across the largest dimension of the grid; ``None``, or a position of 0, draws the plain
+    contour.
 
     ``values`` is ``(frames, rows * columns)``: the smoothed value of every drawn note in every frame, with the notes the
     threshold hides already set to 0; note ``n`` is at row ``n // columns`` and column ``n % columns`` of the grid, and
@@ -93,9 +105,12 @@ def write_contour_frames(
     whole file (0 for a silent file).
     """
     colormap = check_colormap(colormap)
+    waves = check_wave_count(waves)
     values = np.asarray(values, dtype=np.float64)
     if values.ndim != 2 or values.shape[1] != rows * columns:
         raise ValueError(f"Each frame needs {rows * columns} note values (got shape {values.shape}).")
+    if beat is not None:
+        beat = check_beat(beat, len(values))
     directory.mkdir(parents=True, exist_ok=True)
     with _DRAWING:
         import matplotlib
@@ -121,6 +136,12 @@ def write_contour_frames(
                 Z = frame.reshape(rows, columns)[::-1].copy()  # a copy: the smoothing below works in place and must not change the caller's array
                 for ix in [idx for idx in np.ndindex(Z.shape)]:
                  directionalSmoothing(Z, ix[0], ix[1], rows, columns)
+                k = 0.0 if beat is None else float(beat[i])
+                if k > 0:  # the beat wave: at k = 0 the modifier is all 1, so nothing is multiplied and the frame is the plain one
+                    Z = Z * wave_modifier(rows, columns, waves, k)
+                    if Z.min() == Z.max():  # the wave left nothing to draw: contourf cannot draw equal levels
+                        _flat_frame(colormap, float(Z.flat[0]), top, width, height).save(path)
+                        continue
                 # ADN I added levels
                 levels = np.linspace(Z.min(), Z.max(), 12)
                 axes.contourf(x, y, Z, levels=levels, cmap=colormap, vmin=0, vmax=top)

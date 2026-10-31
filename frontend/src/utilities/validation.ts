@@ -317,7 +317,7 @@ export function isRingsType(imageType: string): boolean {
   return imageType === "concentric" || imageType === "decay";
 }
 
-/** Whether Minimum distance and Prominence are used: always by Concentric and Decay (the beat colors or charges them), by Tiles and Blended tiles with the Beat coloring box on, never by the others. */
+/** Whether Minimum distance and Prominence are used: always by Concentric and Decay (the beat colors or charges them), by Tiles, Blended tiles and Contour with the Beat coloring box on, never by the others. */
 export function peakSettingsShown(imageType: string, beatColoring: boolean): boolean {
   return isRingsType(imageType) || (beatColoringApplies(imageType) && beatColoring);
 }
@@ -376,9 +376,30 @@ export function formatPeakProminence(value: number): string {
   return `${value}%`;
 }
 
-/** Whether the beat coloring means anything: only for Tiles and Blended tiles. */
+/** Whether the beat coloring means anything: for Tiles and Blended tiles (it colors them) and for Contour (it switches the beat wave on, feature 028). */
 export function beatColoringApplies(imageType: string): boolean {
-  return imageType === "tiles" || imageType === "blended";
+  return imageType === "tiles" || imageType === "blended" || imageType === "contour";
+}
+
+/** The wave count (feature 028): the waves of the beat wave of the Contour picture across the largest dimension of its grid. */
+export const WAVE_COUNT_RANGE = { min: 2, max: 10, step: 1 } as const;
+export const DEFAULT_WAVE_COUNT = 4;
+
+const waveCountMessage = `The wave count must be a whole number from ${WAVE_COUNT_RANGE.min} to ${WAVE_COUNT_RANGE.max}.`;
+
+/** Returns an error message, or null when the wave count is a whole number from 2 to 10. */
+export function validateWaveCount(value: string | number): string | null {
+  return validateWhole(value, WAVE_COUNT_RANGE.min, WAVE_COUNT_RANGE.max, waveCountMessage);
+}
+
+/** The readout beside the slider: "2 waves", "4 waves". */
+export function formatWaveCount(value: number): string {
+  return `${value} waves`;
+}
+
+/** Whether the wave count does anything: only for Contour (and only with the Beat coloring box on). */
+export function waveCountApplies(imageType: string): boolean {
+  return imageType === "contour";
 }
 
 /** The note layout (feature 026): which note is drawn in which cell of the 12 x 7 grid. Rows lists the notes in order, like text. */

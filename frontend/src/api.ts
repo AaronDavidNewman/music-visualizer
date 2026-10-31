@@ -36,6 +36,8 @@ export interface JobResult {
   note_layout: string;
   /** Decay: the number of frames between two decay steps (feature 027). */
   decay_rate: number;
+  /** Contour: the waves of the beat wave (feature 028). */
+  wave_count: number;
   circle_memory: number;
   circle_notes: number;
   window_spacing: number;
@@ -79,6 +81,7 @@ export interface JobSettings {
   /** "rows" (the default) or "spiral". */
   noteLayout: string;
   decayRate: number;
+  waveCount: number;
   circleMemory: number;
   circleNotes: number;
 }
@@ -108,6 +111,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("peak_prominence", String(settings.peakProminence));
   body.append("note_layout", settings.noteLayout);
   body.append("decay_rate", String(settings.decayRate));
+  body.append("wave_count", String(settings.waveCount));
   body.append("circle_memory", String(settings.circleMemory));
   body.append("circle_notes", String(settings.circleNotes));
 

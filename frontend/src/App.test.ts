@@ -132,3 +132,19 @@ describe("the result summary for Decay (feature 027)", () => {
     for (const label of ["Oversampling:", "Gaussian smoothing:"]) expect(line(label), label).toContain("gridSettingsApply(result.image_type)");
   });
 });
+
+describe("the result summary for Contour (feature 028)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows the wave count in waves for Contour with the beat coloring on only", () => {
+    expect(line("Wave count:")).toContain("result.image_type === 'contour'");
+    expect(line("Wave count:")).toContain("result.beat_coloring");
+    expect(line("Wave count:")).toContain("formatWaveCount(result.wave_count)");
+  });
+
+  it("shows Beat coloring, Minimum distance and Prominence for Contour through the same rules as for the tiles", () => {
+    expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
+    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+  });
+});

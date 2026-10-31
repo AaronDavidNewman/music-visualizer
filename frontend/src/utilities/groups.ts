@@ -17,7 +17,8 @@ export const GROUPS: readonly GroupDefinition[] = [
   { id: "colormap", title: "Colormap", controls: ["colormap"] },
   { id: "image-type", title: "Image type", controls: ["image-type"] },
   { id: "tiles", title: "Tiles", controls: ["threshold", "notes"] },
-  { id: "contour", title: "Contour", controls: ["threshold", "notes"] },
+  // the wave count of the beat wave (feature 028) comes after Threshold and Notes
+  { id: "contour", title: "Contour", controls: ["threshold", "notes", "wave-count"] },
   { id: "blended", title: "Blended Tiles", controls: ["threshold", "notes", "blend-width"] },
   {
     id: "circles",
@@ -30,7 +31,7 @@ export const GROUPS: readonly GroupDefinition[] = [
   { id: "decay", title: "Decay", controls: ["decay-rate"] },
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
-  // the beat coloring of Tiles and Blended tiles (feature 024): its own group, after the group of the type
+  // the beat coloring of Tiles and Blended tiles (feature 024) and the beat wave of Contour (feature 028): its own group, after the group of the type
   { id: "local-peaks", title: "Local peaks", controls: ["beat-coloring", "peak-distance", "peak-prominence"] },
   // the same two settings for Concentric (feature 025) and Decay (feature 027): the beat always colors or charges them, so no checkbox
   { id: "concentric-peaks", title: "Local peaks", controls: ["peak-distance", "peak-prominence"] },
@@ -54,8 +55,8 @@ export function controlsIn(id: string): readonly string[] {
 /**
  * The ids of the groups shown for an image type, top to bottom: the top group, Colormap, Image type, the group of the type
  * (none for Concentric, which has no controls of its own, nor for a type that is not one of the seven), Note layout for Tiles, Blended
- * tiles, Concentric and Decay, Local peaks for Tiles and
- * Blended tiles (with the checkbox) and for Concentric and Decay (without it), Data smoothing, and Image smoothing when the type draws a grid.
+ * tiles, Concentric and Decay, Local peaks for Tiles, Blended tiles and Contour (with the checkbox) and for Concentric and Decay
+ * (without it), Data smoothing, and Image smoothing when the type draws a grid.
  */
 export function groupsFor(imageType: string): string[] {
   const ids = ["analysis", "colormap", "image-type"];

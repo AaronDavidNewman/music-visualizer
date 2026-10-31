@@ -6,6 +6,8 @@ import {
   DEFAULT_COLORMAP,
   DEFAULT_BEAT_COLORING,
   DEFAULT_DECAY_RATE,
+  DEFAULT_WAVE_COUNT,
+  WAVE_COUNT_RANGE,
   DEFAULT_NOTE_LAYOUT,
   DECAY_RATE_RANGE,
   NOTE_LAYOUTS,
@@ -44,6 +46,7 @@ import {
   formatBeatColoring,
   formatBlendWidth,
   formatDecayRate,
+  formatWaveCount,
   formatPeakDistance,
   formatPeakProminence,
   formatCircleMemory,
@@ -60,6 +63,7 @@ import {
   validateBlendWidth,
   validatePeakDistance,
   validateDecayRate,
+  validateWaveCount,
   validateNoteLayout,
   noteLayoutApplies,
   validatePeakProminence,
@@ -102,6 +106,7 @@ import {
   gaussianHelp,
   beatColoringHelp,
   decayRateHelp,
+  waveCountHelp,
   noteLayoutHelp,
   peakDistanceHelp,
   peakProminenceHelp,
@@ -141,6 +146,7 @@ const circleRadius = ref<number>(DEFAULT_CIRCLE_RADIUS);
 const circleResize = ref<boolean>(DEFAULT_CIRCLE_RESIZE);
 const noteLayout = ref<string>(DEFAULT_NOTE_LAYOUT);
 const decayRate = ref<number>(DEFAULT_DECAY_RATE);
+const waveCount = ref<number>(DEFAULT_WAVE_COUNT);
 const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
 const peakDistance = ref<number>(DEFAULT_PEAK_DISTANCE);
 const peakProminence = ref<number>(DEFAULT_PEAK_PROMINENCE);
@@ -178,6 +184,7 @@ const circleNotesError = computed(() => validateCircleNotes(circleNotes.value));
 const circleRadiusError = computed(() => validateCircleRadius(circleRadius.value));
 const noteLayoutError = computed(() => validateNoteLayout(noteLayout.value));
 const decayRateError = computed(() => validateDecayRate(decayRate.value));
+const waveCountError = computed(() => validateWaveCount(waveCount.value));
 const peakDistanceError = computed(() => validatePeakDistance(peakDistance.value));
 const peakProminenceError = computed(() => validatePeakProminence(peakProminence.value));
 const canSubmit = computed(
@@ -202,6 +209,7 @@ const canSubmit = computed(
     !circleRadiusError.value &&
     !noteLayoutError.value &&
     !decayRateError.value &&
+    !waveCountError.value &&
     !peakDistanceError.value &&
     !peakProminenceError.value,
 );
@@ -212,7 +220,7 @@ const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
-// the Local peaks group has one of two ids: local-peaks (Tiles and Blended tiles: with the checkbox) or concentric-peaks (Concentric and Decay: without)
+// the Local peaks group has one of two ids: local-peaks (Tiles, Blended tiles and Contour: with the checkbox) or concentric-peaks (Concentric and Decay: without)
 const showNoteLayout = computed(() => noteLayoutApplies(imageType.value));
 const peaksGroup = computed(() => shownGroups.value.find((id) => id === "local-peaks" || id === "concentric-peaks") ?? "");
 function inTypeGroup(control: string): boolean {
@@ -238,7 +246,8 @@ const typeGroupProblem = computed(
     (inTypeGroup("circle-radius") && !!circleRadiusError.value) ||
     (inTypeGroup("circle-memory") && !!circleMemoryError.value) ||
     (inTypeGroup("circle-notes") && !!circleNotesError.value) ||
-    (inTypeGroup("decay-rate") && !!decayRateError.value),
+    (inTypeGroup("decay-rate") && !!decayRateError.value) ||
+    (inTypeGroup("wave-count") && !!waveCountError.value),
 );
 const noteLayoutProblem = computed(() => !!noteLayoutError.value);
 const localPeaksProblem = computed(() => !!(peakDistanceError.value || peakProminenceError.value));
@@ -279,6 +288,7 @@ function onSubmit() {
     circleResize: circleResize.value,
     noteLayout: noteLayout.value,
     decayRate: decayRate.value,
+    waveCount: waveCount.value,
     beatColoring: beatColoring.value,
     peakDistance: peakDistance.value,
     peakProminence: peakProminence.value,
@@ -532,6 +542,24 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="decayRateError" class="error">{{ decayRateError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('wave-count')" class="field">
+        <div class="field-head">
+          <label for="wave-count">Wave count</label>
+          <InfoPopover label="wave count" :text="waveCountHelp" />
+          <output class="slider-value" for="wave-count">{{ formatWaveCount(waveCount) }}</output>
+        </div>
+        <input
+          id="wave-count"
+          v-model.number="waveCount"
+          type="range"
+          :min="WAVE_COUNT_RANGE.min"
+          :max="WAVE_COUNT_RANGE.max"
+          :step="WAVE_COUNT_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="waveCountError" class="error">{{ waveCountError }}</small>
       </div>
     </SettingsGroup>
 

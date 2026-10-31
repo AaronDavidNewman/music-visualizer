@@ -155,7 +155,7 @@ def test_the_minimum_distance_and_the_prominence_change_the_beat_that_is_found(c
     assert far != default and high != default
 
 
-@pytest.mark.parametrize("image_type", ["contour", "circles", "circles_paint"])
+@pytest.mark.parametrize("image_type", ["circles", "circles_paint"])  # Contour has had the beat wave since feature 028
 def test_the_other_image_types_are_the_same_with_the_box_on(client, image_type):
     audio = pulse_wav(seconds=3.0)
     without = post(client, audio, image_type=image_type).json()
@@ -201,7 +201,7 @@ def test_the_beat_is_not_measured_when_the_box_is_off(client, measured, image_ty
     assert measured == []
 
 
-@pytest.mark.parametrize("image_type", ["contour", "circles", "circles_paint"])
+@pytest.mark.parametrize("image_type", ["circles", "circles_paint"])  # Contour measures it for its beat wave since feature 028
 def test_the_beat_is_not_measured_for_the_other_image_types(client, measured, image_type):
     post(client, tiny(), image_type=image_type, beat_coloring="true")
     assert measured == []

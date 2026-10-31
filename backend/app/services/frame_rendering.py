@@ -46,6 +46,7 @@ from .circles import (
 from .circles_paint import write_paint_frames
 from .colormaps import DEFAULT_COLORMAP, check_beat, check_colormap, colorize, lookup_table
 from .concentric import write_concentric_frames
+from .beat_wave import DEFAULT_WAVE_COUNT, check_wave_count
 from .decay import DEFAULT_DECAY_RATE, check_decay_rate, circle_points, write_decay_frames
 from .contour import write_contour_frames
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
@@ -261,6 +262,7 @@ def write_frames(
     beat: np.ndarray | None = None,
     note_layout: str = DEFAULT_NOTE_LAYOUT,
     decay_rate: int = DEFAULT_DECAY_RATE,
+    wave_count: int = DEFAULT_WAVE_COUNT,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -342,6 +344,11 @@ def write_frames(
     ``beat`` and ``note_layout`` apply; every other setting is checked and ignored. ``decay_rate`` is checked for every image type and
     has no effect on the others.
 
+    ``wave_count`` (a whole number from 2 to 10, default 4) is the number of waves of the **beat wave** of ``contour`` (see ``beat_wave``): with
+    ``beat`` given, the frame's grid of values is multiplied by ``1 - pattern * beat`` before the contour is drawn, with a pattern of concentric
+    rings with ``wave_count`` waves across the largest dimension of the grid; a frame at beat 0 (and every frame with ``beat=None``) is the plain
+    contour. It is checked for every image type and has no effect on the others.
+
     Every argument is checked before anything is written.
     """
     colormap = check_colormap(colormap)
@@ -360,8 +367,9 @@ def write_frames(
     gaussian = check_gaussian(gaussian)
     note_layout = check_note_layout(note_layout)
     decay_rate = check_decay_rate(decay_rate)
+    wave_count = check_wave_count(wave_count)
     if beat is not None:
-        beat = check_beat(beat, len(frames))  # checked for every image type, used by tiles and blended only
+        beat = check_beat(beat, len(frames))  # checked for every image type, used by tiles, blended, contour, concentric and decay
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
     peak = float(smoothed.max()) if smoothed.size else 0.0
     if image_type == "circles":
@@ -410,7 +418,17 @@ def write_frames(
     if image_type == "contour":
         values[hidden] = 0
         write_contour_frames(
-            values, peak, colormap, directory, columns, rows, IMAGE_WIDTH, IMAGE_HEIGHT, indices=frames_to_draw
+            values,
+            peak,
+            colormap,
+            directory,
+            columns,
+            rows,
+            IMAGE_WIDTH,
+            IMAGE_HEIGHT,
+            indices=frames_to_draw,
+            beat=beat,
+            waves=wave_count,
         )
     else:
         colours = colorize(values, colormap, columns * rows, peak, beat=beat)  # beat None: the colors are 100 % harmonic

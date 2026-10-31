@@ -435,6 +435,7 @@ describe("circles settings", () => {
   });
 });
 
+import { DEFAULT_WAVE_COUNT, WAVE_COUNT_RANGE, formatWaveCount, validateWaveCount, waveCountApplies } from "./validation";
 import { DECAY_RATE_RANGE, DEFAULT_DECAY_RATE, decayRateApplies, formatDecayRate, isRingsType, validateDecayRate } from "./validation";
 import {
   DEFAULT_BEAT_COLORING,
@@ -477,10 +478,11 @@ describe("beat coloring (feature 024)", () => {
     for (const v of [-0.1, 100.1, 101, NaN, Infinity, "", "abc", "50%"]) expect(validatePeakProminence(v), String(v)).toBe(PROMINENCE_MESSAGE);
   });
 
-  it("applies to Tiles and Blended tiles only", () => {
+  it("applies to Tiles, Blended tiles and Contour only", () => {
     expect(beatColoringApplies("tiles")).toBe(true);
     expect(beatColoringApplies("blended")).toBe(true);
-    for (const t of ["contour", "circles", "circles_paint", "nonsense", ""]) expect(beatColoringApplies(t), t).toBe(false);
+    expect(beatColoringApplies("contour")).toBe(true);
+    for (const t of ["circles", "circles_paint", "concentric", "decay", "nonsense", ""]) expect(beatColoringApplies(t), t).toBe(false);
   });
 
   it("is shown as Off or On, a number of milliseconds and a percentage", () => {
@@ -504,11 +506,11 @@ describe("Concentric (feature 025)", () => {
 
   it("shows the Local peaks settings always for Concentric, for Tiles and Blended tiles only with the box on, and for no other type", () => {
     for (const box of [true, false]) expect(peakSettingsShown("concentric", box), String(box)).toBe(true);
-    for (const type of ["tiles", "blended"]) {
+    for (const type of ["tiles", "blended", "contour"]) {
       expect(peakSettingsShown(type, true), type).toBe(true);
       expect(peakSettingsShown(type, false), type).toBe(false);
     }
-    for (const type of ["contour", "circles", "circles_paint", "nonsense"]) {
+    for (const type of ["circles", "circles_paint", "nonsense"]) {
       for (const box of [true, false]) expect(peakSettingsShown(type, box), type).toBe(false);
     }
   });
@@ -574,5 +576,33 @@ describe("Decay (feature 027)", () => {
     expect(formatDecayRate(1)).toBe("1 frame");
     expect(formatDecayRate(5)).toBe("5 frames");
     expect(formatDecayRate(10)).toBe("10 frames");
+  });
+});
+
+describe("the wave count (feature 028)", () => {
+  it("is 2 to 10 in steps of 1, 4 at the start, applying to Contour only", () => {
+    expect(WAVE_COUNT_RANGE).toEqual({ min: 2, max: 10, step: 1 });
+    expect(DEFAULT_WAVE_COUNT).toBe(4);
+    expect(waveCountApplies("contour")).toBe(true);
+    for (const type of ["tiles", "blended", "circles", "circles_paint", "concentric", "decay", ""]) expect(waveCountApplies(type), type).toBe(false);
+  });
+
+  it.each([2, 3, 4, 9, 10, "3", " 4 ", 7.0])("accepts the wave count %j", (v) => {
+    expect(validateWaveCount(v)).toBeNull();
+  });
+
+  it.each([0, 1, 11, 2.5, -1, "", "abc", "1e3", NaN, Infinity, "0.5"])("refuses the wave count %j with the message", (v) => {
+    expect(validateWaveCount(v)).toBe("The wave count must be a whole number from 2 to 10.");
+  });
+
+  it("writes the count in waves", () => {
+    expect(formatWaveCount(2)).toBe("2 waves");
+    expect(formatWaveCount(10)).toBe("10 waves");
+  });
+
+  it("keeps Contour a grid picture without a note layout, with the beat coloring and the Local peaks settings available", () => {
+    expect(gridSettingsApply("contour")).toBe(true);
+    expect(noteLayoutApplies("contour")).toBe(false);
+    expect(beatColoringApplies("contour")).toBe(true);
   });
 });

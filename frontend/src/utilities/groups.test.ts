@@ -9,7 +9,7 @@ const COMMON_TOP = ["window-size", "frame-rate", "window-spacing", "colormap", "
 const BEAT = ["beat-coloring", "peak-distance", "peak-prominence"];
 const EXPECTED: Record<string, string[]> = {
   tiles: [...COMMON_TOP, "threshold", "notes", "note-layout", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
-  contour: [...COMMON_TOP, "threshold", "notes", "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
+  contour: [...COMMON_TOP, "threshold", "notes", "wave-count", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
   blended: [...COMMON_TOP, "threshold", "notes", "blend-width", "note-layout", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
   circles: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes", "smoothing-window", "smoothing"],
   circles_paint: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-notes", "smoothing-window", "smoothing"],
@@ -24,7 +24,7 @@ describe("the groups", () => {
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["tiles", "Tiles", ["threshold", "notes"]],
-      ["contour", "Contour", ["threshold", "notes"]],
+      ["contour", "Contour", ["threshold", "notes", "wave-count"]],
       ["blended", "Blended Tiles", ["threshold", "notes", "blend-width"]],
       ["circles", "Circles", ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"]],
       ["circles_paint", "Circles paint", ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]],
@@ -51,7 +51,7 @@ describe("the groups shown for each image type", () => {
     const want = ["analysis", "colormap", "image-type"];
     if (type !== "concentric") want.push(type); // Concentric has no group of its own
     if (type === "tiles" || type === "blended" || type === "concentric" || type === "decay") want.push("note-layout");
-    if (type === "tiles" || type === "blended") want.push("local-peaks");
+    if (type === "tiles" || type === "blended" || type === "contour") want.push("local-peaks");
     if (type === "concentric" || type === "decay") want.push("concentric-peaks");
     want.push("data-smoothing");
     if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay") want.push("image-smoothing");
@@ -187,20 +187,24 @@ describe("the Local peaks group (feature 024)", () => {
     expect(groupTitle("local-peaks")).toBe("Local peaks");
   });
 
-  it("follows the group of Tiles and of Blended Tiles (and the Note layout group), before Data smoothing, and is shown for no other type", () => {
+  it("follows the group of Tiles, of Blended Tiles and of Contour (and the Note layout group), before Data smoothing, and is shown for no other type", () => {
     for (const type of ["tiles", "blended"]) {
       const ids = groupsFor(type);
       expect(ids.indexOf("local-peaks"), type).toBe(ids.indexOf(type) + 2); // the Note layout group is between them
       expect(ids.indexOf("local-peaks"), type).toBeLessThan(ids.indexOf("data-smoothing"));
     }
-    for (const type of ["contour", "circles", "circles_paint", "nonsense"]) expect(groupsFor(type), type).not.toContain("local-peaks");
+    const contour = groupsFor("contour");
+    expect(contour.indexOf("local-peaks")).toBe(contour.indexOf("contour") + 1); // Contour has no Note layout group
+    expect(contour.indexOf("local-peaks")).toBeLessThan(contour.indexOf("data-smoothing"));
+    for (const type of ["circles", "circles_paint", "nonsense"]) expect(groupsFor(type), type).not.toContain("local-peaks");
   });
 
-  it("puts each control in the group, for Tiles and Blended tiles only", () => {
+  it("puts each control in the group, for Tiles, Blended tiles and Contour only", () => {
     for (const control of ["beat-coloring", "peak-distance", "peak-prominence"]) {
       expect(groupOf(control, "tiles"), control).toBe("local-peaks");
       expect(groupOf(control, "blended"), control).toBe("local-peaks");
-      for (const type of ["contour", "circles", "circles_paint"]) expect(groupOf(control, type), control + type).toBeUndefined();
+      expect(groupOf(control, "contour"), control).toBe("local-peaks");
+      for (const type of ["circles", "circles_paint"]) expect(groupOf(control, type), control + type).toBeUndefined();
     }
   });
 
@@ -279,5 +283,21 @@ describe("the Decay group (feature 027)", () => {
       expect(groupOf(control, "decay"), control).toBeUndefined();
     }
     for (const type of TYPES.filter((t) => t !== "decay")) expect(groupOf("decay-rate", type), type).toBeUndefined();
+  });
+});
+
+describe("the Contour group and the wave count (feature 028)", () => {
+  it("has Threshold, Notes and the wave count, three controls, the wave count alone on the last row", () => {
+    expect([...controlsIn("contour")]).toEqual(["threshold", "notes", "wave-count"]);
+    expect(rowsOf(controlsIn("contour").length)).toEqual([2, 1]);
+  });
+
+  it("puts the wave count in the Contour group and in no group of any other type", () => {
+    expect(groupOf("wave-count", "contour")).toBe("contour");
+    for (const type of TYPES.filter((t) => t !== "contour")) expect(groupOf("wave-count", type), type).toBeUndefined();
+  });
+
+  it("shows, for Contour, the groups in the order of the contract", () => {
+    expect(groupsFor("contour")).toEqual(["analysis", "colormap", "image-type", "contour", "local-peaks", "data-smoothing", "image-smoothing"]);
   });
 });

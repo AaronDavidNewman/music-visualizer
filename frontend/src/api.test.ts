@@ -25,6 +25,7 @@ const SETTINGS: JobSettings = {
   peakProminence: 25,
   noteLayout: "spiral",
   decayRate: 3,
+  waveCount: 7,
 };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -66,6 +67,7 @@ describe("the request that submitJob sends", () => {
       peak_prominence: "25",
       note_layout: "spiral",
       decay_rate: "3",
+      wave_count: "7",
       circle_memory: "250",
       circle_notes: "9",
     });
@@ -123,5 +125,18 @@ describe("the decay rate field of the request (feature 027)", () => {
   it("shows the server's message for a refused rate", async () => {
     vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The decay rate must be a whole number from 1 to 10." }) }));
     await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The decay rate must be a whole number from 1 to 10.");
+  });
+});
+
+describe("the wave count field of the request (feature 028)", () => {
+  it("sends the count as a whole number in text, with the image type contour and the beat coloring", async () => {
+    const fields = await posted({ ...SETTINGS, imageType: "contour", beatColoring: true, waveCount: 10 });
+    expect([fields.image_type, fields.beat_coloring, fields.wave_count]).toEqual(["contour", "true", "10"]);
+    expect((await posted({ ...SETTINGS, waveCount: 2 })).wave_count).toBe("2");
+  });
+
+  it("shows the server's message for a refused count", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The wave count must be a whole number from 2 to 10." }) }));
+    await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The wave count must be a whole number from 2 to 10.");
   });
 });

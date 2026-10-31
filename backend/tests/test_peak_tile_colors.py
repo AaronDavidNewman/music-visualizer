@@ -84,7 +84,7 @@ def test_two_runs_give_identical_files(tmp_path, image_type):
     assert raw_files(tmp_path, "one") == raw_files(tmp_path, "two")
 
 
-@pytest.mark.parametrize("image_type", OTHER_TYPES)
+@pytest.mark.parametrize("image_type", [t for t in OTHER_TYPES if t != "contour"])  # Contour uses the beat since feature 028 (its beat wave)
 def test_the_other_image_types_ignore_the_beat(tmp_path, image_type):
     options = {"image_type": image_type}
     made(tmp_path, "without", melody(), COLORMAPS[0], **options)
