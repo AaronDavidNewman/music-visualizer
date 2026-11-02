@@ -148,3 +148,18 @@ describe("the result summary for Contour (feature 028)", () => {
     for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
   });
 });
+
+describe("the result summary: the decay amounts (feature 027, revised)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it.each([
+    ["Low saturation decay:", "decay_low"],
+    ["Medium saturation decay:", "decay_medium"],
+    ["High saturation decay:", "decay_high"],
+    ["Saturated decay:", "decay_saturated"],
+  ])("shows %s for Decay only, per frame", (label, field) => {
+    expect(line(label)).toContain("result.image_type === 'decay'");
+    expect(line(label)).toContain(`formatDecayAmount(result.${field})`);
+  });
+});

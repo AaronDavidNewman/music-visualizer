@@ -441,11 +441,28 @@ def test_the_energy_between_two_peaks_is_the_straight_line_between_them():
     assert all(b > a for a, b in zip(values, values[1:]))
 
 
-def test_before_the_first_peak_the_energy_is_zero_and_after_the_last_it_stays_at_the_last():
+def test_before_the_first_peak_the_energy_is_zero_and_after_the_last_it_falls_to_zero_at_the_end_of_the_file():
     for point in (0, 1, 500, 999, 999.5, -1, -10000, -1e9):
         assert THREE.energy_at(point) == 0.0
-    for point in (4001, 4000.5, 9999, 10000, 123456, 1e9):
-        assert THREE.energy_at(point) == pytest.approx(0.4)
+    # the last beat is taken to last for whatever is left of the file (10000 samples): a straight line from 0.4 at 4000 down to 0 at 10000
+    assert THREE.energy_at(4000) == pytest.approx(0.4)
+    assert THREE.energy_at(7000) == pytest.approx(0.2)
+    assert THREE.energy_at(4001) == pytest.approx(0.4 * 5999 / 6000)
+    assert THREE.energy_at(9999) == pytest.approx(0.4 / 6000)
+    for point in (10000, 10001, 123456, 1e9):  # at the end of the file and past it: nothing
+        assert THREE.energy_at(point) == 0.0
+    values = [THREE.energy_at(p) for p in range(4000, 10001, 50)]
+    assert all(b < a for a, b in zip(values, values[1:]))  # always falling: the file ends on a down part of the beat
+
+
+def test_the_last_beat_lasts_for_whatever_is_left_of_the_file_so_the_line_depends_on_the_length_of_the_file():
+    short = made((1000, 0.8, 60.0), count=3000)
+    long = made((1000, 0.8, 60.0), count=9000)
+    assert short.energy_at(2000) == pytest.approx(0.4) and long.energy_at(2000) == pytest.approx(0.8 * 7000 / 8000)
+    assert short.energy_at(3000) == 0.0 and long.energy_at(9000) == 0.0
+    # a file that is not longer than the last peak's sample (a hand-made measurement): the energy drops to 0 at once after it
+    odd = made((1000, 0.8, 60.0), count=500)
+    assert odd.energy_at(1000) == pytest.approx(0.8) and odd.energy_at(1001) == 0.0
 
 
 def test_a_point_between_samples_and_a_time_give_the_same_answer_as_the_sample_position():
@@ -485,21 +502,23 @@ def test_a_measurement_without_peaks_answers_zero_energy_and_the_default_rate():
     assert result.rate_at([1, 2, 3]).tolist() == [60.0, 60.0, 60.0]
 
 
-def test_a_single_peak_is_the_energy_after_it_and_zero_before():
+def test_a_single_peak_has_energy_0_before_it_then_a_line_down_to_0_at_the_end_of_the_file():
     one = made((2000, 0.7, 60.0))
-    assert one.energy_at(1999) == 0.0 and one.energy_at(2000) == 0.7 and one.energy_at(2001) == 0.7
+    assert one.energy_at(1999) == 0.0 and one.energy_at(2000) == 0.7
+    assert one.energy_at(2001) == pytest.approx(0.7 * 7999 / 8000)
+    assert one.energy_at(6000) == pytest.approx(0.35) and one.energy_at(10000) == 0.0 and one.energy_at(12000) == 0.0
 
 
 def test_sequences_give_arrays_of_the_same_shape_and_scalars_give_floats():
     points = [0, 1000, 2000, 3500, 4000, 9000]
-    want = [0.0, 0.2, 0.5, 0.6, 0.4, 0.4]
+    want = [0.0, 0.2, 0.5, 0.6, 0.4, 0.4 * 1000 / 6000]
     for kind in (list, tuple, np.array):
         got = THREE.energy_at(kind(points))
         assert isinstance(got, np.ndarray) and got.dtype == np.float64
         assert got.tolist() == pytest.approx(want)
     grid = np.array([[0, 2000], [3500, 9000]])
     assert THREE.energy_at(grid).shape == (2, 2)
-    assert np.allclose(THREE.energy_at(grid), [[0.0, 0.5], [0.6, 0.4]])
+    assert np.allclose(THREE.energy_at(grid), [[0.0, 0.5], [0.6, 0.4 * 1000 / 6000]])
     assert THREE.rate_at(grid).tolist() == [[60.0, 60.0], [30.0, 60.0]]
     assert THREE.energy_at(np.array([])).shape == (0,)
     for scalar in (THREE.energy_at(2000), THREE.rate_at(2000), THREE.energy_at_time(1.0), THREE.rate_at_time(1.0), THREE.energy_at(np.int64(2000))):
@@ -547,7 +566,10 @@ def test_the_answers_at_the_peaks_of_a_click_track_match_the_recorded_peaks():
         assert low <= result.energy_at(middle) <= high
         assert result.rate_at(middle) == pytest.approx(peak.rate)
     assert result.energy_at(0) == 0.0
-    assert result.energy_at(len(left) - 1) == pytest.approx(result.peaks[-1].energy)
+    assert result.energy_at(len(left) - 1) < 0.001 * result.peaks[-1].energy  # the file ends on a down part of the beat: all but 0
+    assert result.energy_at(len(left)) == 0.0
+    last = result.peaks[-1]
+    assert result.energy_at((last.sample + len(left)) // 2) == pytest.approx(last.energy / 2)
     assert result.rate_at(0) == 60.0
     assert result.rate_at_time(10.2) == pytest.approx(120, rel=0.02)
 
@@ -814,15 +836,23 @@ def test_between_peaks_the_energy_the_minimum_and_the_maximum_are_each_a_straigh
     assert WINDOWED.position_at(3500) == pytest.approx((energy - low) / (high - low))
 
 
-def test_after_the_last_peak_the_position_is_that_of_the_last_peak():
-    for point in (4001, 4000.5, 9999, 10000, 123456, 1e9):
-        assert WINDOWED.position_at(point) == pytest.approx(0.5)
+def test_after_the_last_peak_the_position_falls_with_the_energy_to_0_at_the_end_of_the_file():
+    # the last peak (4000) has energy 0.5 and a window from 0.1 to 0.9; its energy falls in a straight line to 0 at 10000
+    assert WINDOWED.position_at(4000) == pytest.approx(0.5)
+    assert WINDOWED.position_at(4001) < 0.5
+    for point in (5000, 7000, 8500):
+        energy = 0.5 * (10000 - point) / 6000
+        assert WINDOWED.position_at(point) == pytest.approx(max(0.0, (energy - 0.1) / 0.8))
+    for point in (9999, 10000, 123456, 1e9):
+        assert WINDOWED.position_at(point) == 0.0
+    values = [WINDOWED.position_at(p) for p in range(4000, 10001, 50)]
+    assert all(b <= a for a, b in zip(values, values[1:])) and values[-1] == 0.0  # always on a down part of the beat
 
 
 def test_the_position_is_held_between_0_and_1():
     above = with_windows((2000, 1.5, 0.2, 1.0))
     below = with_windows((2000, 0.05, 0.2, 1.0))
-    assert above.position_at(2000) == 1.0 and above.position_at(5000) == 1.0
+    assert above.position_at(2000) == 1.0 and above.position_at(2500) == 1.0  # the energy 1.5 is above the window's maximum for a while
     assert below.position_at(2000) == 0.0 and below.position_at(5000) == 0.0
     values = [WINDOWED.position_at(p) for p in range(-100, 6000, 13)]
     assert min(values) >= 0.0 and max(values) <= 1.0
@@ -851,7 +881,7 @@ def test_the_position_at_a_time_is_the_position_at_the_sample_and_sequences_give
     for kind in (list, tuple, np.array):
         got = WINDOWED.position_at(kind([0, 1000, 1500, 4000, 9000]))
         assert isinstance(got, np.ndarray) and got.dtype == np.float64
-        assert got.tolist() == pytest.approx([0.0, 0.25, WINDOWED.position_at(1500), 0.5, 0.5])
+        assert got.tolist() == pytest.approx([0.0, 0.25, WINDOWED.position_at(1500), 0.5, 0.0])
     assert WINDOWED.position_at(np.array([[0, 1000], [4000, 9000]])).shape == (2, 2)
     for scalar in (WINDOWED.position_at(1500), WINDOWED.position_at_time(1.5), WINDOWED.position_at(np.int64(1500))):
         assert type(scalar) is float
@@ -896,8 +926,11 @@ def test_equal_clicks_keep_the_position_high_between_them_and_the_first_beat_is_
     positions = result.frame_positions(30, 600)
     times = (np.arange(600) + 0.5) / 30
     assert positions[times < 0.5].max() == 0.0  # before the first click
-    assert positions[times > 1.0].min() > 0.65  # the line joins equal peaks: no dip in the gaps
+    last = result.peaks[-1].sample / RATE
+    between = (times > 1.0) & (times < last)
+    assert positions[between].min() > 0.65  # the line joins equal peaks: no dip in the gaps
     assert positions[times > 1.0].max() <= 1.0
+    assert positions[times > last].max() < 1.0 and positions[-1] < 0.1  # after the last click it falls: the file ends on a down part
 
 
 def test_the_position_is_higher_around_a_strong_click_than_around_a_weak_one():

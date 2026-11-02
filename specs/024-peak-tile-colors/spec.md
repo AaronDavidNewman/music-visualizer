@@ -79,7 +79,7 @@ The beat coloring is a **choice**, kept in a settings group of its own, **Local 
 With the beat coloring on, the beat is not always known: before the first peak, in a file with no peaks (silence, or a very even sound). The rules are:
 
 - **With no known beat the position in the peak is 0**: before the first peak, and in every frame of a file with no peaks. The picture then uses only the lower half of the colormap (a tile with the maximum energy has the middle color).
-- **After the last peak** the position is that of the last peak's values (held).
+- **After the last peak** the position is worked out from the last peak's window minimum and maximum and an energy that **falls in a straight line from the last peak's energy to 0 at the end of the file** (revised 2026-10-31, see feature 023: the last beat lasts for whatever is left of the file, so the position falls and the file ends on a down part of the beat; it used to be held at the last peak's value).
 - **Every visible tile takes part in the formula**, a tile with no energy at all included: it has half the position in the peak, so at the top of a beat it can reach the middle color.
 - **Tiles that the threshold hides are drawn as before**: black for Tiles, the middle color of the colormap for Blended tiles. The beat does not change which tiles are hidden.
 
@@ -91,7 +91,7 @@ With the beat coloring on, the beat is not always known: before the first peak, 
 
 1. **Given** a file with no local peaks, **When** the pictures are made, **Then** they are made without failing and every frame uses the position 0 in the peak.
 2. **Given** a frame before the first peak of the file, **When** the picture is made, **Then** it uses the position 0.
-3. **Given** a frame after the last peak, **When** the picture is made, **Then** it uses the position worked out from the last peak's energy and window minimum and maximum.
+3. **Given** a frame after the last peak, **When** the picture is made, **Then** it uses the position worked out from the last peak's window minimum and maximum and the energy on the line from the last peak's energy to 0 at the end of the file (revised 2026-10-31), so the position falls towards 0 until the end of the file.
 4. **Given** a tile hidden by the threshold, **When** the picture is made, **Then** it is drawn as before this feature (black for Tiles, the middle color of the colormap for Blended tiles).
 5. **Given** a visible tile with no energy at all, **When** the picture is made, **Then** its place on the colormap is half the frame's position in the peak.
 6. **Given** a silent file, **When** the pictures are made, **Then** they are made without failing.

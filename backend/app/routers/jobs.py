@@ -42,7 +42,15 @@ from ..services.circles import (
 from ..services.frame_interpolation import DEFAULT_INTERPOLATE, MAX_INTERPOLATE, MIN_INTERPOLATE
 from ..services.gaussian import DEFAULT_GAUSSIAN, MAX_GAUSSIAN, MIN_GAUSSIAN
 from ..services.beat_wave import DEFAULT_WAVE_COUNT, MAX_WAVE_COUNT, MIN_WAVE_COUNT
-from ..services.decay import DEFAULT_DECAY_RATE, MAX_DECAY_RATE, MIN_DECAY_RATE
+from ..services.decay import (
+    DEFAULT_DECAY_AMOUNTS,
+    DECAY_RATE_MESSAGE,
+    DEFAULT_DECAY_RATE,
+    check_decay_rate,
+    LEVELS,
+    MAX_DECAY_AMOUNT,
+    MIN_DECAY_AMOUNT,
+)
 from ..services.note_layout import DEFAULT_NOTE_LAYOUT, check_note_layout
 from ..services.local_peaks import (
     DEFAULT_MIN_DISTANCE,
@@ -255,19 +263,30 @@ def _parse_circle_memory(text: str | None, sent: bool) -> int:
     return int(value)
 
 
-def _parse_decay_rate(text: str | None, sent: bool) -> int:
-    """The requested number of frames between decay steps. Not sent means the default; anything sent must be a whole number 1..10."""
+def _parse_decay_rate(text: str | None, sent: bool) -> float:
+    """The requested number of frames between decay steps. Not sent means the default; anything sent must be a number 0.25..4 in steps of 0.25."""
     if text is None and not sent:
         return DEFAULT_DECAY_RATE
     text = text or ""
-    message = f"The decay rate must be a whole number from {MIN_DECAY_RATE} to {MAX_DECAY_RATE}."
+    try:
+        return check_decay_rate(float(text))
+    except ValueError:  # not a number, or not one of the allowed steps
+        raise HTTPException(status_code=400, detail=DECAY_RATE_MESSAGE) from None
+
+
+def _parse_decay_amount(text: str | None, sent: bool, index: int) -> float:
+    """The requested decay amount of one saturation level (``LEVELS[index]``). Not sent means the default; anything sent must be a number 0.5..3."""
+    if text is None and not sent:
+        return DEFAULT_DECAY_AMOUNTS[index]
+    text = text or ""
+    message = f"The {LEVELS[index]} saturation decay must be a number from {MIN_DECAY_AMOUNT:g} to {MAX_DECAY_AMOUNT:g}."
     try:
         value = float(text)
     except ValueError:
         raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or not value.is_integer() or not MIN_DECAY_RATE <= value <= MAX_DECAY_RATE:
+    if not math.isfinite(value) or not MIN_DECAY_AMOUNT <= value <= MAX_DECAY_AMOUNT:
         raise HTTPException(status_code=400, detail=message)
-    return int(value)
+    return value
 
 
 def _parse_wave_count(text: str | None, sent: bool) -> int:
@@ -456,6 +475,10 @@ def create_job(
     note_layout: str | None = Form(None),
     decay_rate: str | None = Form(None),
     wave_count: str | None = Form(None),
+    decay_low: str | None = Form(None),
+    decay_medium: str | None = Form(None),
+    decay_high: str | None = Form(None),
+    decay_saturated: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -482,6 +505,12 @@ def create_job(
     note_layout_value = _parse_note_layout(note_layout, "note_layout" in sent)
     decay_rate_value = _parse_decay_rate(decay_rate, "decay_rate" in sent)
     wave_count_value = _parse_wave_count(wave_count, "wave_count" in sent)
+    decay_amounts_value = tuple(
+        _parse_decay_amount(text, name in sent, index)
+        for index, (name, text) in enumerate(
+            (("decay_low", decay_low), ("decay_medium", decay_medium), ("decay_high", decay_high), ("decay_saturated", decay_saturated))
+        )
+    )
     if file is None:
         raise HTTPException(status_code=400, detail="No file was uploaded. Choose a .wav file.")
 
@@ -556,6 +585,7 @@ def create_job(
             note_layout=note_layout_value,
             decay_rate=decay_rate_value,
             wave_count=wave_count_value,
+            decay_amounts=decay_amounts_value,
         )
     except HTTPException:
         _remove_job(job_id)
@@ -597,6 +627,10 @@ def create_job(
         "note_layout": note_layout_value,
         "decay_rate": decay_rate_value,
         "wave_count": wave_count_value,
+        "decay_low": decay_amounts_value[0],
+        "decay_medium": decay_amounts_value[1],
+        "decay_high": decay_amounts_value[2],
+        "decay_saturated": decay_amounts_value[3],
         "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,

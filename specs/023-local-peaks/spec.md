@@ -50,7 +50,7 @@ For every peak that is found, these are recorded: **the sample of the file where
 
 Only a few points of a file are peaks, but a visualization needs a value for **every frame**. The application must therefore be able to ask the finished measurement for the **interpolated energy at any point of the file** (a sample number, or a time), and for the **rate** at that point, so that the pulse of the music can drive a picture continuously:
 
-- **Energy**: a straight line between the energy of the **previous** peak and that of the **next** peak. **Before the first peak** it is **0**; **after the last peak** it stays at **the last peak's energy**, since there is nothing to interpolate with.
+- **Energy**: a straight line between the energy of the **previous** peak and that of the **next** peak. **Before the first peak** it is **0**; **after the last peak** it is a **straight line from the last peak's energy down to 0 at the end of the file** (revised 2026-10-31: the last beat is taken to last for whatever is left of the file, so a file always ends on a down part of the beat; it used to stay at the last peak's energy).
 - **Rate**: always the rate recorded at the **previous** peak (it is not interpolated). **Before the first peak** it is a default of **1 per second (60 peaks per minute)**.
 
 
@@ -62,10 +62,10 @@ Only a few points of a file are peaks, but a visualization needs a value for **e
 
 1. **Given** the result of a measurement, **When** the energy is asked for at the sample of a recorded peak, **Then** it is that peak's recorded energy.
 2. **Given** two consecutive peaks, **When** the energy is asked for at a point between them, **Then** it is between their two values and changes smoothly (it is the straight-line interpolation) as the point moves from one to the other.
-3. **Given** a point before the first peak, **When** the energy and rate are asked for, **Then** the energy is 0 and the rate is 60 peaks per minute; **Given** a point after the last peak, **Then** the energy is the last peak's energy and the rate is the last peak's rate; neither ever fails.
+3. **Given** a point before the first peak, **When** the energy and rate are asked for, **Then** the energy is 0 and the rate is 60 peaks per minute; **Given** a point after the last peak, **Then** the energy is on the straight line from the last peak's energy to 0 at the end of the file (revised 2026-10-31) and the rate is the last peak's rate; neither ever fails.
 4. **Given** a point that is not a whole sample, or a time in seconds, **When** the energy is asked for, **Then** it answers, with the same value as the equal sample position.
 5. **Given** the result of a file with no peaks, **When** the energy is asked for at any point, **Then** the energy is 0 and the rate 60 peaks per minute, and nothing fails.
-6. **Given** a point outside the file (negative, or after its end), **When** the energy is asked for, **Then** it answers as for a point before the first peak (a negative point) or after the last (a point past the end), and nothing fails.
+6. **Given** a point outside the file (negative, or after its end), **When** the energy is asked for, **Then** it answers 0 for a negative point and 0 for a point at or past the end of the file (revised 2026-10-31), and nothing fails.
 7. **Given** a point of the file, **When** the rate is asked for, **Then** it is the rate recorded at the last peak at or before the point (it is not interpolated).
 
 ---
@@ -139,7 +139,7 @@ A value that is not allowed (a distance outside 100 to 2,000 ms, a prominence ou
 - **SC-002**: For the same file, the rate at every peak after the first is 120 peaks per minute to within 2%; for a file with clicks every 750 ms it is 80 to within 2%.
 - **SC-003**: Two bursts closer than the minimum distance give one peak (the stronger), at every minimum distance from 100 to 2,000 ms tested, and no two reported peaks are ever closer than the minimum distance to within one impulse window.
 - **SC-004**: Bumps lower than the prominence share of the loudest energy in the window are never reported, and a click above it always is, for prominence values of 10, 50 and 90.
-- **SC-005**: The interpolated energy at the sample of every recorded peak equals that peak's recorded energy; at any point between two peaks it lies between their two values, it is 0 before the first peak and the last peak's energy after the last; every query, on every test file (including a silent one and the file's first and last sample), returns an answer.
+- **SC-005**: The interpolated energy at the sample of every recorded peak equals that peak's recorded energy; at any point between two peaks it lies between their two values, it is 0 before the first peak and, after the last peak, on the line from the last peak's energy to 0 at the end of the file (revised 2026-10-31); every query, on every test file (including a silent one and the file's first and last sample), returns an answer.
 - **SC-006**: Measuring a 60 second stereo file takes under 5 seconds.
 - **SC-007**: A result does not depend on the size of the peaks window: for a click file whose clicks are well separated, windows of 2,048 and of 8,192 impulse samples report the same peaks.
 - **SC-008**: Two runs of the same file and settings give identical results, and the frames of every existing image type for a test file are identical, file for file, to those made before this feature.

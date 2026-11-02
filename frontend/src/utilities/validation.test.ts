@@ -435,6 +435,7 @@ describe("circles settings", () => {
   });
 });
 
+import { DECAY_AMOUNT_RANGE, DECAY_LEVELS, DEFAULT_DECAY_AMOUNTS, formatDecayAmount, validateDecayAmount } from "./validation";
 import { DEFAULT_WAVE_COUNT, WAVE_COUNT_RANGE, formatWaveCount, validateWaveCount, waveCountApplies } from "./validation";
 import { DECAY_RATE_RANGE, DEFAULT_DECAY_RATE, decayRateApplies, formatDecayRate, isRingsType, validateDecayRate } from "./validation";
 import {
@@ -558,24 +559,25 @@ describe("Decay (feature 027)", () => {
   });
 
   it("has a decay rate from 1 to 10 in steps of 1, 5 at the start, applying to Decay only", () => {
-    expect(DECAY_RATE_RANGE).toEqual({ min: 1, max: 10, step: 1 });
-    expect(DEFAULT_DECAY_RATE).toBe(5);
+    expect(DECAY_RATE_RANGE).toEqual({ min: 0.25, max: 4, step: 0.25 });
+    expect(DEFAULT_DECAY_RATE).toBe(1);
     expect(decayRateApplies("decay")).toBe(true);
     for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", ""]) expect(decayRateApplies(type), type).toBe(false);
   });
 
-  it.each([1, 2, 5, 9, 10, "3", " 4 ", 7.0])("accepts the decay rate %j", (v) => {
+  it.each([0.25, 0.5, 0.75, 1, 1.25, 2.5, 3.75, 4, "0.25", " 1.5 ", 3.0])("accepts the decay rate %j", (v) => {
     expect(validateDecayRate(v)).toBeNull();
   });
 
-  it.each([0, 11, 2.5, -1, "", "abc", "1e3", NaN, Infinity, "0.5"])("refuses the decay rate %j with the message", (v) => {
-    expect(validateDecayRate(v)).toBe("The decay rate must be a whole number from 1 to 10.");
+  it.each([0, 0.2, 0.24, 0.3, 1.1, 3.9, 4.25, 5, 10, -1, -0.25, "", "abc", "1e3", NaN, Infinity])("refuses the decay rate %j with the message", (v) => {
+    expect(validateDecayRate(v)).toBe("The decay rate must be a number from 0.25 to 4 in steps of 0.25.");
   });
 
   it("writes the rate in frames, one frame in the singular", () => {
     expect(formatDecayRate(1)).toBe("1 frame");
-    expect(formatDecayRate(5)).toBe("5 frames");
-    expect(formatDecayRate(10)).toBe("10 frames");
+    expect(formatDecayRate(0.25)).toBe("0.25 frames");
+    expect(formatDecayRate(2.5)).toBe("2.5 frames");
+    expect(formatDecayRate(4)).toBe("4 frames");
   });
 });
 
@@ -604,5 +606,33 @@ describe("the wave count (feature 028)", () => {
     expect(gridSettingsApply("contour")).toBe(true);
     expect(noteLayoutApplies("contour")).toBe(false);
     expect(beatColoringApplies("contour")).toBe(true);
+  });
+});
+
+describe("the decay amounts, one for each saturation level (feature 027, revised)", () => {
+  it("are 0.5 to 3 in steps of 0.5 with the defaults 0.5, 1, 2 and 3 and four named levels", () => {
+    expect(DECAY_AMOUNT_RANGE).toEqual({ min: 0.5, max: 3, step: 0.5 });
+    expect([...DEFAULT_DECAY_AMOUNTS]).toEqual([0.5, 1, 2, 3]);
+    expect(DECAY_LEVELS.map((l) => [l.name, l.control, l.label])).toEqual([
+      ["low", "decay-low", "Low saturation"],
+      ["medium", "decay-medium", "Medium saturation"],
+      ["high", "decay-high", "High saturation"],
+      ["saturated", "decay-saturated", "Saturated"],
+    ]);
+  });
+
+  it.each([0.5, 1, 1.25, 2, 2.999, 3, "0.5", " 2.5 "])("accepts the amount %j", (v) => {
+    expect(validateDecayAmount(v, "high")).toBeNull();
+  });
+
+  it.each([0, 0.49, 3.01, 4, -1, "", "abc", NaN, Infinity, "1e3"])("refuses the amount %j with the message of its level", (v) => {
+    for (const level of ["low", "medium", "high", "saturated"]) {
+      expect(validateDecayAmount(v, level)).toBe(`The ${level} saturation decay must be a number from 0.5 to 3.`);
+    }
+  });
+
+  it("writes the amount per frame", () => {
+    expect(formatDecayAmount(0.5)).toBe("0.5 per frame");
+    expect(formatDecayAmount(3)).toBe("3 per frame");
   });
 });

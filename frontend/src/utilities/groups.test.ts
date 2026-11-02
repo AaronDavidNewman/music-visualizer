@@ -14,7 +14,7 @@ const EXPECTED: Record<string, string[]> = {
   circles: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes", "smoothing-window", "smoothing"],
   circles_paint: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-notes", "smoothing-window", "smoothing"],
   concentric: [...COMMON_TOP, "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
-  decay: [...COMMON_TOP, "decay-rate", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
+  decay: [...COMMON_TOP, "decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
 };
 
 describe("the groups", () => {
@@ -28,7 +28,7 @@ describe("the groups", () => {
       ["blended", "Blended Tiles", ["threshold", "notes", "blend-width"]],
       ["circles", "Circles", ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"]],
       ["circles_paint", "Circles paint", ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]],
-      ["decay", "Decay", ["decay-rate"]],
+      ["decay", "Decay", ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance", "peak-prominence"]],
       ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
@@ -263,10 +263,17 @@ describe("the Note layout group (feature 026)", () => {
 });
 
 describe("the Decay group (feature 027)", () => {
-  it("is titled Decay and has the one control, the decay rate", () => {
+  it("is titled Decay and has the decay rate and the four decay amounts, one for each saturation level", () => {
     expect(groupTitle("decay")).toBe("Decay");
-    expect([...controlsIn("decay")]).toEqual(["decay-rate"]);
-    expect(rowsOf(controlsIn("decay").length)).toEqual([1]);
+    expect([...controlsIn("decay")]).toEqual(["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]);
+    expect(rowsOf(controlsIn("decay").length)).toEqual([2, 2, 1]);
+  });
+
+  it("puts each decay amount in the Decay group for Decay and in no group of any other type", () => {
+    for (const control of ["decay-low", "decay-medium", "decay-high", "decay-saturated"]) {
+      expect(groupOf(control, "decay"), control).toBe("decay");
+      for (const type of TYPES.filter((t) => t !== "decay")) expect(groupOf(control, type), control + type).toBeUndefined();
+    }
   });
 
   it("is shown for Decay only, between Image type and Note layout, with Local peaks without the checkbox", () => {

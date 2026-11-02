@@ -35,7 +35,7 @@ write_frames(frames, directory, ..., gaussian=0.0, beat=None)
     # beat: None or one number 0..1 per frame; used for tiles and blended, ignored for the other types
 ```
 
-`position_at` before the first peak and for a file without peaks is 0; after the last peak it is computed from the last peak's `energy`, `window_min` and `window_max`.
+`position_at` before the first peak and for a file without peaks is 0; after the last peak it is computed from the last peak's `window_min` and `window_max` and an energy that falls in a straight line from the last peak's `energy` to 0 at the end of the file (revised 2026-10-31), so it falls to 0.
 
 ## The frames
 

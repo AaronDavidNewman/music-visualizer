@@ -31,8 +31,8 @@ Expected: all green, including `test_decay.py`, `test_decay_rendering.py`, `test
 ## Scenario 3: The decay rate (User Story 2)
 
 1. On the page choose Decay: the groups are Analysis, Colormap, Image type, Decay, Note layout, Local peaks (no checkbox) and Data smoothing.
-2. Set the decay rate to 1, then 10, and create frames each time: at 1 the spread is fast and smooth; at 10 it moves in visible steps every tenth frame.
-3. Through the API: `curl -F image_type=decay -F decay_rate=3 -F file=@song.wav http://localhost:8000/api/jobs` returns `"image_type": "decay", "decay_rate": 3`; `-F decay_rate=11` and `-F decay_rate=2.5` return 400 `The decay rate must be a whole number from 1 to 10.`.
+2. Set the decay rate to 0.25, then 4, and create frames each time: at 0.25 the spread is smooth (four steps in every frame); at 4 it moves in visible steps every fourth frame.
+3. Through the API: `curl -F image_type=decay -F decay_rate=0.5 -F file=@song.wav http://localhost:8000/api/jobs` returns `"image_type": "decay", "decay_rate": 0.5`; `-F decay_rate=5` and `-F decay_rate=1.1` return 400 `The decay rate must be a number from 0.25 to 4 in steps of 0.25.`.
 
 ## Scenario 4: Corners (User Story 3)
 

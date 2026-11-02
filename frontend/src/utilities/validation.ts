@@ -322,23 +322,53 @@ export function peakSettingsShown(imageType: string, beatColoring: boolean): boo
   return isRingsType(imageType) || (beatColoringApplies(imageType) && beatColoring);
 }
 
-/** The decay rate (feature 027): the number of frames between two decay steps of the Decay picture. */
-export const DECAY_RATE_RANGE = { min: 1, max: 10, step: 1 } as const;
-export const DEFAULT_DECAY_RATE = 5;
+/**
+ * The decay rate (feature 027): the number of frames between two decay steps of the Decay picture, from 0.25 to 4 in steps of 0.25 (revised 2026-11-01).
+ * Below 1 there are several steps in a frame, which is smoother, above all at higher frame rates; anything above 4 blinks.
+ */
+export const DECAY_RATE_RANGE = { min: 0.25, max: 4, step: 0.25 } as const;
+export const DEFAULT_DECAY_RATE = 1;
 
-const decayRateMessage = `The decay rate must be a whole number from ${DECAY_RATE_RANGE.min} to ${DECAY_RATE_RANGE.max}.`;
+const decayRateMessage = `The decay rate must be a number from ${DECAY_RATE_RANGE.min} to ${DECAY_RATE_RANGE.max} in steps of ${DECAY_RATE_RANGE.step}.`;
 
-/** Returns an error message, or null when the decay rate is a whole number from 1 to 10. */
+/** Returns an error message, or null when the decay rate is a number from 0.25 to 4 that is a whole number of quarters. */
 export function validateDecayRate(value: string | number): string | null {
-  return validateWhole(value, DECAY_RATE_RANGE.min, DECAY_RATE_RANGE.max, decayRateMessage);
+  const n = parseNumber(value);
+  const ok = Number.isFinite(n) && n >= DECAY_RATE_RANGE.min && n <= DECAY_RATE_RANGE.max && Number.isInteger(n / DECAY_RATE_RANGE.step);
+  return ok ? null : decayRateMessage;
 }
 
-/** The readout beside the slider and the summary item: "1 frame", "5 frames". */
+/** The readout beside the slider and the summary item: "0.25 frames", "1 frame", "2.5 frames". */
 export function formatDecayRate(value: number): string {
   return value === 1 ? "1 frame" : `${value} frames`;
 }
 
-/** Whether the decay rate does anything: only for Decay. */
+/**
+ * The decay amounts (feature 027, revised): how many points a circle of the Decay picture gives to each circle around it per frame, one amount for each
+ * of four saturation levels (how full the circle is). Each is a number from 0.5 to 3; the defaults are 0.5, 1, 2 and 3.
+ */
+export const DECAY_AMOUNT_RANGE = { min: 0.5, max: 3, step: 0.5 } as const;
+export const DEFAULT_DECAY_AMOUNTS = [0.5, 1, 2, 3] as const;
+export const DECAY_LEVELS = [
+  { name: "low", control: "decay-low", label: "Low saturation" },
+  { name: "medium", control: "decay-medium", label: "Medium saturation" },
+  { name: "high", control: "decay-high", label: "High saturation" },
+  { name: "saturated", control: "decay-saturated", label: "Saturated" },
+] as const;
+
+/** Returns an error message, or null when the amount is a finite number from 0.5 to 3; ``level`` is the name of the saturation level. */
+export function validateDecayAmount(value: string | number, level: string): string | null {
+  const n = parseNumber(value);
+  const ok = Number.isFinite(n) && n >= DECAY_AMOUNT_RANGE.min && n <= DECAY_AMOUNT_RANGE.max;
+  return ok ? null : `The ${level} saturation decay must be a number from ${DECAY_AMOUNT_RANGE.min} to ${DECAY_AMOUNT_RANGE.max}.`;
+}
+
+/** The readout beside a slider and the summary item: "0.5 per frame", "3 per frame". */
+export function formatDecayAmount(value: number): string {
+  return `${value} per frame`;
+}
+
+/** Whether the decay rate (and the four decay amounts) do anything: only for Decay. */
 export function decayRateApplies(imageType: string): boolean {
   return imageType === "decay";
 }

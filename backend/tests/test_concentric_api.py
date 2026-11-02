@@ -224,7 +224,8 @@ def test_mono_and_stereo_copies_of_the_same_sound_make_the_same_frames(client):
     assert all_frames(client, mono) == all_frames(client, stereo)
 
 
-def test_the_last_frames_after_the_last_click_keep_the_colours_of_the_last_peak(client):
+def test_the_last_frames_after_the_last_click_fall_towards_the_start_of_the_colormap(client):
     job = concentric(client, pulse_wav()).json()
     rows = [ring_row(client, job, i, 12) for i in range(65, job["frame_count"])]
-    assert len(set(rows)) == 1, rows  # the position is held after the last peak
+    assert all(b <= a for a, b in zip(rows, rows[1:])), rows  # the position falls with the energy to the end of the file
+    assert rows[-1] < rows[0], rows

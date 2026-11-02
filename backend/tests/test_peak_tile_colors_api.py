@@ -237,11 +237,13 @@ def test_a_file_in_which_no_beat_is_found_has_no_tile_past_the_middle_of_the_col
     assert max(ROWS[tuple(int(v) for v in c)] for c in np.unique(picture(client, off, 5).reshape(-1, 3), axis=0)) == 255
 
 
-def test_after_the_last_click_the_position_is_held(client):
+def test_after_the_last_click_the_position_falls_to_the_end_of_the_file(client):
     job = post(client, pulse_wav(), image_type="tiles", beat_coloring="true").json()
     rows = [strong_row(client, job, i) for i in range(job["frame_count"])]
-    last_click_frame = 65  # the last click is at 6.5 s, ten frames a second
-    assert len(set(rows[last_click_frame:])) == 1, rows[last_click_frame:]
+    last_click_frame = 65  # the last click is at 6.5 s, ten frames a second; the file ends at 7 s
+    after = rows[last_click_frame:]
+    assert all(b <= a for a, b in zip(after, after[1:])), after  # always falling: the file ends on a down part of the beat
+    assert after[-1] < after[0], after
 
 
 @pytest.mark.parametrize("image_type, hidden", [("tiles", (0, 0, 0)), ("blended", None)])

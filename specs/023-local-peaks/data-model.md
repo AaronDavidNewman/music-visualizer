@@ -54,7 +54,7 @@ Methods (all total for finite input; see [contracts/local-peaks.md](contracts/lo
 
 | Method | Result |
 |--------|--------|
-| `energy_at(point)` | Straight line between the previous and next peak's `energy`; `0.0` before the first peak; the last peak's `energy` after the last; `0.0` with no peaks |
+| `energy_at(point)` | Straight line between the previous and next peak's `energy`; `0.0` before the first peak; after the last peak a straight line from the last peak's `energy` down to `0.0` at `sample_count` (the end of the file; revised 2026-10-31), and `0.0` at and past it; `0.0` with no peaks |
 | `rate_at(point)` | `rate` of the last peak at or before the point; `DEFAULT_RATE` before the first and with no peaks |
 | `energy_at_time(seconds)`, `rate_at_time(seconds)` | The same at `seconds × file_rate` |
 

@@ -6,7 +6,7 @@
 
 ## Summary
 
-A seventh image type, **Decay** (`decay`): the 84 circles of Concentric in the same places, but each circle is **a disc** that keeps a **point value from 0 to 64** from frame to frame. The points set the size (1/12 of the full radius at 0, full at 24 and above) and the color (first color at 0, last at 32, a flat disc up to there; from 32 to 64 the 12 concentric rings of Concentric open up from the last color at the center to the first at the edge). Each frame the five loudest notes add 24, 20, 16, 12, 8 points plus `8 × position` (the beat); every N frames (the new **Decay rate**, 1 to 10, default 5) every circle gives 2 points to each neighbour among the up to 8 around it and loses 16 in all.
+A seventh image type, **Decay** (`decay`): the 84 circles of Concentric in the same places, but each circle is **a disc** that keeps a **point value from 0 to 64** from frame to frame. The points set the size (1/12 of the full radius at 0, full at 24 and above) and the color (first color at 0, last at 32, a flat disc up to there; from 32 to 64 the 12 concentric rings of Concentric open up from the last color at the center to the first at the edge). Each frame the five loudest notes add 24, 20, 16, 12, 8 points plus `8 × position` (the beat); every N frames (the new **Decay rate**, 0.25 to 4 in steps of 0.25, default 1) every circle gives `N × r` points to each neighbour among the up to 8 around it and loses `8 N r` in all, with `r` the per-frame rate of its band: 0.5 for 1 to 8 points, 1 above 8 and up to 20, 2 above 20 and below 64, 3 at 64 (revised 2026-11-01; an edge or corner circle decays as if it had 8 neighbours, and a circle never gives more than it has).
 
 How it is done (research Decisions 1 to 4):
 
@@ -14,7 +14,7 @@ How it is done (research Decisions 1 to 4):
 - **Gains are worked out in note order, the simulation runs in cell order.** The top five are ranked among the notes (ties to the lower note, as the spec says), the gains are placed in cells with the existing `arrange_notes(…, note_layout)`, and the neighbours of a circle are the cells around its cell. Rows and Spiral therefore both work and nothing about the layout is duplicated.
 - **Decay is a conservative shift.** With `give = min(points, 16)` and `share = give / 16`, a circle sends `2 × share` to each neighbour; the part of the 16 with no neighbour is lost. A circle with at least 16 points gives exactly what the spec says; one with fewer gives proportionally less, so nothing is created. All circles use the points before the step.
 - **Drawing reuses the Concentric cell geometry.** The cell of every pixel and its distance to the cell center are worked out once for the frame size; a frame is the blend of the background and the circle color with the analytic coverage `clip(radius − distance + 0.5, 0, 1)`, which gives the same one-pixel smooth edge for any radius, so a size that varies continuously costs no more than a fixed one.
-- **Wiring.** `IMAGE_TYPES` gets `decay`; `write_frames(…, decay_rate=5)` checks the rate for every type and draws Decay like Concentric (same beat, same note layout, same ignored settings); `jobs.py` gets the optional field `decay_rate`, measures the beat for `decay` as for `concentric`, and echoes the rate.
+- **Wiring.** `IMAGE_TYPES` gets `decay`; `write_frames(…, decay_rate=1)` checks the rate for every type and draws Decay like Concentric (same beat, same note layout, same ignored settings); `jobs.py` gets the optional field `decay_rate`, measures the beat for `decay` as for `concentric`, and echoes the rate.
 - **Frontend.** `decay` joins `IMAGE_TYPES`; `DECAY_RATE_RANGE`, `DEFAULT_DECAY_RATE`, `validateDecayRate`; a type group `decay` titled "Decay" with one slider; `gridSettingsApply`, `noteLayoutApplies` and the peaks group treat Decay like Concentric; the request, the summary line, a help text; tests.
 - **Tests**: the point rules (gains and ranking, ties, the beat bonus, clamping at 0 and 64, the decay of an interior cell, an edge cell and a corner cell, a circle with fewer than 16 points, simultaneity, the total never growing, the interval, a silent file), the radius and color of a circle from its points, `write_frames` and the API (the field, defaults, refusals, echo, ignored for the others, Rows and Spiral, the reference hashes of the other six types), and the page (the group, the groups shown, the request, the summary, the help).
 - **Docs**: README, `quickstart.md`.
@@ -69,7 +69,7 @@ backend/
 ├── app/services/
 │   ├── decay.py                # NEW: gains, the decay step, the points of all frames, radii and colors, write_decay_frames
 │   ├── image_types.py          # IMAGE_TYPES gets "decay"
-│   └── frame_rendering.py      # write_frames(..., decay_rate=5), the decay branch
+│   └── frame_rendering.py      # write_frames(..., decay_rate=1), the decay branch
 ├── app/routers/jobs.py         # the field decay_rate; the beat is measured for decay
 └── tests/
     ├── test_decay.py            # NEW

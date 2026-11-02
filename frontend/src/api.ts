@@ -38,6 +38,11 @@ export interface JobResult {
   decay_rate: number;
   /** Contour: the waves of the beat wave (feature 028). */
   wave_count: number;
+  /** Decay: the points a circle gives to each neighbour per frame at the low, medium, high and saturated levels (0.5 to 3 each). */
+  decay_low: number;
+  decay_medium: number;
+  decay_high: number;
+  decay_saturated: number;
   circle_memory: number;
   circle_notes: number;
   window_spacing: number;
@@ -82,6 +87,10 @@ export interface JobSettings {
   noteLayout: string;
   decayRate: number;
   waveCount: number;
+  decayLow: number;
+  decayMedium: number;
+  decayHigh: number;
+  decaySaturated: number;
   circleMemory: number;
   circleNotes: number;
 }
@@ -112,6 +121,10 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("note_layout", settings.noteLayout);
   body.append("decay_rate", String(settings.decayRate));
   body.append("wave_count", String(settings.waveCount));
+  body.append("decay_low", String(settings.decayLow));
+  body.append("decay_medium", String(settings.decayMedium));
+  body.append("decay_high", String(settings.decayHigh));
+  body.append("decay_saturated", String(settings.decaySaturated));
   body.append("circle_memory", String(settings.circleMemory));
   body.append("circle_notes", String(settings.circleNotes));
 

@@ -27,8 +27,8 @@ export const GROUPS: readonly GroupDefinition[] = [
   },
   // the same circles with no memory (feature 022): so no Memory control
   { id: "circles_paint", title: "Circles paint", controls: ["circle-unit", "circle-radius", "circle-resize", "circle-notes"] },
-  // the decay rate of the Decay picture (feature 027): the frames between two decay steps
-  { id: "decay", title: "Decay", controls: ["decay-rate"] },
+  // the decay rate of the Decay picture (feature 027): the frames between two decay steps, and the four decay amounts, one for each saturation level
+  { id: "decay", title: "Decay", controls: ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"] },
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
   // the beat coloring of Tiles and Blended tiles (feature 024) and the beat wave of Contour (feature 028): its own group, after the group of the type

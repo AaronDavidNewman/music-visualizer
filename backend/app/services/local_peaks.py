@@ -17,7 +17,9 @@ a last pass keeps it across the borders of the zones (the stronger of two close 
 Every peak records the sample where the maximum is (the first sample of its impulse window), its energy, the smallest and the
 largest impulse energy of the peaks window it was found in, and the rate in peaks per minute (60 times the file rate over the
 samples since the previous peak; the first peak, with no predecessor, has the default rate of 60). A finished measurement
-answers the interpolated energy and the rate at any point of the file (:class:`LocalPeaks`).
+answers the interpolated energy and the rate at any point of the file (:class:`LocalPeaks`). After the last peak there is no next peak to
+interpolate with, so the energy falls in a straight line from the last peak's energy to 0 at the end of the file: the last beat is taken to last
+for whatever is left of the file, and a file always ends on a down part of the beat.
 
 This module knows nothing about the note analysis, the frames or the router: it takes the two channels and the file's sample
 rate. Nothing uses it yet; how it is used in the pictures is a later feature.
@@ -122,17 +124,30 @@ class LocalPeaks:
     def _window_maxs(self) -> np.ndarray:
         return np.array([p.window_max for p in self.peaks], dtype=np.float64)
 
+    def _energy_line(self, points: np.ndarray) -> np.ndarray:
+        """The energy at the points, for a measurement that has peaks: the line through the peaks, then down to 0 at the end of the file."""
+        end = max(float(self.sample_count), self._samples[-1] + 1.0)  # the last beat lasts for whatever is left of the file
+        return np.interp(
+            points,
+            np.append(self._samples, end),
+            np.append(self._energies, 0.0),
+            left=0.0,
+            right=0.0,
+        )
+
     def energy_at(self, point):
         """The interpolated energy at a sample number, or at each of a sequence of them.
 
-        A straight line between the energy of the previous peak and that of the next; 0 before the first peak; the last peak's
-        energy after the last (also past the end of the file and for a negative point); 0 for a file without peaks.
+        A straight line between the energy of the previous peak and that of the next; 0 before the first peak; after the last peak
+        a straight line from the last peak's energy down to 0 at the end of the file (the last beat is taken to last for whatever is
+        left of the file, so the file ends on a down part of the beat), and 0 past the end and for a negative point; 0 for a file
+        without peaks.
         """
         points, scalar = _points(point)
         if not len(self.peaks):
             answer = np.zeros(points.shape)
         else:
-            answer = np.interp(points, self._samples, self._energies, left=0.0, right=self._energies[-1])
+            answer = self._energy_line(points)
         return float(answer) if scalar else answer
 
     def rate_at(self, point):
@@ -155,14 +170,15 @@ class LocalPeaks:
         The interpolated energy (see :meth:`energy_at`) between the smallest and the largest energy of the peaks windows of
         the neighbouring peaks, those two interpolated in the same straight line from the previous peak to the next. 0 is the
         minimum, 1 the maximum; a value outside is held at the nearest end. It is 0 before the first peak, for a file without
-        peaks and where the smallest and the largest energy leave no range; after the last peak it is worked out from the
-        last peak's own values.
+        peaks and where the smallest and the largest energy leave no range; after the last peak the smallest and the largest energy
+        are those of the last peak's window and the energy falls to 0 at the end of the file (see :meth:`energy_at`), so the position
+        falls to 0 and the file ends on a down part of the beat.
         """
         points, scalar = _points(point)
         if not len(self.peaks):
             answer = np.zeros(points.shape)
         else:
-            energy = np.interp(points, self._samples, self._energies, left=0.0, right=self._energies[-1])
+            energy = self._energy_line(points)
             low = np.interp(points, self._samples, self._window_mins, left=0.0, right=self._window_mins[-1])
             high = np.interp(points, self._samples, self._window_maxs, left=0.0, right=self._window_maxs[-1])
             span = high - low

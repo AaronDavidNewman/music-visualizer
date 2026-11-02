@@ -5,6 +5,9 @@ import {
   COLORMAPS,
   DEFAULT_COLORMAP,
   DEFAULT_BEAT_COLORING,
+  DECAY_AMOUNT_RANGE,
+  DECAY_LEVELS,
+  DEFAULT_DECAY_AMOUNTS,
   DEFAULT_DECAY_RATE,
   DEFAULT_WAVE_COUNT,
   WAVE_COUNT_RANGE,
@@ -45,6 +48,7 @@ import {
   WINDOW_SIZES,
   formatBeatColoring,
   formatBlendWidth,
+  formatDecayAmount,
   formatDecayRate,
   formatWaveCount,
   formatPeakDistance,
@@ -62,6 +66,7 @@ import {
   formatThreshold,
   validateBlendWidth,
   validatePeakDistance,
+  validateDecayAmount,
   validateDecayRate,
   validateWaveCount,
   validateNoteLayout,
@@ -105,6 +110,7 @@ import {
   imageTypeHelp,
   gaussianHelp,
   beatColoringHelp,
+  decayAmountHelp,
   decayRateHelp,
   waveCountHelp,
   noteLayoutHelp,
@@ -146,6 +152,7 @@ const circleRadius = ref<number>(DEFAULT_CIRCLE_RADIUS);
 const circleResize = ref<boolean>(DEFAULT_CIRCLE_RESIZE);
 const noteLayout = ref<string>(DEFAULT_NOTE_LAYOUT);
 const decayRate = ref<number>(DEFAULT_DECAY_RATE);
+const decayAmounts = ref<number[]>([...DEFAULT_DECAY_AMOUNTS]); // low, medium, high, saturated
 const waveCount = ref<number>(DEFAULT_WAVE_COUNT);
 const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
 const peakDistance = ref<number>(DEFAULT_PEAK_DISTANCE);
@@ -184,6 +191,7 @@ const circleNotesError = computed(() => validateCircleNotes(circleNotes.value));
 const circleRadiusError = computed(() => validateCircleRadius(circleRadius.value));
 const noteLayoutError = computed(() => validateNoteLayout(noteLayout.value));
 const decayRateError = computed(() => validateDecayRate(decayRate.value));
+const decayAmountErrors = computed(() => DECAY_LEVELS.map((level, index) => validateDecayAmount(decayAmounts.value[index], level.name)));
 const waveCountError = computed(() => validateWaveCount(waveCount.value));
 const peakDistanceError = computed(() => validatePeakDistance(peakDistance.value));
 const peakProminenceError = computed(() => validatePeakProminence(peakProminence.value));
@@ -209,6 +217,7 @@ const canSubmit = computed(
     !circleRadiusError.value &&
     !noteLayoutError.value &&
     !decayRateError.value &&
+    decayAmountErrors.value.every((e) => !e) &&
     !waveCountError.value &&
     !peakDistanceError.value &&
     !peakProminenceError.value,
@@ -247,6 +256,7 @@ const typeGroupProblem = computed(
     (inTypeGroup("circle-memory") && !!circleMemoryError.value) ||
     (inTypeGroup("circle-notes") && !!circleNotesError.value) ||
     (inTypeGroup("decay-rate") && !!decayRateError.value) ||
+    (inTypeGroup("decay-low") && decayAmountErrors.value.some((e) => !!e)) ||
     (inTypeGroup("wave-count") && !!waveCountError.value),
 );
 const noteLayoutProblem = computed(() => !!noteLayoutError.value);
@@ -288,6 +298,10 @@ function onSubmit() {
     circleResize: circleResize.value,
     noteLayout: noteLayout.value,
     decayRate: decayRate.value,
+    decayLow: decayAmounts.value[0],
+    decayMedium: decayAmounts.value[1],
+    decayHigh: decayAmounts.value[2],
+    decaySaturated: decayAmounts.value[3],
     waveCount: waveCount.value,
     beatColoring: beatColoring.value,
     peakDistance: peakDistance.value,
@@ -543,6 +557,26 @@ function onSubmit() {
         />
         <small v-if="decayRateError" class="error">{{ decayRateError }}</small>
       </div>
+
+      <template v-for="(level, index) in DECAY_LEVELS" :key="level.control">
+        <div v-if="inTypeGroup(level.control)" class="field">
+          <div class="field-head">
+            <label :for="level.control">{{ level.label }}</label>
+            <InfoPopover :label="level.label.toLowerCase() + ' decay'" :text="decayAmountHelp[level.name]" />
+            <output class="slider-value" :for="level.control">{{ formatDecayAmount(decayAmounts[index]) }}</output>
+          </div>
+          <input
+            :id="level.control"
+            v-model.number="decayAmounts[index]"
+            type="range"
+            :min="DECAY_AMOUNT_RANGE.min"
+            :max="DECAY_AMOUNT_RANGE.max"
+            :step="DECAY_AMOUNT_RANGE.step"
+            :disabled="busy"
+          />
+          <small v-if="decayAmountErrors[index]" class="error">{{ decayAmountErrors[index] }}</small>
+        </div>
+      </template>
 
       <div v-if="inTypeGroup('wave-count')" class="field">
         <div class="field-head">

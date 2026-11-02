@@ -59,7 +59,17 @@ export const circleNotesHelp =
   "5 to 12. Notes: how many of the strongest notes of each frame put a circle down; the circle of the strongest continues from the strongest circle of the previous frame, and so on down the ranks. More notes make a busier picture. Only used by Circles.";
 
 export const decayRateHelp =
-  "1 to 10 frames (default 5). How often the circles of the Decay picture spread out: every this many frames each circle gives 2 points to each of the circles around it and loses 16 points in all, so a circle on an edge or in a corner fades faster than one in the middle. A small number makes the loud spots spread and fade quickly; a large number lets them stay. It counts frames, so at a higher frame rate the picture fades faster in time."
+  "0.25 to 4 frames in steps of 0.25 (default 1). How often the circles of the Decay picture spread out: every this many frames each circle gives points to each of the circles around it, at the rate of its saturation level (the four decay settings below: how full the circle is). A step moves this many frames' worth, so the average rate is the same at any setting: A number below 1 takes several smaller steps in every frame (0.25 takes four), which is smoother, above all at higher frame rates; with a large number a circle with plenty of points can give most of what it has away in one step, so the loud spots disappear in jumps, which is why 4 is the most. A circle on an edge or in a corner loses the same total as one in the middle, but some of it goes to the circles that are not there, so it fades faster. It counts frames, so at a higher frame rate the picture fades faster in time.";
+
+const decayAmountText = (level: string, fullness: string, standard: string) =>
+  `0.5 to 3 (default ${standard}). How many points a circle at the ${level} saturation level (${fullness}) gives to each of the circles around it, every frame: 0.5 is one point every 2 frames, 3 is the fastest. A circle gives to 8 neighbours, so it loses 8 times this a frame (an edge or corner circle too, as if it had all 8; the share of the missing neighbours is lost), and never more than it has. Larger numbers make a circle at this level empty and spread to its neighbours faster; smaller ones keep it longer. Only used by Decay.`;
+
+export const decayAmountHelp = {
+  low: decayAmountText("low", "a circle with only a few points", "0.5"),
+  medium: decayAmountText("medium", "somewhat more than low", "1"),
+  high: decayAmountText("high", "a well charged circle", "2"),
+  saturated: decayAmountText("saturated", "a circle that is completely full", "3"),
+} as const;
 
 export const waveCountHelp =
   "2 to 10 (default 4). Only used by Contour, and only when Beat coloring is on. How many waves the rings across the picture have, counted from the center to the edge of the larger side: a larger number makes more and thinner rings, close together near the middle and wider towards the edge. The rings dim the picture by a share that swells and fades smoothly over a beat: nothing at the bottom of the beat, so the picture is the plain contour, the dark rings cut away completely half way up the beat, and nothing again at the top. The colors still run from 0 to the loudest note of the frame, so the dimmed rings look darker.";

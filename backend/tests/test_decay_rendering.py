@@ -153,7 +153,7 @@ def test_a_bad_colormap_is_refused_before_anything_is_written(tmp_path):
 # ---- write_frames ---------------------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("rate", [1, 5, 10])
+@pytest.mark.parametrize("rate", [0.25, 0.75, 1, 4])
 def test_write_frames_draws_the_points_of_the_values(tmp_path, rate):
     values = np.random.default_rng(4).random((25, 88))
     beat = np.linspace(0, 1, 25)
@@ -162,17 +162,17 @@ def test_write_frames_draws_the_points_of_the_values(tmp_path, rate):
     assert all_frames(tmp_path / "a") == all_frames(tmp_path / "b") and len(all_frames(tmp_path / "a")) == 25
 
 
-def test_write_frames_uses_the_default_rate_5_and_no_beat_means_position_0(tmp_path):
+def test_write_frames_uses_the_default_rate_1_and_no_beat_means_position_0(tmp_path):
     values = song(12)
     write_frames(values, tmp_path / "a", image_type="decay", colormap="viridis")
-    write_frames(values, tmp_path / "b", image_type="decay", colormap="viridis", decay_rate=5, beat=np.zeros(12))
+    write_frames(values, tmp_path / "b", image_type="decay", colormap="viridis", decay_rate=1, beat=np.zeros(12))
     assert all_frames(tmp_path / "a") == all_frames(tmp_path / "b")
 
 
 def test_the_rate_changes_the_pictures(tmp_path):
     values = song(12, until=3)
-    write_frames(values, tmp_path / "a", image_type="decay", colormap="viridis", decay_rate=1)
-    write_frames(values, tmp_path / "b", image_type="decay", colormap="viridis", decay_rate=10)
+    write_frames(values, tmp_path / "a", image_type="decay", colormap="viridis", decay_rate=0.25)
+    write_frames(values, tmp_path / "b", image_type="decay", colormap="viridis", decay_rate=4)
     assert all_frames(tmp_path / "a") != all_frames(tmp_path / "b")
 
 
@@ -184,17 +184,18 @@ def test_the_beat_changes_the_points_and_the_pictures(tmp_path):
 
 
 def test_a_held_note_charges_its_circle_to_full_size_and_the_last_color_and_keeps_it_there(tmp_path):
-    write_frames(song(12), tmp_path, image_type="decay", colormap="viridis", decay_rate=5)
+    # a beat of 1 adds 32 a frame; a step every frame takes 16 from 32 points (2 to each of 8 neighbours): 16, then 34, and the circle stays above 32
+    write_frames(song(12), tmp_path, image_type="decay", colormap="viridis", decay_rate=1, beat=np.ones(12))
     x, y = centre(30)
     last = tuple(lookup_table("viridis")[255])
     pictures = [np.array(Image.open(tmp_path / f"frame_{i:06d}.png").convert("RGB")) for i in range(12)]
-    assert tuple(pictures[0][y, x]) == tuple(lookup_table("viridis")[int(np.rint(24 / 32 * 255))])
-    assert all(tuple(p[y, x]) == last for p in pictures[2:])  # from 32 points on, saturated
+    assert tuple(pictures[0][y, x]) == tuple(lookup_table("viridis")[int(np.rint(16 / 32 * 255))])
+    assert all(tuple(p[y, x]) == last for p in pictures[1:])  # from 32 points on, saturated
 
 
 def test_with_the_spiral_layout_middle_c_is_drawn_at_row_3_column_6(tmp_path):
     values = song(2, notes=((MIDDLE_C_NOTE, 1.0),))
-    write_frames(values, tmp_path, image_type="decay", colormap="viridis", note_layout="spiral", decay_rate=10)
+    write_frames(values, tmp_path, image_type="decay", colormap="viridis", note_layout="spiral", decay_rate=4)
     picture = np.array(Image.open(tmp_path / "frame_000000.png").convert("RGB"))
     row, column = MIDDLE_C_CELL
     x, y = centre(row * 12 + column)
@@ -227,9 +228,9 @@ def test_the_settings_of_the_other_pictures_are_checked_and_have_no_effect(tmp_p
 
 
 @pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay"])
-@pytest.mark.parametrize("bad", [0, 11, 2.5, True, "5", None])
+@pytest.mark.parametrize("bad", [0, 0.2, 0.3, 1.1, 4.25, 5, 10, True, "1", None])
 def test_a_bad_decay_rate_is_refused_before_anything_is_written_for_every_type(tmp_path, image_type, bad):
-    with pytest.raises(ValueError, match="The decay rate must be a whole number from 1 to 10."):
+    with pytest.raises(ValueError, match="The decay rate must be a number from 0.25 to 4 in steps of 0.25."):
         write_frames(song(3), tmp_path / "out", image_type=image_type, colormap="viridis", decay_rate=bad)
     assert not (tmp_path / "out").exists()
 
@@ -341,3 +342,36 @@ def test_each_ring_has_the_color_of_its_position_at_its_middle(tmp_path):
         near = [rings[j].astype(int) for j in (max(k - 1, 0), k, min(k + 1, 11))]
         assert min(np.abs(sample - c).max() for c in near) <= 16, (k, sample, near)
     assert tuple(rings[0]) == tuple(table[255])
+
+# ---- the decay amounts ----------------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay"])
+@pytest.mark.parametrize(
+    "bad, level",
+    [((0.4, 1, 2, 3), "low"), ((0.5, 3.5, 2, 3), "medium"), ((0.5, 1, 0, 3), "high"), ((0.5, 1, 2, float("nan")), "saturated"), ((1, 2, 3), "low"), (None, "low")],
+)
+def test_bad_decay_amounts_are_refused_for_every_type_before_anything_is_written(tmp_path, image_type, bad, level):
+    with pytest.raises(ValueError):
+        write_frames(song(3), tmp_path / "out", image_type=image_type, colormap="viridis", decay_amounts=bad)
+    assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric"])
+def test_the_decay_amounts_have_no_effect_on_the_other_types(tmp_path, image_type):
+    values = np.random.default_rng(12).random((6, 88))
+    write_frames(values, tmp_path / "a", image_type=image_type, colormap="viridis")
+    write_frames(values, tmp_path / "b", image_type=image_type, colormap="viridis", decay_amounts=(3.0, 3.0, 3.0, 3.0))
+    assert all_frames(tmp_path / "a") == all_frames(tmp_path / "b")
+
+
+def test_the_decay_amounts_change_the_decay_pictures_and_the_defaults_change_nothing(tmp_path):
+    values = np.random.default_rng(13).random((15, 88)) ** 3
+    beat = np.linspace(0, 1, 15)
+    write_frames(values, tmp_path / "plain", image_type="decay", colormap="viridis", decay_rate=1, beat=beat)
+    write_frames(values, tmp_path / "default", image_type="decay", colormap="viridis", decay_rate=1, beat=beat, decay_amounts=(0.5, 1.0, 2.0, 3.0))
+    write_frames(values, tmp_path / "fast", image_type="decay", colormap="viridis", decay_rate=1, beat=beat, decay_amounts=(3.0, 3.0, 3.0, 3.0))
+    write_frames(values, tmp_path / "slow", image_type="decay", colormap="viridis", decay_rate=1, beat=beat, decay_amounts=(0.5, 0.5, 0.5, 0.5))
+    assert all_frames(tmp_path / "plain") == all_frames(tmp_path / "default")
+    assert all_frames(tmp_path / "fast") != all_frames(tmp_path / "plain") != all_frames(tmp_path / "slow")
+    assert all_frames(tmp_path / "fast") != all_frames(tmp_path / "slow")

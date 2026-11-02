@@ -10,6 +10,7 @@ import {
   circleResizeHelp,
   circleRadiusHelp,
   circleNotesHelp,
+  decayAmountHelp,
   decayRateHelp,
   waveCountHelp,
   circleUnitHelp,
@@ -244,10 +245,12 @@ describe("the Decay help (feature 027)", () => {
   });
 
   it("explains the decay rate: the range, the default, what happens every so many frames and that it counts frames", () => {
-    expect(decayRateHelp).toContain("1 to 10");
-    expect(decayRateHelp).toContain("default 5");
-    expect(decayRateHelp).toContain("2 points");
-    expect(decayRateHelp).toContain("16 points");
+    expect(decayRateHelp).toContain("0.25 to 4 frames");
+    expect(decayRateHelp).toContain("steps of 0.25");
+    expect(decayRateHelp).toContain("default 1");
+    expect(decayRateHelp).toContain("0.25 takes four");
+    expect(decayRateHelp).toContain("saturation level");
+    expect(decayRateHelp).toContain("this many frames' worth");
     expect(decayRateHelp).toContain("frames");
     expect(decayRateHelp.length).toBeGreaterThan(60);
   });
@@ -268,5 +271,19 @@ describe("the beat wave help (feature 028)", () => {
     expect(beatColoringHelp).toContain("Contour");
     expect(beatColoringHelp).toContain("beat wave");
     expect(imageTypeHelp).toContain("rings pulse over it with the beat");
+  });
+});
+
+describe("the decay amount help (feature 027, revised)", () => {
+  it("has a text for each saturation level with the range, its default and what it does, and without listing points", () => {
+    expect(Object.keys(decayAmountHelp)).toEqual(["low", "medium", "high", "saturated"]);
+    const defaults: Record<string, string> = { low: "0.5", medium: "1", high: "2", saturated: "3" };
+    for (const [level, text] of Object.entries(decayAmountHelp)) {
+      expect(text, level).toContain("0.5 to 3");
+      expect(text, level).toContain(`default ${defaults[level]}`);
+      expect(text, level).toContain(`${level} saturation level`);
+      expect(text, level).toContain("8 neighbours");
+      expect(text.length, level).toBeGreaterThan(100);
+    }
   });
 });

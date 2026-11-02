@@ -67,7 +67,7 @@ class LocalPeaks:
 | `energy_at(p)`, `p` at a peak's `sample` | That peak's `energy` |
 | `energy_at(p)`, `p` between peaks `a` and `b` | `a.energy + (b.energy − a.energy) × (p − a.sample) / (b.sample − a.sample)` |
 | `energy_at(p)`, `p` before the first peak (including negative) | `0.0` |
-| `energy_at(p)`, `p` after the last peak (including past the end) | The last peak's `energy` |
+| `energy_at(p)`, `p` after the last peak (revised 2026-10-31) | The straight line from the last peak's `energy` at its `sample` to `0` at `sample_count` (the end of the file), `0` at and past the end |
 | `rate_at(p)` | The `rate` of the last peak with `sample ≤ p`; `60.0` if there is none |
 | any call with no peaks | energy `0.0`, rate `60.0` |
 | `*_at_time(t)` | `*_at(t × file_rate)` |

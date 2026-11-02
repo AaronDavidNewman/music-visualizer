@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import SettingsForm from "./SettingsForm.vue";
 import formSource from "./SettingsForm.vue?raw";
 import { COLORMAPS, DEFAULT_COLORMAP } from "../utilities/validation";
+import { decayAmountHelp, decayRateHelp } from "../utilities/help";
 
 async function render(busy = false): Promise<string> {
   const app = createSSRApp(SettingsForm, { busy, file: null, sampleRate: 44100 });
@@ -755,22 +756,22 @@ describe("the page for Decay (feature 027)", () => {
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
-      ["decay", "Decay", ["decay-rate"]],
+      ["decay", "Decay", ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
 
-  it("has the Decay rate slider from 1 to 10 in steps of 1, with a label and an info button", async () => {
+  it("has the Decay rate slider from 0.25 to 4 in steps of 0.25, with a label and an info button", async () => {
     const html = await renderType("decay");
     const slider = html.match(/<input id="decay-rate"[^>]*>/)?.[0] ?? "";
     expect(slider).toContain('type="range"');
-    expect(slider).toContain('min="1"');
-    expect(slider).toContain('max="10"');
-    expect(slider).toContain('step="1"');
+    expect(slider).toContain('min="0.25"');
+    expect(slider).toContain('max="4"');
+    expect(slider).toContain('step="0.25"');
     expect(html).toMatch(/<label[^>]*for="decay-rate"[^>]*>Decay rate<\/label>/);
-    expect(html).toMatch(/<output[^>]*for="decay-rate"[^>]*>5 frames<\/output>/);
+    expect(html).toMatch(/<output[^>]*for="decay-rate"[^>]*>1 frame<\/output>/);
   });
 
   it("has no Beat coloring checkbox and none of the grid controls", async () => {
@@ -835,5 +836,58 @@ describe("the page for Contour: the beat wave (feature 028)", () => {
     expect(formSource).toContain("waveCount: waveCount.value");
     expect(formSource).toContain("validateWaveCount(waveCount.value)");
     expect(formSource).toContain("ref<number>(DEFAULT_WAVE_COUNT)");
+  });
+});
+
+describe("the decay amounts, one for each saturation level (feature 027, revised)", () => {
+  const LEVELS: [string, string, string][] = [
+    ["decay-low", "Low saturation", "0.5 per frame"],
+    ["decay-medium", "Medium saturation", "1 per frame"],
+    ["decay-high", "High saturation", "2 per frame"],
+    ["decay-saturated", "Saturated", "3 per frame"],
+  ];
+
+  it.each(LEVELS)("has the %s slider from 0.5 to 3 in steps of 0.5 with its label, an info button and a readout at its default", async (id, label, readout) => {
+    const html = await renderType("decay");
+    const slider = html.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))?.[0] ?? "";
+    expect(slider).toContain('type="range"');
+    expect(slider).toContain('min="0.5"');
+    expect(slider).toContain('max="3"');
+    expect(slider).toContain('step="0.5"');
+    expect(html).toMatch(new RegExp(`<label[^>]*for="${id}"[^>]*>${label}</label>`));
+    expect(html).toMatch(new RegExp(`<output[^>]*for="${id}"[^>]*>${readout}</output>`));
+    expect(html).toContain(`aria-label="About ${label.toLowerCase()} decay"`);
+  });
+
+  it("calls the categories saturation levels and never lists the points in the page", async () => {
+    const html = await renderType("decay");
+    for (const word of ["Low saturation", "Medium saturation", "High saturation", "Saturated"]) expect(html).toContain(word);
+    for (const text of Object.values(decayAmountHelp)) {
+      expect(text).toContain("saturation level");
+      expect(text).not.toMatch(/\b\d+ to \d+ points\b|up to \d+ points|above \d+ points|\b64 points\b/);
+    }
+    expect(decayRateHelp).not.toMatch(/\b\d+ to \d+ points\b|up to \d+ points|above \d+ points|\b64 points\b/);
+  });
+
+  it("does not show the amounts for any other type", async () => {
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric"]) {
+      const html = await renderType(type);
+      for (const [id] of LEVELS) expect(html, type + id).not.toContain(`id="${id}"`);
+    }
+  });
+
+  it("lays the Decay group out as the rate and the four amounts, the last one alone on its row", async () => {
+    const group = groupsOf(await renderType("decay")).find((g) => g.id === "decay");
+    expect(group?.controls).toEqual(["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]);
+  });
+
+  it("keeps the values in one array, checks each by its own level, flags the group, blocks the form and sends all four", () => {
+    expect(formSource).toContain("ref<number[]>([...DEFAULT_DECAY_AMOUNTS])");
+    expect(formSource).toContain("validateDecayAmount(decayAmounts.value[index], level.name)");
+    expect(formSource).toContain("decayAmountErrors.value.every((e) => !e)");
+    expect(formSource).toContain('(inTypeGroup("decay-low") && decayAmountErrors.value.some((e) => !!e))');
+    for (const [field, index] of [["decayLow", 0], ["decayMedium", 1], ["decayHigh", 2], ["decaySaturated", 3]] as const) {
+      expect(formSource).toContain(`${field}: decayAmounts.value[${index}]`);
+    }
   });
 });

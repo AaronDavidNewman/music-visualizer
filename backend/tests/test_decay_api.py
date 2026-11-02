@@ -15,7 +15,7 @@ from .test_peak_tile_colors_api import COLORMAP, ROWS, TONE_NOTE, all_frames, po
 from .test_resolution_api import picture, tiny
 
 TYPE_MESSAGE = f"The image type must be one of {', '.join(IMAGE_TYPES)}."
-RATE_MESSAGE = "The decay rate must be a whole number from 1 to 10."
+RATE_MESSAGE = "The decay rate must be a number from 0.25 to 4 in steps of 0.25."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
 PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent."
 MIDDLE_COLOR_ROW = 128
@@ -59,7 +59,7 @@ def test_decay_is_accepted_and_echoed_with_every_colormap_and_the_defaults(clien
     assert r.status_code == 200, r.text
     job = r.json()
     assert job["image_type"] == "decay" and job["colormap"] == name
-    assert (job["decay_rate"], job["note_layout"], job["peak_distance"], job["peak_prominence"]) == (5, "rows", 100, 50)
+    assert (job["decay_rate"], job["note_layout"], job["peak_distance"], job["peak_prominence"]) == (1, "rows", 100, 50)
 
 
 def test_the_response_has_the_same_keys_as_for_the_other_types_and_decay_rate_is_in_all_of_them(client):
@@ -80,14 +80,14 @@ def test_the_frames_are_600_by_400_rgb_pictures_and_their_count_is_that_of_the_o
 # --- the decay rate -----------------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("rate", ["1", "3", "10", "5.0", " 4 "])
-def test_a_whole_number_from_1_to_10_is_accepted_and_echoed(client, rate):
+@pytest.mark.parametrize("rate", ["0.25", "0.5", "0.75", "1", "1.25", "2.5", "3", "4", "4.0", " 1.5 "])
+def test_a_number_from_a_quarter_to_4_in_steps_of_a_quarter_is_accepted_and_echoed(client, rate):
     r = decay(client, tiny(), decay_rate=rate)
     assert r.status_code == 200, r.text
-    assert r.json()["decay_rate"] == int(float(rate))
+    assert r.json()["decay_rate"] == float(rate)
 
 
-@pytest.mark.parametrize("rate", ["0", "11", "2.5", "-1", "abc", "", "nan", "inf", "1e3"])
+@pytest.mark.parametrize("rate", ["0", "0.2", "0.24", "0.3", "1.1", "3.9", "4.25", "5", "10", "-1", "-0.25", "abc", "", "nan", "inf", "1e3"])
 def test_anything_else_is_refused_with_the_message_and_nothing_is_created(client, rate):
     r = decay(client, tiny(), decay_rate=rate)
     assert r.status_code == 400 and r.json()["detail"] == RATE_MESSAGE
@@ -95,7 +95,7 @@ def test_anything_else_is_refused_with_the_message_and_nothing_is_created(client
 
 
 def test_the_rate_is_checked_before_the_file_is_read(client):
-    r = client.post("/api/jobs", data={"window_size": "4096", "frame_rate": "10", "image_type": "decay", "decay_rate": "11"})  # no file at all
+    r = client.post("/api/jobs", data={"window_size": "4096", "frame_rate": "10", "image_type": "decay", "decay_rate": "5"})  # no file at all
     assert r.status_code == 400 and r.json()["detail"] == RATE_MESSAGE
     assert leftovers() == []
 
@@ -107,13 +107,13 @@ def test_a_rate_sent_with_another_type_is_checked_echoed_and_has_no_effect(clien
     sent = post(client, audio, image_type=image_type, decay_rate="2")
     assert sent.status_code == 200 and sent.json()["decay_rate"] == 2
     assert all_frames(client, sent.json()) == all_frames(client, plain)
-    assert post(client, audio, image_type=image_type, decay_rate="11").status_code == 400
+    assert post(client, audio, image_type=image_type, decay_rate="5").status_code == 400
 
 
 def test_the_rate_changes_the_frames(client):
     audio = pulse_wav(seconds=4.0)
-    one = all_frames(client, decay(client, audio, decay_rate="1").json())
-    ten = all_frames(client, decay(client, audio, decay_rate="10").json())
+    one = all_frames(client, decay(client, audio, decay_rate="0.25").json())
+    ten = all_frames(client, decay(client, audio, decay_rate="4").json())
     assert one != ten and len(one) == len(ten)
 
 
@@ -171,9 +171,9 @@ def test_the_minimum_distance_and_the_prominence_change_the_beat_that_charges_th
 
 
 def test_a_steady_tone_charges_its_circle_to_the_last_color_and_the_silent_notes_stay_small_dots(client):
-    job = decay(client, wav_bytes(0.5 * note_tone(TONE_NOTE, 4.0)), peak_prominence="100").json()
+    job = decay(client, wav_bytes(0.5 * note_tone(TONE_NOTE, 4.0)), decay_rate="1", peak_prominence="100").json()
     last = job["frame_count"] - 1
-    assert row_at(client, job, last) == 255
+    assert row_at(client, job, last) == 255  # the circle settles above 32 points (24 a frame in, 16 to 24 out)
     assert row_at(client, job, last, cell=0) < 40 and row_at(client, job, last, cell=83) < 40  # leakage of the tone gives them a point or so
 
 
@@ -182,7 +182,7 @@ def test_the_circle_of_a_note_that_stops_loses_its_points_and_its_color_over_the
     job = decay(client, wav_bytes(audio), decay_rate="1", peak_prominence="100").json()
     rows = [row_at(client, job, i) for i in range(job["frame_count"])]
     assert max(rows) == 255 and rows[-1] == 0
-    assert row_at(client, job, job["frame_count"] - 1, cell=TONE_NOTE + 1) == 0
+    assert row_at(client, job, job["frame_count"] - 1, cell=TONE_NOTE + 1) <= 4  # a neighbour's last few points are still leaking away at half a point a frame
 
 
 def test_the_settings_of_the_other_pictures_are_accepted_and_ignored(client):
@@ -242,7 +242,7 @@ def test_a_silent_file_makes_frames_of_the_smallest_dots_in_the_first_color_with
 def test_a_file_in_which_no_beat_is_found_works_with_no_bonus(client):
     audio = wav_bytes(0.5 * note_tone(TONE_NOTE, 4.0))
     job = decay(client, audio, peak_prominence="100").json()  # a prominence of 100 % finds no peak in a steady tone
-    assert job["frame_count"] > 0 and row_at(client, job, 0) == int(np.rint(24 / 32 * 255))
+    assert job["frame_count"] > 0 and row_at(client, job, 0) == int(np.rint(8 / 32 * 255))  # 24 gained, and a step of the default rate (1 frame) gives 16 away
 
 
 def test_a_file_shorter_than_the_peaks_window_makes_frames(client):
@@ -252,7 +252,7 @@ def test_a_file_shorter_than_the_peaks_window_makes_frames(client):
     assert picture(client, job, 0).shape == (HEIGHT, WIDTH, 3)
 
 
-@pytest.mark.parametrize("rate", ["1", "10"])
+@pytest.mark.parametrize("rate", ["0.25", "0.75", "4"])
 def test_mono_and_stereo_copies_of_the_same_sound_make_the_same_frames(client, rate):
     mono = 0.5 * note_tone(TONE_NOTE, 2.0)
     a = decay(client, wav_bytes(mono), decay_rate=rate).json()
@@ -267,3 +267,66 @@ def test_a_minute_of_frames_at_30_a_second_is_made_in_a_reasonable_time(client):
     elapsed = time.perf_counter() - started
     assert r.status_code == 200 and r.json()["frame_count"] >= 1700
     assert elapsed < 30, elapsed
+
+# --- the four decay amounts (one for each saturation level) --------------------------------------------------------------------------
+
+AMOUNT_FIELDS = ["decay_low", "decay_medium", "decay_high", "decay_saturated"]
+AMOUNT_DEFAULTS = [0.5, 1.0, 2.0, 3.0]
+LEVEL_NAMES = ["low", "medium", "high", "saturated"]
+
+
+def amount_message(level):
+    return f"The {level} saturation decay must be a number from 0.5 to 3."
+
+
+@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay"])
+def test_the_defaults_are_reported_for_every_image_type(client, image_type):
+    r = post(client, tiny(), image_type=image_type)
+    assert r.status_code == 200, r.text
+    assert [r.json()[f] for f in AMOUNT_FIELDS] == AMOUNT_DEFAULTS
+
+
+@pytest.mark.parametrize("field, default", list(zip(AMOUNT_FIELDS, AMOUNT_DEFAULTS)))
+@pytest.mark.parametrize("value, expected", [("0.5", 0.5), ("1", 1.0), ("1.25", 1.25), ("3", 3.0), ("3.0", 3.0), (" 2.5 ", 2.5)])
+def test_a_number_from_half_to_3_is_accepted_and_echoed_others_keep_their_defaults(client, field, default, value, expected):
+    r = decay(client, tiny(), **{field: value})
+    assert r.status_code == 200, r.text
+    job = r.json()
+    assert job[field] == expected
+    assert [job[f] for f in AMOUNT_FIELDS if f != field] == [d for f, d in zip(AMOUNT_FIELDS, AMOUNT_DEFAULTS) if f != field]
+
+
+@pytest.mark.parametrize("field, level", list(zip(AMOUNT_FIELDS, LEVEL_NAMES)))
+@pytest.mark.parametrize("value", ["0.49", "0", "3.01", "4", "-1", "abc", "", "nan", "inf", "-inf", "1e3"])
+def test_anything_else_is_refused_with_the_message_of_its_level_and_nothing_is_created(client, field, level, value):
+    r = decay(client, tiny(), **{field: value})
+    assert r.status_code == 400 and r.json()["detail"] == amount_message(level)
+    assert leftovers() == []
+
+
+@pytest.mark.parametrize("field, level", list(zip(AMOUNT_FIELDS, LEVEL_NAMES)))
+def test_the_amounts_are_checked_before_the_file_is_read(client, field, level):
+    r = client.post("/api/jobs", data={"window_size": "4096", "frame_rate": "10", "image_type": "decay", field: "5"})  # no file at all
+    assert r.status_code == 400 and r.json()["detail"] == amount_message(level)
+    assert leftovers() == []
+
+
+@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric"])
+def test_amounts_sent_with_another_type_are_checked_echoed_and_have_no_effect(client, image_type):
+    audio = tiny()
+    plain = post(client, audio, image_type=image_type).json()
+    sent = post(client, audio, image_type=image_type, decay_low="3", decay_medium="3", decay_high="0.5", decay_saturated="0.5")
+    assert sent.status_code == 200
+    assert [sent.json()[f] for f in AMOUNT_FIELDS] == [3.0, 3.0, 0.5, 0.5]
+    assert all_frames(client, sent.json()) == all_frames(client, plain)
+    assert post(client, audio, image_type=image_type, decay_high="9").status_code == 400
+
+
+def test_each_amount_changes_the_decay_frames_and_the_defaults_do_not(client):
+    audio = pulse_wav(seconds=6.0)
+    base = all_frames(client, decay(client, audio, decay_rate="1").json())
+    same = all_frames(client, decay(client, audio, decay_rate="1", decay_low="0.5", decay_medium="1", decay_high="2", decay_saturated="3").json())
+    assert same == base
+    for field, other in zip(AMOUNT_FIELDS, ["3", "3", "0.5", "0.5"]):
+        changed = all_frames(client, decay(client, audio, decay_rate="1", **{field: other}).json())
+        assert changed != base, field

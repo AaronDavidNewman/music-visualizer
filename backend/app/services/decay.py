@@ -14,13 +14,21 @@ Every circle has **points** from 0 to 64, 0 before the first frame. The points d
 
 In every frame the five loudest notes (the smoothed values of the 84 drawn notes; ties go to the lower note, a note with value 0 does
 not count) **gain** 24, 20, 16, 12 and 8 points in order of loudness, plus ``8 * position`` points each, with ``position`` the frame's
-place in the local energy peak (0 to 1, see ``local_peaks``; 0 when no beat is given). Every ``decay_rate`` frames (a whole number from
-1 to 10, counting the frames from 1) there is a **decay step**: every circle gives 2 points to each of the cells around it (the up to
-8 of them on the grid, which does not wrap) and loses 16 points in all, the part of the 16 that has no neighbour to go to being lost, so
-an edge circle sends 10 and loses 6 more and a corner circle sends 6 and loses 10 more. A circle with fewer than 16 points gives only
-what it has, in the same proportions, so no points appear from nothing. All circles give and receive at the same time, from the
-points before the step. After the gains and after the step the points are held between 0 and 64, and after a step a circle with less than a hundredth of a
-point has none, so that a circle that has faded is really at 0.
+place in the local energy peak (0 to 1, see ``local_peaks``; 0 when no beat is given).
+
+Circles give their points to the cells around them in a **decay step**, every ``decay_rate`` frames (a number from 0.25 to 4 in steps of
+0.25, counting the frames from 1; below 1 there are several steps in a frame: 0.25 is four, each a quarter of a frame's worth, which is smoother, above all
+at higher frame rates). **How much a circle gives depends on its saturation level**, as a rate per neighbour per frame, one **decay amount** for each
+of four levels, each a number from 0.5 to 3: *low* (1 to 8 points, 0.5 by default: 1 every 2 frames), *medium* (more than 8 and up to 20
+points, 1 by default), *high* (more than 20 and fewer than 64 points, 2 by default) and *saturated* (64 points, 3 by default), to each
+neighbour every frame. A step moves ``decay_rate`` frames' worth, so the average rate is the same
+whatever the ``decay_rate`` (the setting says how often it happens, not how much; a step is taken at the times ``decay_rate``, ``2 * decay_rate``,
+... measured in frames, and frame ``i`` has the steps that fall in ``(i - 1, i]``: one a frame at 1, two at 0.5, 1 or 2 at 0.75, one every other frame at 2). A circle gives to each of the up to 8 cells around it (the grid
+does not wrap); a circle on an edge or in a corner decays as if it had 8 neighbours, so it loses the same total, and what the missing
+neighbours would have received is lost. A circle never gives more points than it has, and gives in the same proportions to each neighbour,
+so no points appear from nothing. All circles give and receive at the same time, from the points before the step. After the gains and after the
+step the points are held between 0 and 64, and after a step a circle with less than a hundredth of a point has none, so that a circle that
+has faded is really at 0.
 
 The points of all frames are worked out first, in one pass over the frames (``circle_points``): the gains are ranked in note order,
 put in the cells of the note layout with ``arrange_notes``, and the neighbours are the cells around a cell, whatever notes they hold.
@@ -47,34 +55,43 @@ from .concentric import GRID_COLUMNS, GRID_ROWS, NOTES, RINGS, _check_values, fu
 from .image_types import tile_edges
 from .note_layout import DEFAULT_NOTE_LAYOUT, arrange_notes, check_note_layout
 
-MIN_DECAY_RATE = 1
-MAX_DECAY_RATE = 10
-DEFAULT_DECAY_RATE = 5
+MIN_DECAY_RATE = 0.25  # frames between decay steps (below 1: several steps in a frame, which is smoother)
+MAX_DECAY_RATE = 4.0  # anything higher blinks
+DECAY_RATE_STEP = 0.25
+DEFAULT_DECAY_RATE = 1.0
 
 MAX_POINTS = 64
 GAINS = (24, 20, 16, 12, 8)  # the points of the five loudest notes of a frame, loudest first
 BEAT_BONUS = 8  # the extra points of the five at the top of the local peak (the position is 1); 0 at the bottom
-GIVE = 2  # the points a circle gives to each neighbour in a decay step
-LOSS = 16  # the points a circle loses in all in a decay step
+NEIGHBOURS = 8  # the cells around a cell; an edge or corner circle loses as if it had all of them
+# the four saturation levels of a circle, by the points it has: low (above 0 and up to 8 points), medium (above 8 and up to 20), high (above 20 and below 64)
+# and saturated (64 points); each has a decay amount, the points a circle at that level gives to each neighbour per frame (settings of the picture)
+LOW_TOP = 8
+MID_TOP = 20
+LEVELS = ("low", "medium", "high", "saturated")
+MIN_DECAY_AMOUNT = 0.5
+MAX_DECAY_AMOUNT = 3.0
+DEFAULT_DECAY_AMOUNTS = (0.5, 1.0, 2.0, 3.0)  # 1 every 2 frames, 1, 2 and 3 a frame
 NEGLIGIBLE = 0.01  # after a decay step a circle with fewer points than this has none: the tail of the fading would never reach 0
 SIZE_POINTS = 24  # the circle is full size from here
 COLOR_POINTS = 32  # the circle has the last color of the colormap from here, and from here it gets rings
 SMALLEST = 1 / 12  # the smallest circle, at 0 points, as a share of the full radius
 
-_RATE_MESSAGE = f"The decay rate must be a whole number from {MIN_DECAY_RATE} to {MAX_DECAY_RATE}."
+DECAY_RATE_MESSAGE = f"The decay rate must be a number from {MIN_DECAY_RATE:g} to {MAX_DECAY_RATE:g} in steps of {DECAY_RATE_STEP:g}."
 
 
-def check_decay_rate(value) -> int:
-    """Return ``value`` as an ``int`` when it is a whole number from 1 to 10 (a bool, a string or a fraction is refused)."""
+def check_decay_rate(value) -> float:
+    """Return ``value`` as a ``float`` when it is a number from 0.25 to 4 in steps of 0.25 (a bool, a string, a non-finite number or a number
+    between two steps is refused)."""
     if (
         isinstance(value, bool)
         or not isinstance(value, numbers.Real)
         or not math.isfinite(value)
-        or value != int(value)
         or not MIN_DECAY_RATE <= value <= MAX_DECAY_RATE
+        or value % DECAY_RATE_STEP != 0
     ):
-        raise ValueError(_RATE_MESSAGE)
-    return int(value)
+        raise ValueError(DECAY_RATE_MESSAGE)
+    return float(value)
 
 
 def gains(values, beat=None) -> np.ndarray:
@@ -96,46 +113,101 @@ def gains(values, beat=None) -> np.ndarray:
     return result
 
 
-def decay_step(points) -> np.ndarray:
-    """One decay step on a ``(7, 12)`` array of points: a new array, the input is not changed.
+def check_decay_amount(value, level: str = "low") -> float:
+    """Return ``value`` as a ``float`` when it is a number from 0.5 to 3 (a bool, a string or a non-finite number is refused); ``level`` names the
+    saturation level in the message."""
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, numbers.Real)
+        or not math.isfinite(value)
+        or not MIN_DECAY_AMOUNT <= value <= MAX_DECAY_AMOUNT
+    ):
+        raise ValueError(f"The {level} saturation decay must be a number from {MIN_DECAY_AMOUNT:g} to {MAX_DECAY_AMOUNT:g}.")
+    return float(value)
 
-    A circle with ``p`` points gives ``min(p, 16)`` points away: ``2 * share`` to each of its neighbours, with ``share = give / 16``
-    (so 2 points to each when it has 16 or more), and the rest of the ``give`` is lost where it has no neighbour. Everything is worked
-    out from the points before the step; the result is held between 0 and 64, and a circle left with less than a hundredth of a point
-    has none (the points spread out and halve again and again, and would otherwise never quite reach 0).
+
+def check_decay_amounts(amounts) -> tuple[float, float, float, float]:
+    """Return the four decay amounts (low, medium, high, saturated) as a tuple of floats, each checked with :func:`check_decay_amount`."""
+    try:
+        values = tuple(amounts)
+    except TypeError:
+        raise ValueError("The decay amounts must be four numbers (low, medium, high, saturated).") from None
+    if len(values) != len(LEVELS):
+        raise ValueError("The decay amounts must be four numbers (low, medium, high, saturated).")
+    return tuple(check_decay_amount(v, level) for v, level in zip(values, LEVELS))  # type: ignore[return-value]
+
+
+def decay_per_frame(points, amounts=DEFAULT_DECAY_AMOUNTS) -> np.ndarray:
+    """The points a circle with ``points`` points gives to each of its neighbours in one frame: 0 with no points, then the decay amount of its
+    saturation level: ``amounts[0]`` up to 8 points (by default 0.5, 1 every 2 frames), ``amounts[1]`` above 8 and up to 20 (1), ``amounts[2]``
+    above 20 and below 64 (2) and ``amounts[3]`` for a saturated circle (64 points: 3)."""
+    low, medium, high, saturated = check_decay_amounts(amounts)
+    points = np.asarray(points, dtype=np.float64)
+    return np.select(
+        [points >= MAX_POINTS, points > MID_TOP, points > LOW_TOP, points > 0.0],
+        [saturated, high, medium, low],
+        default=0.0,
+    )
+
+
+def decay_step(points, frames: int = 1, amounts=DEFAULT_DECAY_AMOUNTS) -> np.ndarray:
+    """One decay step of ``frames`` frames' worth on a ``(7, 12)`` array of points: a new array, the input is not changed.
+
+    A circle with ``p`` points would give ``8 * frames * r`` points away, ``r`` being ``decay_per_frame(p, amounts)`` (the decay amount of its
+    saturation level, per neighbour per frame: 0.5, 1, 2 or 3 by default), and gives ``give = min(p, 8 * frames * r)``: ``give / 8`` to each of its neighbours (so ``frames * r`` to each
+    when it has enough points), and the rest of the ``give`` is lost where it has no neighbour (an edge or corner circle loses as if it had 8).
+    Everything is worked out from the points before the step; the result is held between 0 and 64, and a circle left with less than a
+    hundredth of a point has none (the points spread out and halve again and again, and would otherwise never quite reach 0).
     """
     points = np.asarray(points, dtype=np.float64)
     if points.shape != (GRID_ROWS, GRID_COLUMNS):
         raise ValueError(f"The points must be an array of shape {(GRID_ROWS, GRID_COLUMNS)} (got {points.shape}).")
-    give = np.minimum(points, LOSS)
+    give = np.minimum(points, NEIGHBOURS * frames * decay_per_frame(points, amounts))
     share = np.zeros((GRID_ROWS + 2, GRID_COLUMNS + 2))  # a border of cells that do not exist, so that nothing wraps around
-    share[1:-1, 1:-1] = give / LOSS
+    share[1:-1, 1:-1] = give / NEIGHBOURS  # what each neighbour gets from the circle
     neighbours = np.zeros_like(points)
     for dy in (-1, 0, 1):
         for dx in (-1, 0, 1):
             if dy or dx:
                 neighbours += share[1 + dy : 1 + dy + GRID_ROWS, 1 + dx : 1 + dx + GRID_COLUMNS]
-    after = np.clip(points - give + GIVE * neighbours, 0.0, MAX_POINTS)
+    after = np.clip(points - give + neighbours, 0.0, MAX_POINTS)
     after[after < NEGLIGIBLE] = 0.0
     return after
 
 
-def circle_points(values, beat=None, note_layout: str = DEFAULT_NOTE_LAYOUT, decay_rate: int = DEFAULT_DECAY_RATE) -> np.ndarray:
+def steps_in_frame(index: int, decay_rate: float) -> int:
+    """The number of decay steps that fall in frame ``index`` (counting from 0, that is in ``(index, index + 1]`` frames) when a step is taken
+    at the times ``decay_rate``, ``2 * decay_rate``, ... (frames): none, one or several. 1 gives one a frame, 0.25 four, 2 one every other frame
+    (frames 2, 4, ...), 0.75 one, one and two in turn. Worked out in quarters of a frame, which are exact integers."""
+    quarters = int(round(check_decay_rate(decay_rate) / DECAY_RATE_STEP))
+    return 4 * (index + 1) // quarters - 4 * index // quarters
+
+
+def circle_points(
+    values,
+    beat=None,
+    note_layout: str = DEFAULT_NOTE_LAYOUT,
+    decay_rate: float = DEFAULT_DECAY_RATE,
+    decay_amounts=DEFAULT_DECAY_AMOUNTS,
+) -> np.ndarray:
     """The points of the 84 circles after every frame: a float64 array of shape ``(frames, 84)``, in cell order (row by row).
 
     ``values`` is ``(frames, 84 or more)``, the smoothed note values in note order; ``beat`` is ``None`` or one position from 0 to 1 for
-    each frame; ``note_layout`` says which note is in which cell; ``decay_rate`` is the number of frames between decay steps. Frame ``i``
-    (counting from 1) adds its gains, then has a decay step when ``i`` is a multiple of ``decay_rate``, and is recorded.
+    each frame; ``note_layout`` says which note is in which cell; ``decay_rate`` is the number of frames between decay steps (0.25 to 4 in steps of 0.25), each of which moves that
+    many frames' worth of decay, each circle at the rate of its saturation level (``decay_amounts``: the four per-neighbour amounts, low, medium,
+    high, saturated). Frame ``i`` (counting from 1) adds its gains, then has the decay steps that fall in ``(i - 1, i]`` when steps are taken at the
+    times ``decay_rate``, ``2 * decay_rate``, ... in frames (none, one or several: at 0.25 four), and is recorded.
     """
     note_layout = check_note_layout(note_layout)
     decay_rate = check_decay_rate(decay_rate)
+    decay_amounts = check_decay_amounts(decay_amounts)
     gained = arrange_notes(gains(values, beat), note_layout).reshape(-1, GRID_ROWS, GRID_COLUMNS)
     points = np.zeros((GRID_ROWS, GRID_COLUMNS))
     recorded = np.zeros((gained.shape[0], NOTES))
     for index in range(gained.shape[0]):
         points = np.clip(points + gained[index], 0.0, MAX_POINTS)
-        if (index + 1) % decay_rate == 0:
-            points = decay_step(points)
+        for _ in range(steps_in_frame(index, decay_rate)):  # the steps that fall in (index, index + 1] frames
+            points = decay_step(points, decay_rate, decay_amounts)  # a step of decay_rate frames' worth: the same average rate whatever the setting
         recorded[index] = points.reshape(NOTES)
     return recorded
 
