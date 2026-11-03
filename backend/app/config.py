@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     max_window_size: int = 32768
     min_frame_rate: float = 1
     max_frame_rate: float = 60
+    # Frames -> silent MP4. Each render's video is output_dir/<job_id>/video.mp4; ffmpeg is a name on the PATH or a full path.
+    output_dir: Path = Path(__file__).resolve().parent.parent / "output"
+    ffmpeg_path: str = "ffmpeg"
+    video_timeout_seconds: int = 600
     cors_origins: list[str] = ["http://localhost:5173"]
 
 

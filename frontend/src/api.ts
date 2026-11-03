@@ -128,9 +128,15 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("circle_memory", String(settings.circleMemory));
   body.append("circle_notes", String(settings.circleNotes));
 
+  const res = await send("/api/jobs", { method: "POST", body });
+  return (await res.json()) as JobResult;
+}
+
+/** Sends the request; rejects with a message fit to show the user when the server cannot be reached or answers with an error. */
+async function send(url: string, init: RequestInit): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch("/api/jobs", { method: "POST", body });
+    res = await fetch(url, init);
   } catch {
     throw new Error("Could not reach the server. Check that it is running and try again.");
   }
@@ -145,9 +151,33 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
     }
     throw new Error(detail);
   }
-  return (await res.json()) as JobResult;
+  return res;
 }
 
 export function frameUrl(job: JobResult, index: number): string {
   return job.frame_url_template.replace("{index}", String(index));
+}
+
+/** The silent MP4 made from a render's frames (feature 029). */
+export interface VideoResult {
+  job_id: string;
+  file_name: string;
+  /** Where the file was saved on the machine that runs the server. */
+  path: string;
+  size_bytes: number;
+  frame_count: number;
+  frame_rate: number;
+  duration_seconds: number;
+  /** Where the file can be downloaded from. */
+  url: string;
+}
+
+/** Asks the server to join the render's frames into a silent MP4 and waits for it. Rejects with a message fit to show the user. */
+export async function createVideo(job: JobResult): Promise<VideoResult> {
+  const res = await send(`/api/jobs/${job.job_id}/video`, { method: "POST" });
+  return (await res.json()) as VideoResult;
+}
+
+export function videoUrl(job: JobResult): string {
+  return `/api/jobs/${job.job_id}/video`;
 }

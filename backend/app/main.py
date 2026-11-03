@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .routers import hello, images, jobs
+from .routers import hello, images, jobs, video
 
 app = FastAPI(title="Music Visualizer API")
 
@@ -17,6 +17,7 @@ app.add_middleware(
 app.include_router(hello.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
+app.include_router(video.router, prefix="/api")
 
 # Serve the built frontend (run `npm run build` in frontend/). Mounted last so
 # the /api routes and /docs take precedence.

@@ -1,3 +1,4 @@
+import json
 import logging
 import math
 import re
@@ -587,6 +588,8 @@ def create_job(
             wave_count=wave_count_value,
             decay_amounts=decay_amounts_value,
         )
+        # The video made from these frames later (feature 029) needs the frame rate, and the frames do not hold it.
+        (frames_dir / "render.json").write_text(json.dumps({"frame_rate": fps}), encoding="utf-8")
     except HTTPException:
         _remove_job(job_id)
         raise

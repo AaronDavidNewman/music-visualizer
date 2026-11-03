@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import FramePlayer from "./components/FramePlayer.vue";
+import VideoExport from "./components/VideoExport.vue";
 import FilePicker from "./components/FilePicker.vue";
 import SettingsForm from "./components/SettingsForm.vue";
 import { submitJob, type JobResult, type JobSettings } from "./api";
@@ -67,6 +68,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
 
         <section v-if="result" class="results">
           <FramePlayer :result="result" />
+          <VideoExport :result="result" />
           <h2>{{ result.file_name }}</h2>
           <ul class="summary">
             <li>Duration: {{ result.duration_seconds.toFixed(2) }} s</li>

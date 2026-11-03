@@ -225,6 +225,7 @@ frontend/dist/
 
 # App data
 backend/uploads/
+backend/output/
 
 # Sample audio for analysis (large)
 backend/audio/

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { submitJob, type JobSettings } from "./api";
+import { createVideo, submitJob, videoUrl, type JobResult, type JobSettings } from "./api";
 
 const SETTINGS: JobSettings = {
   windowSize: 8192,
@@ -159,5 +159,50 @@ describe("the decay amount fields of the request (feature 027, revised)", () => 
   it("shows the server's message for a refused amount", async () => {
     vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The high saturation decay must be a number from 0.5 to 3." }) }));
     await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The high saturation decay must be a number from 0.5 to 3.");
+  });
+});
+
+describe("the video request (feature 029)", () => {
+  const JOB = { job_id: "0123456789abcdef0123456789abcdef" } as JobResult;
+  const VIDEO = {
+    job_id: JOB.job_id,
+    file_name: "video.mp4",
+    path: "C:\app\backend\output\video.mp4",
+    size_bytes: 1000,
+    frame_count: 240,
+    frame_rate: 24,
+    duration_seconds: 10,
+    url: `/api/jobs/${JOB.job_id}/video`,
+  };
+
+  it("posts to the video address of the job and returns what the server says", async () => {
+    let seen: { url: string; method: string | undefined } | undefined;
+    vi.stubGlobal("fetch", async (url: string, init: { method?: string }) => {
+      seen = { url, method: init.method };
+      return { ok: true, status: 200, json: async () => VIDEO };
+    });
+    expect(await createVideo(JOB)).toEqual(VIDEO);
+    expect(seen).toEqual({ url: `/api/jobs/${JOB.job_id}/video`, method: "POST" });
+  });
+
+  it("shows the server's message when the video cannot be made", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: false, status: 503, json: async () => ({ detail: "ffmpeg was not found." }) }));
+    await expect(createVideo(JOB)).rejects.toThrow("ffmpeg was not found.");
+  });
+
+  it("has a generic message when the error has no detail", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: false, status: 500, json: async () => ({}) }));
+    await expect(createVideo(JOB)).rejects.toThrow("The server returned an error (500).");
+  });
+
+  it("says the server could not be reached when the request fails", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("failed");
+    });
+    await expect(createVideo(JOB)).rejects.toThrow("Could not reach the server.");
+  });
+
+  it("builds the download address of the job's video", () => {
+    expect(videoUrl(JOB)).toBe(`/api/jobs/${JOB.job_id}/video`);
   });
 });
