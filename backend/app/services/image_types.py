@@ -21,7 +21,8 @@ A third kind, ``contour``, is not tile colors at all: the grid of note values is
 makes the same circles with no memory, painted onto a copy of the previous picture (``circles_paint.py``). A sixth,
 ``concentric``, is a circle of up to twelve flat rings for each of the 84 notes on the 12 x 7 grid (``concentric.py``). A seventh,
 ``decay``, has the same circles but each is one flat disc that keeps points from frame to frame, charged by the loudest notes and
-spreading into its neighbours as time passes (``decay.py``).
+spreading into its neighbours as time passes (``decay.py``). An eighth, ``decay-exp``, is ``decay`` with the points gained and lost
+along an exponential curve (``decay_exp.py``).
 
 This module knows nothing about the note analysis or the grid of the application: the tile geometry is passed in.
 """
@@ -31,7 +32,7 @@ import numbers
 
 import numpy as np
 
-IMAGE_TYPES = ("tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay")
+IMAGE_TYPES = ("tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp")
 DEFAULT_IMAGE_TYPE = "tiles"
 
 # The blend width is a percentage of the tile width: the reach of the fade on each side of an edge.

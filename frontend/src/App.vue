@@ -12,6 +12,7 @@ import {
   formatCircleMemory,
   formatDecayAmount,
   formatDecayRate,
+  decayRateApplies,
   formatWaveCount,
   formatCircleNotes,
   formatCircleResize,
@@ -92,7 +93,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
               <li v-if="result.image_type === 'circles'">Memory: {{ formatCircleMemory(result.circle_memory) }}</li>
               <li>Notes: {{ formatCircleNotes(result.circle_notes) }}</li>
             </template>
-            <li v-if="result.image_type === 'decay'">Decay rate: {{ formatDecayRate(result.decay_rate) }}</li>
+            <li v-if="decayRateApplies(result.image_type)">Decay rate: {{ formatDecayRate(result.decay_rate) }}</li>
             <li v-if="result.image_type === 'decay'">Low saturation decay: {{ formatDecayAmount(result.decay_low) }}</li>
             <li v-if="result.image_type === 'decay'">Medium saturation decay: {{ formatDecayAmount(result.decay_medium) }}</li>
             <li v-if="result.image_type === 'decay'">High saturation decay: {{ formatDecayAmount(result.decay_high) }}</li>

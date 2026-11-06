@@ -48,6 +48,7 @@ from .colormaps import DEFAULT_COLORMAP, check_beat, check_colormap, colorize, l
 from .concentric import write_concentric_frames
 from .beat_wave import DEFAULT_WAVE_COUNT, check_wave_count
 from .decay import DEFAULT_DECAY_AMOUNTS, DEFAULT_DECAY_RATE, check_decay_amounts, check_decay_rate, circle_points, write_decay_frames
+from .decay_exp import circle_points as decay_exp_points
 from .contour import write_contour_frames
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
 from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
@@ -346,6 +347,10 @@ def write_frames(
     ``beat`` and ``note_layout`` apply; every other setting is checked and ignored. ``decay_rate`` and ``decay_amounts`` are checked
     for every image type and have no effect on the others.
 
+    ``image_type="decay-exp"`` is ``decay`` with two amounts changed (see ``decay_exp``): a note that would gain ``g`` points gains ``g * exp(-g / 8)``, and
+    a circle with ``p`` points gives each neighbour ``sin(pi / 2 * p / 64) ** 2`` per frame instead of the amount of its saturation level. ``decay_rate``,
+    ``beat``, ``note_layout``, smoothing and the colormap apply; ``decay_amounts`` and every other setting are checked and ignored.
+
     ``wave_count`` (a whole number from 2 to 10, default 4) is the number of waves of the **beat wave** of ``contour`` (see ``beat_wave``): with
     ``beat`` given, the frame's grid of values is multiplied by ``1 - pattern * beat`` before the contour is drawn, with a pattern of concentric
     rings with ``wave_count`` waves across the largest dimension of the grid; a frame at beat 0 (and every frame with ``beat=None``) is the plain
@@ -372,7 +377,7 @@ def write_frames(
     decay_amounts = check_decay_amounts(decay_amounts)
     wave_count = check_wave_count(wave_count)
     if beat is not None:
-        beat = check_beat(beat, len(frames))  # checked for every image type, used by tiles, blended, contour, concentric and decay
+        beat = check_beat(beat, len(frames))  # checked for every image type, used by tiles, blended, contour, concentric, decay and decay-exp
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
     peak = float(smoothed.max()) if smoothed.size else 0.0
     if image_type == "circles":
@@ -409,6 +414,10 @@ def write_frames(
         return
     if image_type == "decay":  # 84 discs that keep points from frame to frame; the grid settings above are checked and not used
         points = circle_points(smoothed, beat, note_layout, decay_rate, decay_amounts)
+        write_decay_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
+        return
+    if image_type == "decay-exp":  # the same discs with the points gained and lost along an exponential curve; decay_amounts is checked and not used
+        points = decay_exp_points(smoothed, beat, note_layout, decay_rate)
         write_decay_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
     columns, rows = GRID_COLUMNS * resolution, GRID_ROWS * resolution

@@ -199,7 +199,7 @@ describe("smoothing window", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric and Decay in that order and starts at tiles", () => {
+  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay and Decay Exp in that order and starts at tiles", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["tiles", "Tiles"],
       ["blended", "Blended tiles"],
@@ -208,6 +208,7 @@ describe("image type", () => {
       ["circles_paint", "Circles paint"],
       ["concentric", "Concentric"],
       ["decay", "Decay"],
+      ["decay-exp", "Decay Exp"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
     expect(imageTypeLabel("tiles")).toBe("Tiles");
@@ -217,14 +218,15 @@ describe("image type", () => {
     expect(imageTypeLabel("circles_paint")).toBe("Circles paint");
     expect(imageTypeLabel("concentric")).toBe("Concentric");
     expect(imageTypeLabel("decay")).toBe("Decay");
+    expect(imageTypeLabel("decay-exp")).toBe("Decay Exp");
   });
 
   it.each(values)("accepts %j", (v) => {
     expect(validateImageType(v)).toBeNull();
   });
 
-  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay.");
+  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-"])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp.");
   });
 
   it("knows the two circle types, and the grid settings apply to neither", () => {
@@ -634,5 +636,27 @@ describe("the decay amounts, one for each saturation level (feature 027, revised
   it("writes the amount per frame", () => {
     expect(formatDecayAmount(0.5)).toBe("0.5 per frame");
     expect(formatDecayAmount(3)).toBe("3 per frame");
+  });
+});
+
+describe("Decay Exp (feature 030)", () => {
+  it("is a rings type like Decay: not a grid type, no checkbox, the Local peaks settings always, the note layout", () => {
+    expect(gridSettingsApply("decay-exp")).toBe(false);
+    expect(isCirclesType("decay-exp")).toBe(false);
+    expect(isRingsType("decay-exp")).toBe(true);
+    expect(beatColoringApplies("decay-exp")).toBe(false);
+    for (const box of [true, false]) expect(peakSettingsShown("decay-exp", box), String(box)).toBe(true);
+    expect(noteLayoutApplies("decay-exp")).toBe(true);
+  });
+
+  it("has the decay rate, which applies to Decay and Decay Exp only", () => {
+    expect(decayRateApplies("decay-exp")).toBe(true);
+    expect(decayRateApplies("decay")).toBe(true);
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay_exp", "Decay-Exp", ""]) expect(decayRateApplies(type), type).toBe(false);
+  });
+
+  it("does not apply the wave count, and is an image type the validation accepts", () => {
+    expect(waveCountApplies("decay-exp")).toBe(false);
+    expect(validateImageType("decay-exp")).toBeNull();
   });
 });

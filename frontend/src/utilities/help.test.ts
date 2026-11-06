@@ -11,6 +11,7 @@ import {
   circleRadiusHelp,
   circleNotesHelp,
   decayAmountHelp,
+  decayExpRateHelp,
   decayRateHelp,
   waveCountHelp,
   circleUnitHelp,
@@ -285,5 +286,25 @@ describe("the decay amount help (feature 027, revised)", () => {
       expect(text, level).toContain("8 neighbours");
       expect(text.length, level).toBeGreaterThan(100);
     }
+  });
+});
+
+describe("the Decay Exp help (feature 030)", () => {
+  it("describes the Decay Exp picture in the Image type help, next to Decay", () => {
+    expect(imageTypeHelp).toContain("Decay Exp:");
+    expect(imageTypeHelp).toContain("Decay:");
+    expect(imageTypeHelp).toContain("decay rate");
+    expect(imageTypeHelp).toContain("four decay settings of Decay do not apply");
+    expect(imageTypeHelp).toContain("more than 10 circles have more than 32 points");
+  });
+
+  it("explains its decay rate: the range, the default, the formula's effect and that it counts frames, without the saturation levels", () => {
+    expect(decayExpRateHelp).toContain("0.25 to 4 frames");
+    expect(decayExpRateHelp).toContain("steps of 0.25");
+    expect(decayExpRateHelp).toContain("default 1");
+    expect(decayExpRateHelp).toContain("sin²(π/2 × p/64)");
+    expect(decayExpRateHelp).toContain("0.25 takes four");
+    expect(decayExpRateHelp).toContain("counts frames");
+    expect(decayExpRateHelp).not.toMatch(/saturation|decay settings below/);
   });
 });

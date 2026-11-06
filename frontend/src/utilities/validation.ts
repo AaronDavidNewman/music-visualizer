@@ -87,7 +87,8 @@ export function validateSmoothingWindow(value: string | number): string | null {
 /**
  * The kinds of picture: Tiles (flat tiles with hard edges, the default), Blended tiles (colors fade across the tile
  * edges) and Contour (the notes drawn as a filled contour map), then Circles, Circles paint and Concentric (a circle of up to
- * twelve rings for each of the 84 notes) and Decay (the same circles, each a disc that keeps points and fades into its neighbours).
+ * twelve rings for each of the 84 notes), Decay (the same circles, each a disc that keeps points and fades into its neighbours) and Decay Exp (Decay
+ * with the points gained and lost along an exponential curve).
  */
 export const IMAGE_TYPES = [
   { value: "tiles", label: "Tiles" },
@@ -97,6 +98,7 @@ export const IMAGE_TYPES = [
   { value: "circles_paint", label: "Circles paint" },
   { value: "concentric", label: "Concentric" },
   { value: "decay", label: "Decay" },
+  { value: "decay-exp", label: "Decay Exp" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -148,7 +150,11 @@ export const COLORMAPS = [
   { value: "Blues", label: "Blues" },
   { value: "viridis", label: "Viridis"},
   { value: "Greys", label: "Grayscale"},
-  { value: "hsv", label: "HSV"}
+  { value: "hsv", label: "HSV"},
+  { value: "hot", label: "Hot (classic)" },
+  { value: "Wistia", label: "Wistia" },
+  { value: "Paired", label: "Paired" },
+  { value: "gist_rainbow", label: "Rainbow" }
 ] as const;
 export const DEFAULT_COLORMAP = "coolwarm";
 
@@ -312,9 +318,9 @@ export function gridSettingsApply(imageType: string): boolean {
   return !isCirclesType(imageType) && !isRingsType(imageType);
 }
 
-/** Whether the picture is one of the two with a circle for each of the 84 notes that the beat always colors: Concentric and Decay (feature 027). */
+/** Whether the picture is one with a circle for each of the 84 notes that the beat always colors or charges: Concentric, Decay (feature 027) and Decay Exp (feature 030). */
 export function isRingsType(imageType: string): boolean {
-  return imageType === "concentric" || imageType === "decay";
+  return imageType === "concentric" || imageType === "decay" || imageType === "decay-exp";
 }
 
 /** Whether Minimum distance and Prominence are used: always by Concentric and Decay (the beat colors or charges them), by Tiles, Blended tiles and Contour with the Beat coloring box on, never by the others. */
@@ -368,9 +374,9 @@ export function formatDecayAmount(value: number): string {
   return `${value} per frame`;
 }
 
-/** Whether the decay rate (and the four decay amounts) do anything: only for Decay. */
+/** Whether the decay rate does anything: for Decay and Decay Exp. The four decay amounts are Decay's only (Decay Exp takes its loss from a formula). */
 export function decayRateApplies(imageType: string): boolean {
-  return imageType === "decay";
+  return imageType === "decay" || imageType === "decay-exp";
 }
 
 /** Beat coloring (feature 024): half the color of a tile comes from the frame's place in the local energy peak. */

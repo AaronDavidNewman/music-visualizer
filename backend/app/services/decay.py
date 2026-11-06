@@ -158,11 +158,21 @@ def decay_step(points, frames: int = 1, amounts=DEFAULT_DECAY_AMOUNTS) -> np.nda
     when it has enough points), and the rest of the ``give`` is lost where it has no neighbour (an edge or corner circle loses as if it had 8).
     Everything is worked out from the points before the step; the result is held between 0 and 64, and a circle left with less than a
     hundredth of a point has none (the points spread out and halve again and again, and would otherwise never quite reach 0).
+    The spreading itself is :func:`_spread`, which ``decay_exp`` shares.
     """
     points = np.asarray(points, dtype=np.float64)
     if points.shape != (GRID_ROWS, GRID_COLUMNS):
         raise ValueError(f"The points must be an array of shape {(GRID_ROWS, GRID_COLUMNS)} (got {points.shape}).")
-    give = np.minimum(points, NEIGHBOURS * frames * decay_per_frame(points, amounts))
+    return _spread(points, np.minimum(points, NEIGHBOURS * frames * decay_per_frame(points, amounts)))
+
+
+def _spread(points: np.ndarray, give: np.ndarray) -> np.ndarray:
+    """The ``(7, 12)`` points after every circle has given ``give`` points (its own array, never more than it has) to the cells around it.
+
+    A circle sends ``give / 8`` to each neighbour that exists, and the rest of ``give`` is lost where it has none (an edge or corner circle
+    loses as if it had 8). All circles give and receive at the same time, from ``points``; the result is held between 0 and 64 and a circle
+    left with less than a hundredth of a point has none. A new array: the inputs are not changed.
+    """
     share = np.zeros((GRID_ROWS + 2, GRID_COLUMNS + 2))  # a border of cells that do not exist, so that nothing wraps around
     share[1:-1, 1:-1] = give / NEIGHBOURS  # what each neighbour gets from the circle
     neighbours = np.zeros_like(points)

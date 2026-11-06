@@ -78,9 +78,9 @@ describe("the image type controls", () => {
   const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
   const blended = (busy = false) => renderType("blended", busy);
 
-  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric and Decay in a dropdown that starts at Tiles", async () => {
+  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay and Decay Exp in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -491,7 +491,7 @@ describe("the groups of the chosen image type (Story 2)", () => {
   it("shares the values of Movement, Radius, Resize by volume and Notes between Circles and Circles paint", () => {
     // one ref each in the form, shown by either circle group, so that switching the type keeps what was entered
     for (const control of ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]) expect(formSource).toContain(`inTypeGroup('${control}')`);
-    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay"]');
+    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp"]');
     expect((formSource.match(/const circleUnit = ref/g) ?? []).length).toBe(1);
     expect((formSource.match(/const circleNotes = ref/g) ?? []).length).toBe(1);
   });
@@ -889,5 +889,54 @@ describe("the decay amounts, one for each saturation level (feature 027, revised
     for (const [field, index] of [["decayLow", 0], ["decayMedium", 1], ["decayHigh", 2], ["decaySaturated", 3]] as const) {
       expect(formSource).toContain(`${field}: decayAmounts.value[${index}]`);
     }
+  });
+});
+
+describe("the page for Decay Exp (feature 030)", () => {
+  it("shows Analysis, Colormap, Image type, Decay (the rate only), Note layout, Local peaks and Data smoothing, in this order", async () => {
+    const groups = groupsOf(await renderType("decay-exp"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+      ["decay-exp", "Decay", ["decay-rate"]],
+      ["note-layout", "Note layout", ["note-layout"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
+    ]);
+  });
+
+  it("has the Decay rate slider from 0.25 to 4 in steps of 0.25, as Decay has", async () => {
+    const html = await renderType("decay-exp");
+    const slider = html.match(/<input id="decay-rate"[^>]*>/)?.[0] ?? "";
+    expect(slider).toContain('type="range"');
+    expect(slider).toContain('min="0.25"');
+    expect(slider).toContain('max="4"');
+    expect(slider).toContain('step="0.25"');
+    expect(html).toMatch(/<label[^>]*for="decay-rate"[^>]*>Decay rate<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="decay-rate"[^>]*>1 frame<\/output>/);
+  });
+
+  it("has none of the four decay amount sliders, no Beat coloring checkbox and none of the grid controls", async () => {
+    const html = await renderType("decay-exp");
+    for (const id of ["decay-low", "decay-medium", "decay-high", "decay-saturated", "beat-coloring", "threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "circle-memory"]) {
+      expect(html, id).not.toContain(`id="${id}"`);
+    }
+    expect(html).not.toContain('data-group="image-smoothing"');
+    expect(html).not.toContain('data-group="local-peaks"');
+    expect(html).not.toContain('data-group="decay"');
+  });
+
+  it("still shows the four decay amounts for Decay", async () => {
+    const html = await renderType("decay");
+    for (const id of ["decay-low", "decay-medium", "decay-high", "decay-saturated"]) expect(html, id).toContain(`id="${id}"`);
+  });
+
+  it("explains the rate with its own help text, not the one that talks about the saturation levels", () => {
+    expect(formSource).toContain("imageType === 'decay-exp' ? decayExpRateHelp : decayRateHelp");
+  });
+
+  it("flags the group and blocks the form when the rate is not allowed, through the same check as for Decay", () => {
+    expect(formSource).toContain('(inTypeGroup("decay-rate") && !!decayRateError.value)');
   });
 });

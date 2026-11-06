@@ -111,6 +111,7 @@ import {
   gaussianHelp,
   beatColoringHelp,
   decayAmountHelp,
+  decayExpRateHelp,
   decayRateHelp,
   waveCountHelp,
   noteLayoutHelp,
@@ -225,11 +226,11 @@ const canSubmit = computed(
 
 // The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
 // shown. Every value stays in its ref, so it is kept when a group is folded or the type is changed, and is still sent.
-const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay"];
+const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp"];
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
-// the Local peaks group has one of two ids: local-peaks (Tiles, Blended tiles and Contour: with the checkbox) or concentric-peaks (Concentric and Decay: without)
+// the Local peaks group has one of two ids: local-peaks (Tiles, Blended tiles and Contour: with the checkbox) or concentric-peaks (Concentric, Decay and Decay Exp: without)
 const showNoteLayout = computed(() => noteLayoutApplies(imageType.value));
 const peaksGroup = computed(() => shownGroups.value.find((id) => id === "local-peaks" || id === "concentric-peaks") ?? "");
 function inTypeGroup(control: string): boolean {
@@ -543,7 +544,7 @@ function onSubmit() {
       <div v-if="inTypeGroup('decay-rate')" class="field">
         <div class="field-head">
           <label for="decay-rate">Decay rate</label>
-          <InfoPopover label="decay rate" :text="decayRateHelp" />
+          <InfoPopover label="decay rate" :text="imageType === 'decay-exp' ? decayExpRateHelp : decayRateHelp" />
           <output class="slider-value" for="decay-rate">{{ formatDecayRate(decayRate) }}</output>
         </div>
         <input

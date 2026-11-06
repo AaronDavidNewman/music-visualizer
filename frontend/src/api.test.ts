@@ -206,3 +206,12 @@ describe("the video request (feature 029)", () => {
     expect(videoUrl(JOB)).toBe(`/api/jobs/${JOB.job_id}/video`);
   });
 });
+
+describe("the request for Decay Exp (feature 030)", () => {
+  it("sends the image type with its hyphen, the decay rate, and the four decay amounts as for any type", async () => {
+    const fields = await posted({ ...SETTINGS, imageType: "decay-exp", decayRate: 0.25 });
+    expect(fields.image_type).toBe("decay-exp");
+    expect(fields.decay_rate).toBe("0.25");
+    expect([fields.decay_low, fields.decay_medium, fields.decay_high, fields.decay_saturated]).toEqual(["1.5", "2", "2.5", "3"]);
+  });
+});

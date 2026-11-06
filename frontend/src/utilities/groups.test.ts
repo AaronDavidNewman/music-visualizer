@@ -15,10 +15,11 @@ const EXPECTED: Record<string, string[]> = {
   circles_paint: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-notes", "smoothing-window", "smoothing"],
   concentric: [...COMMON_TOP, "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   decay: [...COMMON_TOP, "decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
+  "decay-exp": [...COMMON_TOP, "decay-rate", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
 };
 
 describe("the groups", () => {
-  it("are the fourteen groups of the data model, with their titles and controls in order", () => {
+  it("are the fifteen groups of the data model, with their titles and controls in order", () => {
     expect(GROUPS.map((g) => [g.id, g.title, [...g.controls]])).toEqual([
       ["analysis", "Analysis", ["window-size", "frame-rate", "window-spacing"]],
       ["colormap", "Colormap", ["colormap"]],
@@ -29,6 +30,7 @@ describe("the groups", () => {
       ["circles", "Circles", ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"]],
       ["circles_paint", "Circles paint", ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]],
       ["decay", "Decay", ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]],
+      ["decay-exp", "Decay", ["decay-rate"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance", "peak-prominence"]],
       ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
@@ -50,11 +52,11 @@ describe("the groups shown for each image type", () => {
   it.each(TYPES)("are, for %s, in this order: the top group, Colormap, Image type, the type's group, Data smoothing, Image smoothing", (type) => {
     const want = ["analysis", "colormap", "image-type"];
     if (type !== "concentric") want.push(type); // Concentric has no group of its own
-    if (type === "tiles" || type === "blended" || type === "concentric" || type === "decay") want.push("note-layout");
+    if (type === "tiles" || type === "blended" || type === "concentric" || type === "decay" || type === "decay-exp") want.push("note-layout");
     if (type === "tiles" || type === "blended" || type === "contour") want.push("local-peaks");
-    if (type === "concentric" || type === "decay") want.push("concentric-peaks");
+    if (type === "concentric" || type === "decay" || type === "decay-exp") want.push("concentric-peaks");
     want.push("data-smoothing");
-    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay") want.push("image-smoothing");
+    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay" && type !== "decay-exp") want.push("image-smoothing");
     expect(groupsFor(type)).toEqual(want);
   });
 
@@ -278,7 +280,7 @@ describe("the Decay group (feature 027)", () => {
 
   it("is shown for Decay only, between Image type and Note layout, with Local peaks without the checkbox", () => {
     expect(groupsFor("decay")).toEqual(["analysis", "colormap", "image-type", "decay", "note-layout", "concentric-peaks", "data-smoothing"]);
-    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "nonsense"]) expect(groupsFor(type), type).not.toContain("decay");
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay-exp", "nonsense"]) expect(groupsFor(type), type).not.toContain("decay");
   });
 
   it("puts the controls in their groups for Decay and none of the grid controls anywhere", () => {
@@ -289,7 +291,7 @@ describe("the Decay group (feature 027)", () => {
     for (const control of ["threshold", "notes", "blend-width", "beat-coloring", "resolution", "interpolate", "gaussian", "circle-unit"]) {
       expect(groupOf(control, "decay"), control).toBeUndefined();
     }
-    for (const type of TYPES.filter((t) => t !== "decay")) expect(groupOf("decay-rate", type), type).toBeUndefined();
+    for (const type of TYPES.filter((t) => t !== "decay" && t !== "decay-exp")) expect(groupOf("decay-rate", type), type).toBeUndefined();
   });
 });
 
@@ -306,5 +308,29 @@ describe("the Contour group and the wave count (feature 028)", () => {
 
   it("shows, for Contour, the groups in the order of the contract", () => {
     expect(groupsFor("contour")).toEqual(["analysis", "colormap", "image-type", "contour", "local-peaks", "data-smoothing", "image-smoothing"]);
+  });
+});
+
+describe("the Decay Exp group (feature 030)", () => {
+  it("is titled Decay and has the decay rate only, alone on its row", () => {
+    expect(groupTitle("decay-exp")).toBe("Decay");
+    expect([...controlsIn("decay-exp")]).toEqual(["decay-rate"]);
+    expect(rowsOf(controlsIn("decay-exp").length)).toEqual([1]);
+  });
+
+  it("is shown for Decay Exp only, between Image type and Note layout, with Local peaks without the checkbox", () => {
+    expect(groupsFor("decay-exp")).toEqual(["analysis", "colormap", "image-type", "decay-exp", "note-layout", "concentric-peaks", "data-smoothing"]);
+    for (const type of TYPES.filter((t) => t !== "decay-exp")) expect(groupsFor(type), type).not.toContain("decay-exp");
+  });
+
+  it("puts the decay rate in its group and none of the four decay amounts anywhere for Decay Exp", () => {
+    expect(groupOf("decay-rate", "decay-exp")).toBe("decay-exp");
+    expect(groupOf("decay-rate", "decay")).toBe("decay");
+    expect(groupOf("note-layout", "decay-exp")).toBe("note-layout");
+    expect(groupOf("peak-distance", "decay-exp")).toBe("concentric-peaks");
+    for (const control of ["decay-low", "decay-medium", "decay-high", "decay-saturated", "threshold", "notes", "blend-width", "beat-coloring", "resolution", "interpolate", "gaussian", "circle-unit"]) {
+      expect(groupOf(control, "decay-exp"), control).toBeUndefined();
+    }
+    for (const control of ["decay-low", "decay-medium", "decay-high", "decay-saturated"]) expect(groupOf(control, "decay"), control).toBe("decay");
   });
 });

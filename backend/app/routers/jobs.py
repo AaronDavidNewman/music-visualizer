@@ -551,10 +551,10 @@ def create_job(
             )
         result = analyze_channels(left, right, file_rate, window, step=step)
         # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local peaks
-        # measurement. Concentric and Decay are always colored by it; tiles, blended tiles and contour (its beat wave) only with the beat coloring box on; the
+        # measurement. Concentric, Decay and Decay Exp are always colored by it; tiles, blended tiles and contour (its beat wave) only with the beat coloring box on; the
         # other pictures and the box off never measure it
         beat = None
-        if image_type_value in ("concentric", "decay") or (beat_coloring_value and image_type_value in ("tiles", "blended", "contour")):
+        if image_type_value in ("concentric", "decay", "decay-exp") or (beat_coloring_value and image_type_value in ("tiles", "blended", "contour")):
             beat = measure_local_peaks(
                 left, right, file_rate, peak_distance_value, peak_prominence_value
             ).frame_positions(fps, frames)

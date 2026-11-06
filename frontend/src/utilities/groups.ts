@@ -29,6 +29,8 @@ export const GROUPS: readonly GroupDefinition[] = [
   { id: "circles_paint", title: "Circles paint", controls: ["circle-unit", "circle-radius", "circle-resize", "circle-notes"] },
   // the decay rate of the Decay picture (feature 027): the frames between two decay steps, and the four decay amounts, one for each saturation level
   { id: "decay", title: "Decay", controls: ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"] },
+  // Decay Exp (feature 030): the same decay rate, and no decay amounts, because its loss is given by a formula
+  { id: "decay-exp", title: "Decay", controls: ["decay-rate"] },
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
   // the beat coloring of Tiles and Blended tiles (feature 024) and the beat wave of Contour (feature 028): its own group, after the group of the type
@@ -40,7 +42,7 @@ export const GROUPS: readonly GroupDefinition[] = [
 ];
 
 /** The ids of the groups that belong to one image type: exactly one of them follows the Image type group. */
-const TYPE_GROUPS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay"];
+const TYPE_GROUPS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp"];
 
 const byId = new Map(GROUPS.map((g) => [g.id, g]));
 
@@ -54,8 +56,8 @@ export function controlsIn(id: string): readonly string[] {
 
 /**
  * The ids of the groups shown for an image type, top to bottom: the top group, Colormap, Image type, the group of the type
- * (none for Concentric, which has no controls of its own, nor for a type that is not one of the seven), Note layout for Tiles, Blended
- * tiles, Concentric and Decay, Local peaks for Tiles, Blended tiles and Contour (with the checkbox) and for Concentric and Decay
+ * (none for Concentric, which has no controls of its own, nor for a type that is not one of the eight), Note layout for Tiles, Blended
+ * tiles, Concentric, Decay and Decay Exp, Local peaks for Tiles, Blended tiles and Contour (with the checkbox) and for Concentric, Decay and Decay Exp
  * (without it), Data smoothing, and Image smoothing when the type draws a grid.
  */
 export function groupsFor(imageType: string): string[] {

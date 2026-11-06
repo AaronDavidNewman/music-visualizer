@@ -120,8 +120,8 @@ describe("the result summary for Decay (feature 027)", () => {
   const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
   const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
 
-  it("shows the decay rate in frames for Decay only", () => {
-    expect(line("Decay rate:")).toContain("result.image_type === 'decay'");
+  it("shows the decay rate in frames for Decay and Decay Exp only", () => {
+    expect(line("Decay rate:")).toContain("decayRateApplies(result.image_type)");
     expect(line("Decay rate:")).toContain("formatDecayRate(result.decay_rate)");
   });
 
@@ -161,5 +161,29 @@ describe("the result summary: the decay amounts (feature 027, revised)", () => {
   ])("shows %s for Decay only, per frame", (label, field) => {
     expect(line(label)).toContain("result.image_type === 'decay'");
     expect(line(label)).toContain(`formatDecayAmount(result.${field})`);
+  });
+});
+
+describe("the result summary for Decay Exp (feature 030)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows the decay rate, and the note layout and Local peaks settings through the rules that include Decay Exp", () => {
+    expect(line("Decay rate:")).toContain("decayRateApplies(result.image_type)");
+    expect(line("Note layout:")).toContain("noteLayoutApplies(result.image_type)");
+    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+  });
+
+  it("does not show the four decay amounts for it: they stay Decay's", () => {
+    for (const label of ["Low saturation decay:", "Medium saturation decay:", "High saturation decay:", "Saturated decay:"]) {
+      expect(line(label), label).toContain("result.image_type === 'decay'");
+      expect(line(label), label).not.toContain("decay-exp");
+      expect(line(label), label).not.toContain("decayRateApplies");
+    }
+  });
+
+  it("does not show Threshold, Notes, Interpolate, Oversampling, Gaussian smoothing or Beat coloring", () => {
+    expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
+    for (const label of ["Oversampling:", "Gaussian smoothing:"]) expect(line(label), label).toContain("gridSettingsApply(result.image_type)");
   });
 });
