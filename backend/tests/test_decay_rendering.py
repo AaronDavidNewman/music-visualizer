@@ -227,7 +227,7 @@ def test_the_settings_of_the_other_pictures_are_checked_and_have_no_effect(tmp_p
     assert all_frames(tmp_path / "a") == all_frames(tmp_path / "b")
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp"])
+@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"])
 @pytest.mark.parametrize("bad", [0, 0.2, 0.3, 1.1, 4.25, 5, 10, True, "1", None])
 def test_a_bad_decay_rate_is_refused_before_anything_is_written_for_every_type(tmp_path, image_type, bad):
     with pytest.raises(ValueError, match="The decay rate must be a number from 0.25 to 4 in steps of 0.25."):
@@ -346,7 +346,7 @@ def test_each_ring_has_the_color_of_its_position_at_its_middle(tmp_path):
 # ---- the decay amounts ----------------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp"])
+@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"])
 @pytest.mark.parametrize(
     "bad, level",
     [((0.4, 1, 2, 3), "low"), ((0.5, 3.5, 2, 3), "medium"), ((0.5, 1, 0, 3), "high"), ((0.5, 1, 2, float("nan")), "saturated"), ((1, 2, 3), "low"), (None, "low")],

@@ -25,6 +25,7 @@ const SETTINGS: JobSettings = {
   peakProminence: 25,
   noteLayout: "spiral",
   decayRate: 3,
+  polarNotes: 6,
   waveCount: 7,
   decayLow: 1.5,
   decayMedium: 2,
@@ -71,6 +72,7 @@ describe("the request that submitJob sends", () => {
       peak_prominence: "25",
       note_layout: "spiral",
       decay_rate: "3",
+      polar_notes: "6",
       wave_count: "7",
       decay_low: "1.5",
       decay_medium: "2",
@@ -213,5 +215,13 @@ describe("the request for Decay Exp (feature 030)", () => {
     expect(fields.image_type).toBe("decay-exp");
     expect(fields.decay_rate).toBe("0.25");
     expect([fields.decay_low, fields.decay_medium, fields.decay_high, fields.decay_saturated]).toEqual(["1.5", "2", "2.5", "3"]);
+  });
+});
+
+describe("the request for Polar Chords (feature 032)", () => {
+  it("sends the image type with its hyphen and Notes shown as text", async () => {
+    const fields = await posted({ ...SETTINGS, imageType: "polar-chords", polarNotes: 8 });
+    expect(fields.image_type).toBe("polar-chords");
+    expect(fields.polar_notes).toBe("8");
   });
 });

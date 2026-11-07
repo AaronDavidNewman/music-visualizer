@@ -41,13 +41,13 @@ def row_at(client, job, index, cell=TONE_NOTE) -> int:
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_decay_is_the_seventh_image_type_and_the_message_lists_all_eight():
-    assert IMAGE_TYPES[-2] == "decay" and len(IMAGE_TYPES) == 8
-    assert TYPE_MESSAGE == "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp."
+def test_decay_is_the_seventh_image_type_and_the_message_lists_all_nine():
+    assert IMAGE_TYPES[-3] == "decay" and len(IMAGE_TYPES) == 9
+    assert TYPE_MESSAGE == "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords."
 
 
 @pytest.mark.parametrize("name", ["decays", "Decay", "decay ", "DECAY", ""])
-def test_a_name_that_is_not_exactly_decay_is_refused_with_the_eight_names(client, name):
+def test_a_name_that_is_not_exactly_decay_is_refused_with_the_nine_names(client, name):
     r = post(client, tiny(), image_type=name)
     assert r.status_code == 400 and r.json()["detail"] == TYPE_MESSAGE
     assert leftovers() == []
@@ -279,7 +279,7 @@ def amount_message(level):
     return f"The {level} saturation decay must be a number from 0.5 to 3."
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp"])
+@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"])
 def test_the_defaults_are_reported_for_every_image_type(client, image_type):
     r = post(client, tiny(), image_type=image_type)
     assert r.status_code == 200, r.text

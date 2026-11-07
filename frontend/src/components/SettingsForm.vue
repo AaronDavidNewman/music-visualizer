@@ -11,6 +11,8 @@ import {
   DEFAULT_DECAY_RATE,
   DEFAULT_WAVE_COUNT,
   WAVE_COUNT_RANGE,
+  DEFAULT_POLAR_NOTES,
+  POLAR_NOTES_RANGE,
   DEFAULT_NOTE_LAYOUT,
   DECAY_RATE_RANGE,
   NOTE_LAYOUTS,
@@ -50,6 +52,7 @@ import {
   formatBlendWidth,
   formatDecayAmount,
   formatDecayRate,
+  formatPolarNotes,
   formatWaveCount,
   formatPeakDistance,
   formatPeakProminence,
@@ -68,6 +71,7 @@ import {
   validatePeakDistance,
   validateDecayAmount,
   validateDecayRate,
+  validatePolarNotes,
   validateWaveCount,
   validateNoteLayout,
   noteLayoutApplies,
@@ -113,6 +117,7 @@ import {
   decayAmountHelp,
   decayExpRateHelp,
   decayRateHelp,
+  polarNotesHelp,
   waveCountHelp,
   noteLayoutHelp,
   peakDistanceHelp,
@@ -155,6 +160,7 @@ const noteLayout = ref<string>(DEFAULT_NOTE_LAYOUT);
 const decayRate = ref<number>(DEFAULT_DECAY_RATE);
 const decayAmounts = ref<number[]>([...DEFAULT_DECAY_AMOUNTS]); // low, medium, high, saturated
 const waveCount = ref<number>(DEFAULT_WAVE_COUNT);
+const polarNotes = ref<number>(DEFAULT_POLAR_NOTES);
 const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
 const peakDistance = ref<number>(DEFAULT_PEAK_DISTANCE);
 const peakProminence = ref<number>(DEFAULT_PEAK_PROMINENCE);
@@ -194,6 +200,7 @@ const noteLayoutError = computed(() => validateNoteLayout(noteLayout.value));
 const decayRateError = computed(() => validateDecayRate(decayRate.value));
 const decayAmountErrors = computed(() => DECAY_LEVELS.map((level, index) => validateDecayAmount(decayAmounts.value[index], level.name)));
 const waveCountError = computed(() => validateWaveCount(waveCount.value));
+const polarNotesError = computed(() => validatePolarNotes(polarNotes.value));
 const peakDistanceError = computed(() => validatePeakDistance(peakDistance.value));
 const peakProminenceError = computed(() => validatePeakProminence(peakProminence.value));
 const canSubmit = computed(
@@ -220,13 +227,14 @@ const canSubmit = computed(
     !decayRateError.value &&
     decayAmountErrors.value.every((e) => !e) &&
     !waveCountError.value &&
+    !polarNotesError.value &&
     !peakDistanceError.value &&
     !peakProminenceError.value,
 );
 
 // The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
 // shown. Every value stays in its ref, so it is kept when a group is folded or the type is changed, and is still sent.
-const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp"];
+const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords"];
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
@@ -258,6 +266,7 @@ const typeGroupProblem = computed(
     (inTypeGroup("circle-notes") && !!circleNotesError.value) ||
     (inTypeGroup("decay-rate") && !!decayRateError.value) ||
     (inTypeGroup("decay-low") && decayAmountErrors.value.some((e) => !!e)) ||
+    (inTypeGroup("polar-notes") && !!polarNotesError.value) ||
     (inTypeGroup("wave-count") && !!waveCountError.value),
 );
 const noteLayoutProblem = computed(() => !!noteLayoutError.value);
@@ -304,6 +313,7 @@ function onSubmit() {
     decayHigh: decayAmounts.value[2],
     decaySaturated: decayAmounts.value[3],
     waveCount: waveCount.value,
+    polarNotes: polarNotes.value,
     beatColoring: beatColoring.value,
     peakDistance: peakDistance.value,
     peakProminence: peakProminence.value,
@@ -539,6 +549,24 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="circleNotesError" class="error">{{ circleNotesError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('polar-notes')" class="field">
+        <div class="field-head">
+          <label for="polar-notes">Notes shown</label>
+          <InfoPopover label="notes shown" :text="polarNotesHelp" />
+          <output class="slider-value" for="polar-notes">{{ formatPolarNotes(polarNotes) }}</output>
+        </div>
+        <input
+          id="polar-notes"
+          v-model.number="polarNotes"
+          type="range"
+          :min="POLAR_NOTES_RANGE.min"
+          :max="POLAR_NOTES_RANGE.max"
+          :step="POLAR_NOTES_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="polarNotesError" class="error">{{ polarNotesError }}</small>
       </div>
 
       <div v-if="inTypeGroup('decay-rate')" class="field">

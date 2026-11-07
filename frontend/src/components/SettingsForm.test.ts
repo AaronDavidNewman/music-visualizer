@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import SettingsForm from "./SettingsForm.vue";
 import formSource from "./SettingsForm.vue?raw";
 import { COLORMAPS, DEFAULT_COLORMAP } from "../utilities/validation";
-import { decayAmountHelp, decayRateHelp } from "../utilities/help";
+import { decayAmountHelp, decayExpRateHelp, decayRateHelp, polarNotesHelp } from "../utilities/help";
 
 async function render(busy = false): Promise<string> {
   const app = createSSRApp(SettingsForm, { busy, file: null, sampleRate: 44100 });
@@ -80,7 +80,7 @@ describe("the image type controls", () => {
 
   it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay and Decay Exp in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp", "Polar Chords"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -491,7 +491,7 @@ describe("the groups of the chosen image type (Story 2)", () => {
   it("shares the values of Movement, Radius, Resize by volume and Notes between Circles and Circles paint", () => {
     // one ref each in the form, shown by either circle group, so that switching the type keeps what was entered
     for (const control of ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]) expect(formSource).toContain(`inTypeGroup('${control}')`);
-    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp"]');
+    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords"]');
     expect((formSource.match(/const circleUnit = ref/g) ?? []).length).toBe(1);
     expect((formSource.match(/const circleNotes = ref/g) ?? []).length).toBe(1);
   });
@@ -938,5 +938,56 @@ describe("the page for Decay Exp (feature 030)", () => {
 
   it("flags the group and blocks the form when the rate is not allowed, through the same check as for Decay", () => {
     expect(formSource).toContain('(inTypeGroup("decay-rate") && !!decayRateError.value)');
+  });
+});
+
+describe("the page for Polar Chords (feature 032)", () => {
+  it("shows Analysis, Colormap, Image type, Polar chords (Notes shown), Note layout, Local peaks and Data smoothing, in this order", async () => {
+    const groups = groupsOf(await renderType("polar-chords"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+      ["polar-chords", "Polar chords", ["polar-notes"]],
+      ["note-layout", "Note layout", ["note-layout"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
+    ]);
+  });
+
+  it("has the Notes shown slider from 5 to 8 in steps of 1, with a label, a readout and an info button", async () => {
+    const html = await renderType("polar-chords");
+    const slider = html.match(/<input id="polar-notes"[^>]*>/)?.[0] ?? "";
+    expect(slider).toContain('type="range"');
+    expect(slider).toContain('min="5"');
+    expect(slider).toContain('max="8"');
+    expect(slider).toContain('step="1"');
+    expect(html).toMatch(/<label[^>]*for="polar-notes"[^>]*>Notes shown<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="polar-notes"[^>]*>5 notes<\/output>/);
+    expect(html).toContain('aria-label="About notes shown"');
+    expect(html).toContain(polarNotesHelp);
+  });
+
+  it("has the Note layout, no Beat coloring checkbox, none of the grid, decay or wave controls and no Image smoothing", async () => {
+    const html = await renderType("polar-chords");
+    expect(html).toContain('data-group="note-layout"');
+    for (const id of ["beat-coloring", "threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "decay-rate", "decay-low", "wave-count"]) {
+      expect(html, id).not.toContain(`id="${id}"`);
+    }
+    for (const group of ["image-smoothing", "local-peaks"]) expect(html).not.toContain(`data-group="${group}"`);
+  });
+
+  it("does not show Notes shown for any other type", async () => {
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp"]) {
+      expect(await renderType(type), type).not.toContain('id="polar-notes"');
+    }
+  });
+
+  it("flags the group and blocks the form when Notes shown is not allowed, and sends it", () => {
+    expect(formSource).toContain('(inTypeGroup("polar-notes") && !!polarNotesError.value)');
+    expect(formSource).toContain("!polarNotesError.value");
+    expect(formSource).toContain("polarNotes: polarNotes.value");
+    expect(formSource).toContain("validatePolarNotes(polarNotes.value)");
+    expect(formSource).toContain("ref<number>(DEFAULT_POLAR_NOTES)");
   });
 });

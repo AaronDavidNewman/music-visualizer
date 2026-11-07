@@ -38,6 +38,8 @@ export interface JobResult {
   decay_rate: number;
   /** Contour: the waves of the beat wave (feature 028). */
   wave_count: number;
+  /** Polar Chords: how many of the loudest notes get a bar (feature 032). */
+  polar_notes: number;
   /** Decay: the points a circle gives to each neighbour per frame at the low, medium, high and saturated levels (0.5 to 3 each). */
   decay_low: number;
   decay_medium: number;
@@ -87,6 +89,7 @@ export interface JobSettings {
   noteLayout: string;
   decayRate: number;
   waveCount: number;
+  polarNotes: number;
   decayLow: number;
   decayMedium: number;
   decayHigh: number;
@@ -121,6 +124,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("note_layout", settings.noteLayout);
   body.append("decay_rate", String(settings.decayRate));
   body.append("wave_count", String(settings.waveCount));
+  body.append("polar_notes", String(settings.polarNotes));
   body.append("decay_low", String(settings.decayLow));
   body.append("decay_medium", String(settings.decayMedium));
   body.append("decay_high", String(settings.decayHigh));

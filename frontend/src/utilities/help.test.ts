@@ -13,6 +13,7 @@ import {
   decayAmountHelp,
   decayExpRateHelp,
   decayRateHelp,
+  polarNotesHelp,
   waveCountHelp,
   circleUnitHelp,
   noteCountHelp,
@@ -306,5 +307,26 @@ describe("the Decay Exp help (feature 030)", () => {
     expect(decayExpRateHelp).toContain("0.25 takes four");
     expect(decayExpRateHelp).toContain("counts frames");
     expect(decayExpRateHelp).not.toMatch(/saturation|decay settings below/);
+  });
+});
+
+describe("the Polar Chords help (feature 032)", () => {
+  it("describes the Polar Chords picture in the Image type help: two rings, both directions, the 7 chords, the length from the beat", () => {
+    expect(imageTypeHelp).toContain("Polar Chords:");
+    expect(imageTypeHelp).toContain("counterclockwise");
+    expect(imageTypeHelp).toContain("clockwise");
+    expect(imageTypeHelp).toContain("84");
+    expect(imageTypeHelp).toContain("7 chord types");
+    expect(imageTypeHelp).toContain("12 letters");
+    expect(imageTypeHelp).toContain("root letter");
+    expect(imageTypeHelp).toContain("beat");
+    expect(imageTypeHelp).toContain("Note layout");
+    expect(imageTypeHelp).toContain("one arc a frame");
+  });
+
+  it("explains Notes shown: the range, the default and that the loudest notes get a bar", () => {
+    expect(polarNotesHelp).toContain("5 to 8");
+    expect(polarNotesHelp).toContain("default 5");
+    expect(polarNotesHelp).toContain("loudest");
   });
 });

@@ -88,7 +88,8 @@ export function validateSmoothingWindow(value: string | number): string | null {
  * The kinds of picture: Tiles (flat tiles with hard edges, the default), Blended tiles (colors fade across the tile
  * edges) and Contour (the notes drawn as a filled contour map), then Circles, Circles paint and Concentric (a circle of up to
  * twelve rings for each of the 84 notes), Decay (the same circles, each a disc that keeps points and fades into its neighbours) and Decay Exp (Decay
- * with the points gained and lost along an exponential curve).
+ * with the points gained and lost along an exponential curve) and Polar Chords (the loudest notes clockwise and the chord of the frame
+ * counterclockwise as bars of a polar bar graph).
  */
 export const IMAGE_TYPES = [
   { value: "tiles", label: "Tiles" },
@@ -99,6 +100,7 @@ export const IMAGE_TYPES = [
   { value: "concentric", label: "Concentric" },
   { value: "decay", label: "Decay" },
   { value: "decay-exp", label: "Decay Exp" },
+  { value: "polar-chords", label: "Polar Chords" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -315,7 +317,7 @@ export function isCirclesType(imageType: string): boolean {
 
 /** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate, Gaussian) mean anything: not for circles, Concentric and Decay. */
 export function gridSettingsApply(imageType: string): boolean {
-  return !isCirclesType(imageType) && !isRingsType(imageType);
+  return !isCirclesType(imageType) && !isRingsType(imageType) && !isPolarType(imageType);
 }
 
 /** Whether the picture is one with a circle for each of the 84 notes that the beat always colors or charges: Concentric, Decay (feature 027) and Decay Exp (feature 030). */
@@ -323,9 +325,30 @@ export function isRingsType(imageType: string): boolean {
   return imageType === "concentric" || imageType === "decay" || imageType === "decay-exp";
 }
 
-/** Whether Minimum distance and Prominence are used: always by Concentric and Decay (the beat colors or charges them), by Tiles, Blended tiles and Contour with the Beat coloring box on, never by the others. */
+/** Whether the picture is Polar Chords (feature 032): bars of the loudest notes and of the chord, whose length the beat always sets. */
+export function isPolarType(imageType: string): boolean {
+  return imageType === "polar-chords";
+}
+
+/** Whether Minimum distance and Prominence are used: always by Concentric, Decay, Decay Exp and Polar Chords (the beat colors, charges or lengthens them), by Tiles, Blended tiles and Contour with the Beat coloring box on, never by the others. */
 export function peakSettingsShown(imageType: string, beatColoring: boolean): boolean {
-  return isRingsType(imageType) || (beatColoringApplies(imageType) && beatColoring);
+  return isRingsType(imageType) || isPolarType(imageType) || (beatColoringApplies(imageType) && beatColoring);
+}
+
+/** Notes shown by Polar Chords (feature 032): how many of the loudest notes of a frame get a bar, from 5 to 8. */
+export const POLAR_NOTES_RANGE = { min: 5, max: 8, step: 1 } as const;
+export const DEFAULT_POLAR_NOTES = 5;
+
+const polarNotesMessage = `The number of notes shown must be a whole number from ${POLAR_NOTES_RANGE.min} to ${POLAR_NOTES_RANGE.max}.`;
+
+/** Returns an error message, or null when Notes shown is a whole number from 5 to 8. */
+export function validatePolarNotes(value: string | number): string | null {
+  return validateWhole(value, POLAR_NOTES_RANGE.min, POLAR_NOTES_RANGE.max, polarNotesMessage);
+}
+
+/** The readout beside the slider and the summary item: "5 notes". */
+export function formatPolarNotes(value: number): string {
+  return `${value} notes`;
 }
 
 /**
@@ -457,7 +480,7 @@ export function noteLayoutLabel(value: string): string {
   return NOTE_LAYOUTS.find((l) => l.value === value)?.label ?? value;
 }
 
-/** Whether the note layout does anything: for the pictures with one shape for each note, Tiles, Blended tiles, Concentric and Decay. */
+/** Whether the note layout does anything: for the pictures with one shape for each note, Tiles, Blended tiles, Concentric, Decay and Decay Exp, and for Polar Chords (it says in which arc each note is). */
 export function noteLayoutApplies(imageType: string): boolean {
-  return imageType === "tiles" || imageType === "blended" || isRingsType(imageType);
+  return imageType === "tiles" || imageType === "blended" || isRingsType(imageType) || isPolarType(imageType);
 }

@@ -15,7 +15,7 @@ from .test_resolution_api import picture, tiny
 MESSAGE = "The wave count must be a whole number from 2 to 10."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
 PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent."
-OTHER_TYPES = ["tiles", "blended", "circles", "circles_paint", "concentric", "decay", "decay-exp"]
+OTHER_TYPES = ["tiles", "blended", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"]
 
 
 def contour(client, data=None, **fields):
@@ -25,7 +25,7 @@ def contour(client, data=None, **fields):
 # --- the field -----------------------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp"])
+@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"])
 def test_the_default_is_4_and_is_reported_for_every_image_type(client, image_type):
     r = post(client, tiny(), image_type=image_type)
     assert r.status_code == 200, r.text

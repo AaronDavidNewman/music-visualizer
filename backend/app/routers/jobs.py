@@ -53,6 +53,7 @@ from ..services.decay import (
     MIN_DECAY_AMOUNT,
 )
 from ..services.note_layout import DEFAULT_NOTE_LAYOUT, check_note_layout
+from ..services.polar_chords import DEFAULT_POLAR_NOTES, NOTES_MESSAGE as POLAR_NOTES_MESSAGE, check_polar_notes
 from ..services.local_peaks import (
     DEFAULT_MIN_DISTANCE,
     DEFAULT_PROMINENCE,
@@ -290,6 +291,16 @@ def _parse_decay_amount(text: str | None, sent: bool, index: int) -> float:
     return value
 
 
+def _parse_polar_notes(text: str | None, sent: bool) -> int:
+    """The requested number of notes shown by Polar Chords. Not sent means the default; anything sent must be a whole number 5..8."""
+    if text is None and not sent:
+        return DEFAULT_POLAR_NOTES
+    try:
+        return check_polar_notes(float(text or ""))
+    except ValueError:
+        raise HTTPException(status_code=400, detail=POLAR_NOTES_MESSAGE) from None
+
+
 def _parse_wave_count(text: str | None, sent: bool) -> int:
     """The requested number of waves of the contour's beat wave. Not sent means the default; anything sent must be a whole number 2..10."""
     if text is None and not sent:
@@ -476,6 +487,7 @@ def create_job(
     note_layout: str | None = Form(None),
     decay_rate: str | None = Form(None),
     wave_count: str | None = Form(None),
+    polar_notes: str | None = Form(None),
     decay_low: str | None = Form(None),
     decay_medium: str | None = Form(None),
     decay_high: str | None = Form(None),
@@ -506,6 +518,7 @@ def create_job(
     note_layout_value = _parse_note_layout(note_layout, "note_layout" in sent)
     decay_rate_value = _parse_decay_rate(decay_rate, "decay_rate" in sent)
     wave_count_value = _parse_wave_count(wave_count, "wave_count" in sent)
+    polar_notes_value = _parse_polar_notes(polar_notes, "polar_notes" in sent)
     decay_amounts_value = tuple(
         _parse_decay_amount(text, name in sent, index)
         for index, (name, text) in enumerate(
@@ -551,10 +564,10 @@ def create_job(
             )
         result = analyze_channels(left, right, file_rate, window, step=step)
         # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local peaks
-        # measurement. Concentric, Decay and Decay Exp are always colored by it; tiles, blended tiles and contour (its beat wave) only with the beat coloring box on; the
+        # measurement. Concentric, Decay, Decay Exp and Polar Chords are always colored by it; tiles, blended tiles and contour (its beat wave) only with the beat coloring box on; the
         # other pictures and the box off never measure it
         beat = None
-        if image_type_value in ("concentric", "decay", "decay-exp") or (beat_coloring_value and image_type_value in ("tiles", "blended", "contour")):
+        if image_type_value in ("concentric", "decay", "decay-exp", "polar-chords") or (beat_coloring_value and image_type_value in ("tiles", "blended", "contour")):
             beat = measure_local_peaks(
                 left, right, file_rate, peak_distance_value, peak_prominence_value
             ).frame_positions(fps, frames)
@@ -586,6 +599,7 @@ def create_job(
             note_layout=note_layout_value,
             decay_rate=decay_rate_value,
             wave_count=wave_count_value,
+            polar_notes=polar_notes_value,
             decay_amounts=decay_amounts_value,
         )
         # The video made from these frames later (feature 029) needs the frame rate, and the frames do not hold it.
@@ -630,6 +644,7 @@ def create_job(
         "note_layout": note_layout_value,
         "decay_rate": decay_rate_value,
         "wave_count": wave_count_value,
+        "polar_notes": polar_notes_value,
         "decay_low": decay_amounts_value[0],
         "decay_medium": decay_amounts_value[1],
         "decay_high": decay_amounts_value[2],

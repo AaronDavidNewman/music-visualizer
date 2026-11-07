@@ -199,7 +199,7 @@ describe("smoothing window", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay and Decay Exp in that order and starts at tiles", () => {
+  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp and Polar Chords in that order and starts at tiles", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["tiles", "Tiles"],
       ["blended", "Blended tiles"],
@@ -209,6 +209,7 @@ describe("image type", () => {
       ["concentric", "Concentric"],
       ["decay", "Decay"],
       ["decay-exp", "Decay Exp"],
+      ["polar-chords", "Polar Chords"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
     expect(imageTypeLabel("tiles")).toBe("Tiles");
@@ -219,14 +220,15 @@ describe("image type", () => {
     expect(imageTypeLabel("concentric")).toBe("Concentric");
     expect(imageTypeLabel("decay")).toBe("Decay");
     expect(imageTypeLabel("decay-exp")).toBe("Decay Exp");
+    expect(imageTypeLabel("polar-chords")).toBe("Polar Chords");
   });
 
   it.each(values)("accepts %j", (v) => {
     expect(validateImageType(v)).toBeNull();
   });
 
-  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp.");
+  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "polar_chords", "polarchords", "Polar-Chords", "polar-chords ", "polar-"])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords.");
   });
 
   it("knows the two circle types, and the grid settings apply to neither", () => {
@@ -543,8 +545,8 @@ describe("note layout (feature 026)", () => {
     expect(validateNoteLayout(v)).toBe(MESSAGE);
   });
 
-  it("applies to Tiles, Blended tiles, Concentric and Decay only", () => {
-    for (const type of ["tiles", "blended", "concentric", "decay"]) expect(noteLayoutApplies(type), type).toBe(true);
+  it("applies to Tiles, Blended tiles, Concentric, Decay, Decay Exp and Polar Chords only", () => {
+    for (const type of ["tiles", "blended", "concentric", "decay", "decay-exp", "polar-chords"]) expect(noteLayoutApplies(type), type).toBe(true);
     for (const type of ["contour", "circles", "circles_paint", "nonsense", ""]) expect(noteLayoutApplies(type), type).toBe(false);
   });
 });
@@ -658,5 +660,51 @@ describe("Decay Exp (feature 030)", () => {
   it("does not apply the wave count, and is an image type the validation accepts", () => {
     expect(waveCountApplies("decay-exp")).toBe(false);
     expect(validateImageType("decay-exp")).toBeNull();
+  });
+});
+
+import { DEFAULT_POLAR_NOTES, POLAR_NOTES_RANGE, formatPolarNotes, isPolarType, validatePolarNotes } from "./validation";
+
+describe("Polar Chords (feature 032)", () => {
+  it("has Notes shown from 5 to 8 in steps of 1, 5 at the start", () => {
+    expect(POLAR_NOTES_RANGE).toEqual({ min: 5, max: 8, step: 1 });
+    expect(DEFAULT_POLAR_NOTES).toBe(5);
+  });
+
+  it.each([5, 6, 7, 8, "5", " 7 ", 8.0])("accepts Notes shown %j", (v) => {
+    expect(validatePolarNotes(v)).toBeNull();
+  });
+
+  it.each([4, 9, 0, -5, 6.5, "", "abc", "1e1", NaN, Infinity])("refuses Notes shown %j with the message", (v) => {
+    expect(validatePolarNotes(v)).toBe("The number of notes shown must be a whole number from 5 to 8.");
+  });
+
+  it("formats the readout beside the slider and the summary item as a number of notes", () => {
+    expect(formatPolarNotes(5)).toBe("5 notes");
+    expect(formatPolarNotes(8)).toBe("8 notes");
+  });
+
+  it("is the polar type only for polar-chords", () => {
+    expect(isPolarType("polar-chords")).toBe(true);
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar_chords", "Polar-Chords", ""]) {
+      expect(isPolarType(type), type).toBe(false);
+    }
+  });
+
+  it("is not a grid type, has no checkbox, uses the Local peaks settings always and has the note layout (rows or spiral)", () => {
+    expect(gridSettingsApply("polar-chords")).toBe(false);
+    expect(isCirclesType("polar-chords")).toBe(false);
+    expect(isRingsType("polar-chords")).toBe(false);
+    expect(beatColoringApplies("polar-chords")).toBe(false);
+    for (const box of [true, false]) expect(peakSettingsShown("polar-chords", box), String(box)).toBe(true);
+    expect(noteLayoutApplies("polar-chords")).toBe(true);
+    expect(decayRateApplies("polar-chords")).toBe(false);
+    expect(waveCountApplies("polar-chords")).toBe(false);
+  });
+
+  it("leaves the other types as they were", () => {
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp"]) {
+      expect(peakSettingsShown(type, false) === (isRingsType(type)), type).toBe(true);
+    }
   });
 });

@@ -187,3 +187,25 @@ describe("the result summary for Decay Exp (feature 030)", () => {
     for (const label of ["Oversampling:", "Gaussian smoothing:"]) expect(line(label), label).toContain("gridSettingsApply(result.image_type)");
   });
 });
+
+describe("the result summary for Polar Chords (feature 032)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows Notes shown, as a number of notes, for Polar Chords only", () => {
+    expect(line("Notes shown:")).toContain("isPolarType(result.image_type)");
+    expect(line("Notes shown:")).toContain("formatPolarNotes(result.polar_notes)");
+  });
+
+  it("shows the Note layout and the Local peaks settings, and not Threshold, Notes, Interpolate, Oversampling, Gaussian smoothing or Beat coloring", () => {
+    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+    expect(line("Note layout:")).toContain("noteLayoutApplies(result.image_type)");
+    expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
+    for (const label of ["Oversampling:", "Gaussian smoothing:"]) expect(line(label), label).toContain("gridSettingsApply(result.image_type)");
+  });
+
+  it("does not show the decay lines for it", () => {
+    expect(line("Decay rate:")).toContain("decayRateApplies(result.image_type)");
+    expect(line("Low saturation decay:")).toContain("result.image_type === 'decay'");
+  });
+});

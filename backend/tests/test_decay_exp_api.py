@@ -31,13 +31,13 @@ def decay(client, data=None, **fields):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_decay_exp_is_the_eighth_image_type_and_the_message_lists_all_eight():
-    assert IMAGE_TYPES[-2:] == ("decay", "decay-exp") and len(IMAGE_TYPES) == 8
-    assert TYPE_MESSAGE == "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp."
+def test_decay_exp_is_the_eighth_image_type_and_the_message_lists_all_nine():
+    assert IMAGE_TYPES[-3:-1] == ("decay", "decay-exp") and len(IMAGE_TYPES) == 9
+    assert TYPE_MESSAGE == "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords."
 
 
 @pytest.mark.parametrize("name", ["decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "DECAY-EXP", ""])
-def test_a_name_that_is_not_exactly_decay_exp_is_refused_with_the_eight_names(client, name):
+def test_a_name_that_is_not_exactly_decay_exp_is_refused_with_the_nine_names(client, name):
     r = post(client, tiny(), image_type=name)
     assert r.status_code == 400 and r.json()["detail"] == TYPE_MESSAGE
     assert leftovers() == []

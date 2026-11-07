@@ -16,10 +16,11 @@ const EXPECTED: Record<string, string[]> = {
   concentric: [...COMMON_TOP, "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   decay: [...COMMON_TOP, "decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   "decay-exp": [...COMMON_TOP, "decay-rate", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
+  "polar-chords": [...COMMON_TOP, "polar-notes", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
 };
 
 describe("the groups", () => {
-  it("are the fifteen groups of the data model, with their titles and controls in order", () => {
+  it("are the sixteen groups of the data model, with their titles and controls in order", () => {
     expect(GROUPS.map((g) => [g.id, g.title, [...g.controls]])).toEqual([
       ["analysis", "Analysis", ["window-size", "frame-rate", "window-spacing"]],
       ["colormap", "Colormap", ["colormap"]],
@@ -31,6 +32,7 @@ describe("the groups", () => {
       ["circles_paint", "Circles paint", ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]],
       ["decay", "Decay", ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]],
       ["decay-exp", "Decay", ["decay-rate"]],
+      ["polar-chords", "Polar chords", ["polar-notes"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance", "peak-prominence"]],
       ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
@@ -52,11 +54,11 @@ describe("the groups shown for each image type", () => {
   it.each(TYPES)("are, for %s, in this order: the top group, Colormap, Image type, the type's group, Data smoothing, Image smoothing", (type) => {
     const want = ["analysis", "colormap", "image-type"];
     if (type !== "concentric") want.push(type); // Concentric has no group of its own
-    if (type === "tiles" || type === "blended" || type === "concentric" || type === "decay" || type === "decay-exp") want.push("note-layout");
+    if (type === "tiles" || type === "blended" || type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("note-layout");
     if (type === "tiles" || type === "blended" || type === "contour") want.push("local-peaks");
-    if (type === "concentric" || type === "decay" || type === "decay-exp") want.push("concentric-peaks");
+    if (type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("concentric-peaks");
     want.push("data-smoothing");
-    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay" && type !== "decay-exp") want.push("image-smoothing");
+    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay" && type !== "decay-exp" && type !== "polar-chords") want.push("image-smoothing");
     expect(groupsFor(type)).toEqual(want);
   });
 
@@ -332,5 +334,37 @@ describe("the Decay Exp group (feature 030)", () => {
       expect(groupOf(control, "decay-exp"), control).toBeUndefined();
     }
     for (const control of ["decay-low", "decay-medium", "decay-high", "decay-saturated"]) expect(groupOf(control, "decay"), control).toBe("decay");
+  });
+});
+
+describe("the Polar chords group (feature 032)", () => {
+  it("is titled Polar chords and has Notes shown alone on its row", () => {
+    expect(groupTitle("polar-chords")).toBe("Polar chords");
+    expect([...controlsIn("polar-chords")]).toEqual(["polar-notes"]);
+    expect(rowsOf(controlsIn("polar-chords").length)).toEqual([1]);
+  });
+
+  it("is shown for Polar Chords only, between Image type and Note layout, without the image smoothing", () => {
+    expect(groupsFor("polar-chords")).toEqual(["analysis", "colormap", "image-type", "polar-chords", "note-layout", "concentric-peaks", "data-smoothing"]);
+    for (const type of TYPES.filter((t) => t !== "polar-chords")) expect(groupsFor(type), type).not.toContain("polar-chords");
+  });
+
+  it("puts Notes shown in its group for Polar Chords and in no group of any other type", () => {
+    expect(groupOf("polar-notes", "polar-chords")).toBe("polar-chords");
+    for (const type of TYPES.filter((t) => t !== "polar-chords")) expect(groupOf("polar-notes", type), type).toBeUndefined();
+  });
+
+  it("puts the note layout and the Local peaks settings in their groups (without the checkbox) and shows none of the controls that do not apply", () => {
+    expect(groupOf("note-layout", "polar-chords")).toBe("note-layout");
+    expect(groupOf("peak-distance", "polar-chords")).toBe("concentric-peaks");
+    expect(groupOf("peak-prominence", "polar-chords")).toBe("concentric-peaks");
+    for (const control of ["beat-coloring", "threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "decay-rate", "decay-low", "wave-count"]) {
+      expect(groupOf(control, "polar-chords"), control).toBeUndefined();
+    }
+  });
+
+  it("leaves the groups of the other eight types as they were", () => {
+    expect(groupsFor("decay-exp")).toEqual(["analysis", "colormap", "image-type", "decay-exp", "note-layout", "concentric-peaks", "data-smoothing"]);
+    expect(groupsFor("concentric")).toEqual(["analysis", "colormap", "image-type", "note-layout", "concentric-peaks", "data-smoothing"]);
   });
 });

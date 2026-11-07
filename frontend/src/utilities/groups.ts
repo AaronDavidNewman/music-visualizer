@@ -1,4 +1,4 @@
-import { beatColoringApplies, gridSettingsApply, isRingsType, noteLayoutApplies } from "./validation";
+import { beatColoringApplies, gridSettingsApply, isPolarType, isRingsType, noteLayoutApplies } from "./validation";
 
 /**
  * The groups of the settings form (feature 020): which groups there are, what is in each, which are shown for an image type, and
@@ -31,6 +31,8 @@ export const GROUPS: readonly GroupDefinition[] = [
   { id: "decay", title: "Decay", controls: ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"] },
   // Decay Exp (feature 030): the same decay rate, and no decay amounts, because its loss is given by a formula
   { id: "decay-exp", title: "Decay", controls: ["decay-rate"] },
+  // Notes shown by Polar Chords (feature 032): how many of the loudest notes get a bar
+  { id: "polar-chords", title: "Polar chords", controls: ["polar-notes"] },
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
   // the beat coloring of Tiles and Blended tiles (feature 024) and the beat wave of Contour (feature 028): its own group, after the group of the type
@@ -42,7 +44,7 @@ export const GROUPS: readonly GroupDefinition[] = [
 ];
 
 /** The ids of the groups that belong to one image type: exactly one of them follows the Image type group. */
-const TYPE_GROUPS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp"];
+const TYPE_GROUPS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords"];
 
 const byId = new Map(GROUPS.map((g) => [g.id, g]));
 
@@ -65,7 +67,7 @@ export function groupsFor(imageType: string): string[] {
   if (TYPE_GROUPS.includes(imageType)) ids.push(imageType);
   if (noteLayoutApplies(imageType)) ids.push("note-layout");
   if (beatColoringApplies(imageType)) ids.push("local-peaks");
-  if (isRingsType(imageType)) ids.push("concentric-peaks");
+  if (isRingsType(imageType) || isPolarType(imageType)) ids.push("concentric-peaks");
   ids.push("data-smoothing");
   if (gridSettingsApply(imageType)) ids.push("image-smoothing");
   return ids;

@@ -49,6 +49,7 @@ from .concentric import write_concentric_frames
 from .beat_wave import DEFAULT_WAVE_COUNT, check_wave_count
 from .decay import DEFAULT_DECAY_AMOUNTS, DEFAULT_DECAY_RATE, check_decay_amounts, check_decay_rate, circle_points, write_decay_frames
 from .decay_exp import circle_points as decay_exp_points
+from .polar_chords import DEFAULT_POLAR_NOTES, check_polar_notes, polar_bars, write_polar_frames
 from .contour import write_contour_frames
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
 from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
@@ -265,6 +266,7 @@ def write_frames(
     decay_rate: float = DEFAULT_DECAY_RATE,
     wave_count: int = DEFAULT_WAVE_COUNT,
     decay_amounts: tuple[float, float, float, float] = DEFAULT_DECAY_AMOUNTS,
+    polar_notes: int = DEFAULT_POLAR_NOTES,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -351,6 +353,12 @@ def write_frames(
     a circle with ``p`` points gives each neighbour ``sin(pi / 2 * p / 64) ** 2`` per frame instead of the amount of its saturation level. ``decay_rate``,
     ``beat``, ``note_layout``, smoothing and the colormap apply; ``decay_amounts`` and every other setting are checked and ignored.
 
+    ``image_type="polar-chords"`` draws a polar bar graph (see ``polar_chords``): the ``polar_notes`` loudest notes of a frame (a whole number from 5 to 8,
+    default 5, checked for every image type and used by this one only) as bars clockwise from the top, one arc of 84 for each note (in the order of the
+    cells of ``note_layout``: ``rows`` is the order of pitch), and the chord that
+    ``chords.measure_chords`` records for the frame as one bar counterclockwise, one arc of 84 for each of the 12 root letters and 7 chord types (the types of a letter together, the letters from A). Every bar
+    reaches out to ``0.5 + 0.5 * beat`` of the full radius. Smoothing, the colormap, ``beat`` and ``note_layout`` apply; every other setting is checked and ignored.
+
     ``wave_count`` (a whole number from 2 to 10, default 4) is the number of waves of the **beat wave** of ``contour`` (see ``beat_wave``): with
     ``beat`` given, the frame's grid of values is multiplied by ``1 - pattern * beat`` before the contour is drawn, with a pattern of concentric
     rings with ``wave_count`` waves across the largest dimension of the grid; a frame at beat 0 (and every frame with ``beat=None``) is the plain
@@ -376,8 +384,9 @@ def write_frames(
     decay_rate = check_decay_rate(decay_rate)
     decay_amounts = check_decay_amounts(decay_amounts)
     wave_count = check_wave_count(wave_count)
+    polar_notes = check_polar_notes(polar_notes)
     if beat is not None:
-        beat = check_beat(beat, len(frames))  # checked for every image type, used by tiles, blended, contour, concentric, decay and decay-exp
+        beat = check_beat(beat, len(frames))  # checked for every image type, used by tiles, blended, contour, concentric, decay, decay-exp and polar-chords
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
     peak = float(smoothed.max()) if smoothed.size else 0.0
     if image_type == "circles":
@@ -419,6 +428,9 @@ def write_frames(
     if image_type == "decay-exp":  # the same discs with the points gained and lost along an exponential curve; decay_amounts is checked and not used
         points = decay_exp_points(smoothed, beat, note_layout, decay_rate)
         write_decay_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
+        return
+    if image_type == "polar-chords":  # a polar bar graph: the loudest notes clockwise, the chord counterclockwise; the grid settings above are checked and not used
+        write_polar_frames(polar_bars(smoothed, beat, polar_notes, note_layout), colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
     columns, rows = GRID_COLUMNS * resolution, GRID_ROWS * resolution
     shown = spread_notes(smoothed[:, :SHOWN_NOTES], note_count)
