@@ -277,6 +277,12 @@ def test_the_longest_type_wins_in_the_picture_too_a_seventh_chord_is_not_its_tri
     assert bars.chord_place.tolist() == [5]  # on A: letter 0, type 5
 
 
+def test_a_faint_extra_note_does_not_turn_a_triad_into_a_seventh_chord_but_one_at_the_noise_floor_does():
+    # A C E (3, 7) with a G: A minor seventh (3, 7, 10) if the G counts. The loudest value is 1.0, so the noise floor (-60 dB) is 0.001
+    assert polar_bars(frames({12: 1.0, 15: 0.9, 19: 0.8, 22: 0.0009}), None, 5).chord_place.tolist() == [2]  # the triad, on A
+    assert polar_bars(frames({12: 1.0, 15: 0.9, 19: 0.8, 22: 0.001}), None, 5).chord_place.tolist() == [5]  # exactly at the floor: the seventh chord
+
+
 @pytest.mark.parametrize("row", [[C4, C4 + 1], [C4, C4 + 3, C4 + 6], [C4, C4 + 6], [C4, C4 + 2], [C4], []])
 def test_a_frame_whose_loudest_notes_form_none_of_the_seven_has_no_chord_bar(row):
     bars = polar_bars(frames(row), None, 5)

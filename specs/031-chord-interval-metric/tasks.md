@@ -138,6 +138,10 @@ description: "Task list for Chord Interval Metric (feature 031)"
 
 ---
 
+- [x] T023 Update of 2026-11-07 (feature 033, noise floor): `measure_chords` applies the fixed noise floor (a note strictly below a thousandth of the largest value of the array given is 0) first, and the per-window floor of a millionth of the loudest letter (`NOISE_FLOOR = 1e-6`, T019/T020) is removed; the oracle of `tests/test_chords.py` works on values cut by an independent `floored` helper and the boundary tests of the old floor became tests of the new one. See `specs/033-noise-floor/`.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 first. Phase 2 (T002 then T003) before any story, because every story uses the checked types and the inversion patterns.

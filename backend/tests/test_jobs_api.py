@@ -320,6 +320,7 @@ def test_same_settings_give_identical_frames(client):
 def test_spacing_one_matches_consecutive_window_analysis(client):
     """SC-002: spacing 1 gives the frames the application produced before spacing existed."""
     from app.services.frame_rendering import average_frames, frame_count
+    from app.services.noise_floor import floor_analysis
     from app.services.note_analysis import analyze_channels, read_wav
 
     left, right = tone(440, 2.0), tone(660, 2.0)
@@ -328,7 +329,8 @@ def test_spacing_one_matches_consecutive_window_analysis(client):
     # consecutive windows: starts at multiples of the window size, the previous default behavior
     result = analyze_channels(l, r, rate, 4096)
     assert result.starts.tolist() == [i * 4096 for i in range(math.ceil(len(l) / 4096))]
-    values = average_frames(result, 30, frame_count(len(l), rate, 30))
+    # the job cuts the notes more than 60 dB below the loudest (feature 033) before the frames are averaged: the notes under the floor are 0 here too
+    values = average_frames(floor_analysis(result), 30, frame_count(len(l), rate, 30))
     expected = np.rint(np.sqrt(values[:, :84] / values.max()) * 255).astype(int)
     for index in (0, 7, 30, 59):
         assert np.array_equal(frame_levels(client, job, index), expected[index])
@@ -494,12 +496,14 @@ def test_one_of_the_four_omitted_notes_leaves_no_visible_tile_at_full_white(clie
 
 
 def frame_values(job):
-    """The averaged note values per frame of a stored job, before smoothing and scaling, from the services."""
+    """The averaged note values per frame of a stored job, before smoothing and scaling, from the services (with the noise floor of feature 033: the
+    notes more than 60 dB below the loudest of the file are 0, as the job makes them)."""
     from app.services.frame_rendering import average_frames, frame_count
+    from app.services.noise_floor import floor_analysis
     from app.services.note_analysis import analyze_channels, read_wav
 
     rate, left, right = read_wav(settings.audio_temp_dir / job["job_id"] / "audio.wav")
-    result = analyze_channels(left, right, rate, job["window_size"], step=job["step_samples"])
+    result = floor_analysis(analyze_channels(left, right, rate, job["window_size"], step=job["step_samples"]))
     return average_frames(result, job["frame_rate"], frame_count(len(left), rate, job["frame_rate"]))
 
 

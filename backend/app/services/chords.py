@@ -5,10 +5,13 @@ A **chord type** is a tuple of 1 to 3 *intervals*, each a whole number of steps 
 root position (inversion 0) and ``n`` inversions: inversion ``k`` is made by moving the ``k`` lowest notes up an octave and counting the steps from
 the new lowest note (``(4,)``: 0, 4 then 0, 8; ``(4, 7)``: 0, 4, 7 then 0, 3, 8 then 0, 5, 9).
 
-For every window the notes are first combined into the 12 **letters** (the 7 octaves of a letter are added up: an octave is the same note), and the
+The notes first go through the **noise floor** (``noise_floor.apply_noise_floor``, feature 033): a note strictly below a thousandth (-60 dB) of the
+largest value of the whole array given is 0, so it is neither a note of a chord nor one of the recorded notes, whatever array the measurement is
+given. The cut comes before the Notes limit, the Threshold and the combining of the octaves, so a letter is made of notes that were not cut only.
+
+For every window the notes are then combined into the 12 **letters** (the 7 octaves of a letter are added up: an octave is the same note), and the
 loudest letters are matched against every chord type asked for. A type with ``n`` intervals looks at the ``min(n + 3, 6)`` loudest letters (4 for one
-interval, 5 for two, 6 for three; a letter with no strength does not count, nor does one weaker than a millionth of the window's loudest letter, which
-is only rounding noise; equal strengths go to the lower letter) and tries every choice of ``n + 1`` of them. Each letter stands for its loudest octave
+interval, 5 for two, 6 for three; a letter with no strength does not count; equal strengths go to the lower letter) and tries every choice of ``n + 1`` of them. Each letter stands for its loudest octave
 (the lowest on a tie). The notes of a choice are brought down by whole octaves until they are less than an octave above the lowest (dividing their
 frequency by 2), and the steps above the lowest note are compared with every inversion of the type.
 
@@ -38,6 +41,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .concentric import NOTES
+from .noise_floor import apply_noise_floor
 from .note_selection import check_note_count, top_energy_notes
 
 MIN_INTERVALS = 1
@@ -49,7 +53,6 @@ LETTERS = 12
 OCTAVES = NOTES // LETTERS  # 7: the 84 piano notes
 EXTRA_LETTERS = 2  # a type with n + 1 notes looks at this many letters more than it has notes: 4, 5 or 6 letters ...
 MAX_LETTERS = WINDOW_NOTES + EXTRA_LETTERS  # ... six at most (the user's limit, because the choices multiply), reached by the 3-interval types
-NOISE_FLOOR = 1e-6  # a letter this much weaker than the window's loudest letter (or weaker) is rounding noise and does not sound
 
 CHORD_LIST_MESSAGE = "The chord types must be a list of one or more chord types."
 VALUES_SHAPE_MESSAGE = "Each window needs at least {notes} note values (got shape {shape})."
@@ -193,14 +196,13 @@ def _check_values(values) -> np.ndarray:
 def _letters(strength: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """The 12 letters of every window: ``(strength, note)``, each ``(windows, 12)``.
 
-    The strength of a letter is its 7 octaves added up (from the lowest octave, so the sum is always done the same way); a letter weaker than
-    ``NOISE_FLOOR`` of the window's loudest letter does not sound (strength 0). The note of a letter is its loudest octave, the lowest one on a tie.
+    The strength of a letter is its 7 octaves added up (from the lowest octave, so the sum is always done the same way); the notes have been through
+    the noise floor already. The note of a letter is its loudest octave, the lowest one on a tie.
     """
     by_octave = strength.reshape(strength.shape[0], OCTAVES, LETTERS)
     total = by_octave[:, 0].copy()
     for octave in range(1, OCTAVES):
         total += by_octave[:, octave]
-    total[total <= NOISE_FLOOR * total.max(axis=1, keepdims=True)] = 0.0
     note = by_octave.argmax(axis=1) * LETTERS + np.arange(LETTERS)
     return total, note
 
@@ -220,7 +222,8 @@ def measure_chords(values, chord_types, note_count=None, threshold=None) -> Chor
 
     ``values`` is ``(windows, 84 to 88)``, the note strengths of the analysis; the columns after the 84th are never in a chord. ``chord_types`` is
     the list of chord types to look for (:func:`check_chord_types`). ``note_count`` and ``threshold`` are optional and limit the notes like the
-    pictures' Notes and Threshold settings. Everything is checked before any window is measured. The input is not changed.
+    pictures' Notes and Threshold settings. Everything is checked before any window is measured. The input is not changed. The noise floor is
+    applied to ``values`` first (see the module text).
     """
     types = check_chord_types(chord_types)
     if note_count is not None:
@@ -230,6 +233,7 @@ def measure_chords(values, chord_types, note_count=None, threshold=None) -> Chor
 
         hidden_below(np.zeros(1), 0.0, threshold)  # raises the picture's message for a threshold it would refuse
     values = _check_values(values)
+    values = apply_noise_floor(values)  # the noise floor first: a faint note is 0 and so is no part of a chord (idempotent for values already cut)
     strength = values[:, :NOTES].copy()
     if note_count is not None:  # only the notes with the most energy over the whole file: the same in every window, each in its own pitch
         left_out = np.ones(NOTES, dtype=bool)

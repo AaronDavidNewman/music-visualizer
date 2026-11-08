@@ -68,9 +68,18 @@ def oracle_inversions(chord_type) -> list[tuple[int, ...]]:
     return patterns
 
 
+def floored(values):
+    """The noise floor written out as a loop: every value strictly below a thousandth of the largest value of the whole array (all columns, the
+    four undrawn notes too) is 0."""
+    array = np.asarray(values, dtype=np.float64)
+    flat = array.ravel().tolist()
+    top = max(flat) if flat else 0.0
+    return np.array([0.0 if v < top * 0.001 else v for v in flat]).reshape(array.shape)
+
+
 def oracle_letters(row):
-    """For each of the 12 letters: ``(strength, loudest note)``. The strength is the 7 octaves added up, from the lowest octave, and the loudest note is
-    the loudest octave (the lowest on a tie). A letter weaker than a millionth of the window's loudest letter does not sound."""
+    """For each of the 12 letters: ``(strength, loudest note)``. The row has been through the noise floor (``floored``) already. The strength is the 7
+    octaves added up, from the lowest octave, and the loudest note is the loudest octave (the lowest on a tie)."""
     letters = []
     for letter in range(12):
         octaves = [row[12 * octave + letter] for octave in range(7)]
@@ -78,8 +87,7 @@ def oracle_letters(row):
         for value in octaves:
             total += value
         letters.append((total, 12 * octaves.index(max(octaves)) + letter))
-    floor = 1e-6 * max(total for total, _ in letters)
-    return [(0.0 if total <= floor else total, note) for total, note in letters]
+    return letters
 
 
 def oracle_window(row, types):
@@ -347,14 +355,49 @@ def test_a_chord_type_looks_at_two_more_letters_than_it_has_notes_but_at_six_at_
     assert only(out_of_reach, [chord_type]) is None  # the weakest letter of the chord is one place too far down
 
 
-def test_a_letter_much_weaker_than_the_loudest_does_not_sound():
-    # the seventh chord (4, 7, 10) would win over the triad if B-flat counted
+# ---- the noise floor (feature 033): a note below a thousandth of the loudest value (-60 dB) is 0, and is no part of a chord ------------------------
+
+
+def test_a_note_below_the_floor_is_no_part_of_a_chord_and_one_exactly_at_it_is():
+    # the seventh chord (4, 7, 10) would win over the triad if B-flat counted; the loudest value is 1.0, so the floor is 0.001
     types = [(4, 7), (4, 7, 10)]
     triad = ChordRecord((4, 7), 0, (C4, E4, G4))
-    assert only({C4: 1.0, E4: 0.9, G4: 0.8, 37: 2e-6}, types) == ChordRecord((4, 7, 10), 0, (C4, E4, G4, 37))  # a few millionths: it counts
-    assert only({C4: 1.0, E4: 0.9, G4: 0.8, 37: 1e-6}, types) == triad  # exactly a millionth of the loudest letter (C, 1.0): left out
+    assert only({C4: 1.0, E4: 0.9, G4: 0.8, 37: 0.0009}, types) == triad
     assert only({C4: 1.0, E4: 0.9, G4: 0.8, 37: 1e-9}, types) == triad
+    assert only({C4: 1.0, E4: 0.9, G4: 0.8, 37: 0.001}, types) == ChordRecord((4, 7, 10), 0, (C4, E4, G4, 37))  # exactly at the floor: it counts
+    assert only({C4: 1.0, E4: 0.9, G4: 0.8, 37: 0.0011}, types) == ChordRecord((4, 7, 10), 0, (C4, E4, G4, 37))
     assert only({C4: 1.0, E4: 0.9, G4: 0.8, 37: 1e-9}, [(4, 7, 10)]) is None
+
+
+def test_a_faint_note_does_not_complete_a_chord_and_is_not_among_the_recorded_notes():
+    assert only({C4: 1.0, E4: 0.9, G4: 0.0009}, [(4,), (4, 7)]) == ChordRecord((4,), 0, (C4, E4))
+    assert only({C4: 1.0, E4: 0.9, G4: 0.0011}, [(4,), (4, 7)]) == ChordRecord((4, 7), 0, (C4, E4, G4))
+
+
+def test_the_floor_is_the_loudest_value_of_the_whole_array_so_a_window_of_faint_notes_has_no_chord_beside_a_loud_one():
+    values = windows({C4: 1.0}, {C4: 0.0005, E4: 0.0004})
+    assert measure_chords(values, [(4,)]).record(1) is None
+    assert measure_chords(windows({C4: 0.0005, E4: 0.0004}), [(4,)]).record(0) == ChordRecord((4,), 0, (C4, E4))  # alone it is the loudest there is
+
+
+def test_the_four_undrawn_notes_set_the_floor_too():
+    assert measure_chords(windows({C4: 0.5, E4: 0.4, 87: 1000.0}), [(4,)]).record(0) is None  # the floor is 1.0
+    assert measure_chords(windows({C4: 0.5, E4: 0.4, 87: 100.0}), [(4,)]).record(0) == ChordRecord((4,), 0, (C4, E4))  # the floor is 0.1
+
+
+def test_the_notes_are_cut_before_the_octaves_of_a_letter_are_added_up():
+    # C2 and C3 are 0.0006 each, 0.0012 together, which is above the floor of 0.001; each is under it, so the letter C does not sound
+    assert only({E4: 1.0, C2: 0.0006, C3: 0.0006}, [(4,)]) is None
+    assert only({E4: 1.0, C2: 0.0011, C3: 0.0006}, [(4,)]) == ChordRecord((4,), 0, (C2, E4))  # one octave at or above the floor: the letter sounds, as C2
+
+
+def test_cutting_values_that_have_been_cut_changes_nothing_so_the_job_and_the_measurement_agree():
+    rng = np.random.default_rng(11)
+    for _ in range(40):
+        values = random_windows(rng, 8)
+        types = [ALL_TYPES[int(i)] for i in rng.choice(len(ALL_TYPES), 4, replace=False)]
+        cut = floored(values)
+        assert measure_chords(values, types) == measure_chords(cut, types)
 
 
 def test_the_four_notes_above_the_84_piano_notes_are_never_used():
@@ -386,8 +429,9 @@ def row_of(rng, notes, extra=0):
 
 def assert_like_the_oracle(values, types):
     series = measure_chords(values, types)
+    cut = floored(values)  # the measurement cuts the faint notes first
     for i in range(values.shape[0]):
-        assert as_tuple(series.record(i)) == oracle_window(values[i], check_chord_types(types)), (i, types)
+        assert as_tuple(series.record(i)) == oracle_window(cut[i], check_chord_types(types)), (i, types)
 
 
 def test_every_chord_type_in_every_inversion_and_several_octave_placements_is_found_on_its_own():
@@ -589,14 +633,16 @@ def test_a_file_of_4000_windows_with_10_types_is_measured_in_well_under_a_few_se
 
 
 def allowed_by_the_pictures(values, note_count=None, threshold=None):
-    """The note strengths with every note that the picture's Notes and Threshold settings leave out set to 0 (the picture's own functions)."""
-    strength = values[:, :84].copy()
+    """The note strengths with every note that the noise floor and then the picture's Notes and Threshold settings leave out set to 0 (the picture's own
+    functions for the two settings)."""
+    cut = floored(values)
+    strength = cut[:, :84].copy()
     if note_count is not None:
         keep = np.zeros(84, dtype=bool)
         keep[note_selection.top_energy_notes(strength, note_count)] = True
         strength[:, ~keep] = 0.0
     if threshold is not None:
-        strength[frame_rendering.hidden_below(values[:, :84], float(values.max()), threshold)] = 0.0
+        strength[frame_rendering.hidden_below(cut[:, :84], float(values.max()), threshold)] = 0.0
     return strength
 
 

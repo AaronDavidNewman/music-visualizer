@@ -68,6 +68,7 @@ from ..services.image_types import (
     MAX_BLEND_WIDTH,
     MIN_BLEND_WIDTH,
 )
+from ..services.noise_floor import floor_analysis
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
 from ..services.note_selection import DEFAULT_NOTE_COUNT, MAX_NOTE_COUNT, MIN_NOTE_COUNT
 from ..services.resolution import DEFAULT_RESOLUTION, MAX_RESOLUTION, MIN_RESOLUTION
@@ -562,7 +563,9 @@ def create_job(
                     "Use a larger window spacing."
                 ),
             )
-        result = analyze_channels(left, right, file_rate, window, step=step)
+        # the noise floor (feature 033): a note more than 60 dB below the loudest note of the file is 0 in every window, whatever the image type, so
+        # that no picture or measurement counts it as a note. It is fixed (no setting) and made once, here, before the frames are averaged and smoothed
+        result = floor_analysis(analyze_channels(left, right, file_rate, window, step=step))
         # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local peaks
         # measurement. Concentric, Decay, Decay Exp and Polar Chords are always colored by it; tiles, blended tiles and contour (its beat wave) only with the beat coloring box on; the
         # other pictures and the box off never measure it
