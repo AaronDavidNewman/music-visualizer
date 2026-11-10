@@ -101,6 +101,7 @@ export const IMAGE_TYPES = [
   { value: "decay", label: "Decay" },
   { value: "decay-exp", label: "Decay Exp" },
   { value: "polar-chords", label: "Polar Chords" },
+  { value: "energy-graphs", label: "Energy graphs" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -317,7 +318,7 @@ export function isCirclesType(imageType: string): boolean {
 
 /** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate, Gaussian) mean anything: not for circles, Concentric and Decay. */
 export function gridSettingsApply(imageType: string): boolean {
-  return !isCirclesType(imageType) && !isRingsType(imageType) && !isPolarType(imageType);
+  return !isCirclesType(imageType) && !isRingsType(imageType) && !isPolarType(imageType) && !isEnergyType(imageType);
 }
 
 /** Whether the picture is one with a circle for each of the 84 notes that the beat always colors or charges: Concentric, Decay (feature 027) and Decay Exp (feature 030). */
@@ -328,6 +329,11 @@ export function isRingsType(imageType: string): boolean {
 /** Whether the picture is Polar Chords (feature 032): bars of the loudest notes and of the chord, whose length the beat always sets. */
 export function isPolarType(imageType: string): boolean {
   return imageType === "polar-chords";
+}
+
+/** Whether the picture is Energy graphs (feature 034): a running histogram of the notes with two data sets. It has no setting of its own and uses neither the grid settings, the layout, the beat nor the data smoothing. */
+export function isEnergyType(imageType: string): boolean {
+  return imageType === "energy-graphs";
 }
 
 /** Whether Minimum distance and Prominence are used: always by Concentric, Decay, Decay Exp and Polar Chords (the beat colors, charges or lengthens them), by Tiles, Blended tiles and Contour with the Beat coloring box on, never by the others. */

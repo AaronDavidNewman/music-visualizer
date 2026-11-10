@@ -78,9 +78,9 @@ describe("the image type controls", () => {
   const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
   const blended = (busy = false) => renderType("blended", busy);
 
-  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay and Decay Exp in a dropdown that starts at Tiles", async () => {
+  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords and Energy graphs in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp", "Polar Chords"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp", "Polar Chords", "Energy graphs"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -989,5 +989,34 @@ describe("the page for Polar Chords (feature 032)", () => {
     expect(formSource).toContain("polarNotes: polarNotes.value");
     expect(formSource).toContain("validatePolarNotes(polarNotes.value)");
     expect(formSource).toContain("ref<number>(DEFAULT_POLAR_NOTES)");
+  });
+});
+
+describe("the page for Energy graphs (feature 034)", () => {
+  it("shows only Analysis, Colormap and Image type, with no control of its own", async () => {
+    const groups = groupsOf(await renderType("energy-graphs"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+    ]);
+  });
+
+  it("has none of the controls of the other types and no Data smoothing or Image smoothing", async () => {
+    const html = await renderType("energy-graphs");
+    for (const id of ["polar-notes", "note-layout", "beat-coloring", "peak-distance", "threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "decay-rate", "wave-count", "smoothing", "smoothing-window"]) {
+      expect(html, id).not.toContain(`id="${id}"`);
+    }
+    for (const group of ["data-smoothing", "image-smoothing", "local-peaks", "concentric-peaks", "note-layout"]) expect(html).not.toContain(`data-group="${group}"`);
+  });
+
+  it("is a valid choice: the form is not in a problem state with it", async () => {
+    expect(await renderType("energy-graphs")).not.toContain("The image type must be one of");
+  });
+
+  it("is the one type that hides Data smoothing", async () => {
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"]) {
+      expect(await renderType(type), type).toContain('data-group="data-smoothing"');
+    }
   });
 });

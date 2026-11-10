@@ -237,7 +237,8 @@ def test_a_bad_wave_count_is_refused_for_every_type_before_anything_is_written(t
     assert not (tmp_path / "out").exists()
 
 
-@pytest.mark.parametrize("image_type", [t for t in IMAGE_TYPES if t != "contour"])
+# Energy graphs needs its own data to be drawn (feature 034: ``energy``), which these frames do not have; its own tests show that it ignores every setting
+@pytest.mark.parametrize("image_type", [t for t in IMAGE_TYPES if t not in ("contour", "energy-graphs")])
 def test_the_wave_count_has_no_effect_on_the_other_types(tmp_path, image_type):
     values = note_frames(5)
     beat = np.linspace(0, 1, 5)

@@ -61,6 +61,7 @@ from ..services.local_peaks import (
     check_prominence,
     measure_local_peaks,
 )
+from ..services.energy_graphs import frame_energy
 from ..services.image_types import (
     DEFAULT_BLEND_WIDTH,
     DEFAULT_IMAGE_TYPE,
@@ -604,6 +605,7 @@ def create_job(
             wave_count=wave_count_value,
             polar_notes=polar_notes_value,
             decay_amounts=decay_amounts_value,
+            energy=frame_energy(result, fps, frames) if image_type_value == "energy-graphs" else None,
         )
         # The video made from these frames later (feature 029) needs the frame rate, and the frames do not hold it.
         (frames_dir / "render.json").write_text(json.dumps({"frame_rate": fps}), encoding="utf-8")

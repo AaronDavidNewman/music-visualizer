@@ -225,3 +225,12 @@ describe("the request for Polar Chords (feature 032)", () => {
     expect(fields.polar_notes).toBe("8");
   });
 });
+
+describe("the request for Energy graphs (feature 034)", () => {
+  it("sends the image type with its hyphen and the same fields as for any other type: no field of its own", async () => {
+    const energy = await posted({ ...SETTINGS, imageType: "energy-graphs" });
+    const polar = await posted({ ...SETTINGS, imageType: "polar-chords" });
+    expect(energy.image_type).toBe("energy-graphs");
+    expect(Object.keys(energy).sort()).toEqual(Object.keys(polar).sort());
+  });
+});

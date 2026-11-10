@@ -237,6 +237,7 @@ const canSubmit = computed(
 const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords"];
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
+const showDataSmoothing = computed(() => shownGroups.value.includes("data-smoothing")); // not for Energy graphs (feature 034)
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
 // the Local peaks group has one of two ids: local-peaks (Tiles, Blended tiles and Contour: with the checkbox) or concentric-peaks (Concentric, Decay and Decay Exp: without)
 const showNoteLayout = computed(() => noteLayoutApplies(imageType.value));
@@ -701,6 +702,7 @@ function onSubmit() {
     </SettingsGroup>
 
     <SettingsGroup
+      v-if="showDataSmoothing"
       id="data-smoothing"
       :title="groupTitle('data-smoothing')"
       :open="isOpen(openState, 'data-smoothing')"

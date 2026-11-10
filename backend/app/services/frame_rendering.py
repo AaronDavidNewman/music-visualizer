@@ -49,6 +49,7 @@ from .concentric import write_concentric_frames
 from .beat_wave import DEFAULT_WAVE_COUNT, check_wave_count
 from .decay import DEFAULT_DECAY_AMOUNTS, DEFAULT_DECAY_RATE, check_decay_amounts, check_decay_rate, circle_points, write_decay_frames
 from .decay_exp import circle_points as decay_exp_points
+from .energy_graphs import EnergyGraphData, write_energy_frames
 from .polar_chords import DEFAULT_POLAR_NOTES, check_polar_notes, polar_bars, write_polar_frames
 from .contour import write_contour_frames
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
@@ -108,22 +109,33 @@ def frame_count(sample_count: int, sample_rate: float, frame_rate: float) -> int
     """Number of frames for audio of ``sample_count`` samples: duration * frame rate, rounded up."""
     return max(0, math.ceil(sample_count * frame_rate / sample_rate - _EPSILON))
 
+def frame_windows(result: AnalysisResult, frame_rate: float, frames: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Which windows of ``result`` belong to each of ``frames`` frames: three integer arrays ``(first, stop, earlier)``, one entry per frame.
+
+    Windows are assigned to frames by their exact start position (``k * step``), not by the rounded start sample: frame ``i`` owns the windows
+    ``first[i]`` up to (not including) ``stop[i]``. A frame that owns none (``stop == first``) falls back to window ``earlier[i]``, the last
+    window that started before it (the first window when there is none). Every window is owned by exactly one frame.
+    """
+    if frames == 0 or result.frames.shape[0] == 0:
+        zeros = np.zeros(frames, dtype=np.intp)
+        return zeros, zeros.copy(), zeros.copy()
+    positions = result.window_positions
+    boundaries = np.arange(frames + 1) * (result.sample_rate / frame_rate) - _BOUNDARY_TOLERANCE
+    edges = np.searchsorted(positions, boundaries, side="left")
+    first, stop = edges[:-1], edges[1:]
+    return first, stop, np.maximum(first - 1, 0)
+
+
 def average_frames(result: AnalysisResult, frame_rate: float, frames: int) -> np.ndarray:
     """Average the window rows of ``result`` into ``frames`` rows of 88 values.
 
-    Windows are assigned to frames by their exact start position (``k * step``), not by the rounded
-    start sample. A frame whose period has no window start uses the last window that started before it.
+    Windows are assigned to frames as ``frame_windows`` says. A frame whose period has no window start uses the last window that started before it.
     """
     windows = result.frames
     if frames == 0 or windows.shape[0] == 0:
         return np.zeros((frames, NOTE_COUNT))
 
-    positions = result.window_positions
-    boundaries = np.arange(frames + 1) * (result.sample_rate / frame_rate) - _BOUNDARY_TOLERANCE
-    edges = np.searchsorted(positions, boundaries, side="left")
-    first, stop = edges[:-1], edges[1:]
-    earlier = np.maximum(first - 1, 0)
-
+    first, stop, earlier = frame_windows(result, frame_rate, frames)
     running = np.vstack([np.zeros((1, NOTE_COUNT)), np.cumsum(windows, axis=0)])
     counts = stop - first
     has_windows = counts > 0
@@ -267,6 +279,7 @@ def write_frames(
     wave_count: int = DEFAULT_WAVE_COUNT,
     decay_amounts: tuple[float, float, float, float] = DEFAULT_DECAY_AMOUNTS,
     polar_notes: int = DEFAULT_POLAR_NOTES,
+    energy: EnergyGraphData | None = None,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -353,6 +366,10 @@ def write_frames(
     a circle with ``p`` points gives each neighbour ``sin(pi / 2 * p / 64) ** 2`` per frame instead of the amount of its saturation level. ``decay_rate``,
     ``beat``, ``note_layout``, smoothing and the colormap apply; ``decay_amounts`` and every other setting are checked and ignored.
 
+    ``image_type="energy-graphs"`` draws a running histogram of the notes with two data sets, the rank points and the quasi-decibel amplitudes (see
+    ``energy_graphs``), from ``energy``, the totals of every frame made by ``energy_graphs.frame_energy`` (required for this type, ignored by the others; it
+    must have one frame for each row of ``frames``). Only the colormap applies; every other setting is checked and ignored.
+
     ``image_type="polar-chords"`` draws a polar bar graph (see ``polar_chords``): the ``polar_notes`` loudest notes of a frame (a whole number from 5 to 8,
     default 5, checked for every image type and used by this one only) as bars clockwise from the top, one arc of 84 for each note (in the order of the
     cells of ``note_layout``: ``rows`` is the order of pitch), and the chord that
@@ -428,6 +445,13 @@ def write_frames(
     if image_type == "decay-exp":  # the same discs with the points gained and lost along an exponential curve; decay_amounts is checked and not used
         points = decay_exp_points(smoothed, beat, note_layout, decay_rate)
         write_decay_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
+        return
+    if image_type == "energy-graphs":  # a histogram of two data sets, made from ``energy`` (the rest of the settings above are checked and not used)
+        if energy is None:
+            raise ValueError("The energy graphs need the energy data.")
+        if energy.frame_count != len(frames):
+            raise ValueError(f"The energy data has {energy.frame_count} frames but {len(frames)} were given.")
+        write_energy_frames(energy, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
     if image_type == "polar-chords":  # a polar bar graph: the loudest notes clockwise, the chord counterclockwise; the grid settings above are checked and not used
         write_polar_frames(polar_bars(smoothed, beat, polar_notes, note_layout), colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)

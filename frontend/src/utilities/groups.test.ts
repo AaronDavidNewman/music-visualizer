@@ -17,6 +17,7 @@ const EXPECTED: Record<string, string[]> = {
   decay: [...COMMON_TOP, "decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   "decay-exp": [...COMMON_TOP, "decay-rate", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   "polar-chords": [...COMMON_TOP, "polar-notes", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
+  "energy-graphs": [...COMMON_TOP], // no setting of its own, and the data is not smoothed
 };
 
 describe("the groups", () => {
@@ -53,12 +54,12 @@ describe("the groups", () => {
 describe("the groups shown for each image type", () => {
   it.each(TYPES)("are, for %s, in this order: the top group, Colormap, Image type, the type's group, Data smoothing, Image smoothing", (type) => {
     const want = ["analysis", "colormap", "image-type"];
-    if (type !== "concentric") want.push(type); // Concentric has no group of its own
+    if (type !== "concentric" && type !== "energy-graphs") want.push(type); // Concentric and Energy graphs have no group of their own
     if (type === "tiles" || type === "blended" || type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("note-layout");
     if (type === "tiles" || type === "blended" || type === "contour") want.push("local-peaks");
     if (type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("concentric-peaks");
-    want.push("data-smoothing");
-    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay" && type !== "decay-exp" && type !== "polar-chords") want.push("image-smoothing");
+    if (type !== "energy-graphs") want.push("data-smoothing"); // Energy graphs does not smooth the data
+    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay" && type !== "decay-exp" && type !== "polar-chords" && type !== "energy-graphs") want.push("image-smoothing");
     expect(groupsFor(type)).toEqual(want);
   });
 
@@ -366,5 +367,22 @@ describe("the Polar chords group (feature 032)", () => {
   it("leaves the groups of the other eight types as they were", () => {
     expect(groupsFor("decay-exp")).toEqual(["analysis", "colormap", "image-type", "decay-exp", "note-layout", "concentric-peaks", "data-smoothing"]);
     expect(groupsFor("concentric")).toEqual(["analysis", "colormap", "image-type", "note-layout", "concentric-peaks", "data-smoothing"]);
+  });
+});
+
+describe("the groups of Energy graphs (feature 034)", () => {
+  it("are only the top group, Colormap and Image type: no group of its own, no layout, peaks or smoothing", () => {
+    expect(groupsFor("energy-graphs")).toEqual(["analysis", "colormap", "image-type"]);
+  });
+
+  it("add no group to any other type and take no control of any other type", () => {
+    for (const type of TYPES.filter((t) => t !== "energy-graphs")) expect(groupsFor(type), type).not.toContain("energy-graphs");
+    for (const control of ["smoothing", "smoothing-window", "note-layout", "peak-distance", "polar-notes", "threshold", "resolution"]) {
+      expect(groupOf(control, "energy-graphs"), control).toBeUndefined();
+    }
+  });
+
+  it("leave Data smoothing in the other nine types as it was", () => {
+    for (const type of TYPES.filter((t) => t !== "energy-graphs")) expect(groupsFor(type), type).toContain("data-smoothing");
   });
 });

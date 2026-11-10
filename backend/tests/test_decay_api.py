@@ -41,9 +41,9 @@ def row_at(client, job, index, cell=TONE_NOTE) -> int:
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_decay_is_the_seventh_image_type_and_the_message_lists_all_nine():
-    assert IMAGE_TYPES[-3] == "decay" and len(IMAGE_TYPES) == 9
-    assert TYPE_MESSAGE == "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords."
+def test_decay_is_the_seventh_image_type_and_the_message_lists_all_ten():
+    assert IMAGE_TYPES[6] == "decay" and len(IMAGE_TYPES) == 10
+    assert TYPE_MESSAGE == "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs."
 
 
 @pytest.mark.parametrize("name", ["decays", "Decay", "decay ", "DECAY", ""])

@@ -199,7 +199,7 @@ describe("smoothing window", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp and Polar Chords in that order and starts at tiles", () => {
+  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords and Energy graphs in that order and starts at tiles", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["tiles", "Tiles"],
       ["blended", "Blended tiles"],
@@ -210,6 +210,7 @@ describe("image type", () => {
       ["decay", "Decay"],
       ["decay-exp", "Decay Exp"],
       ["polar-chords", "Polar Chords"],
+      ["energy-graphs", "Energy graphs"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
     expect(imageTypeLabel("tiles")).toBe("Tiles");
@@ -221,14 +222,15 @@ describe("image type", () => {
     expect(imageTypeLabel("decay")).toBe("Decay");
     expect(imageTypeLabel("decay-exp")).toBe("Decay Exp");
     expect(imageTypeLabel("polar-chords")).toBe("Polar Chords");
+    expect(imageTypeLabel("energy-graphs")).toBe("Energy graphs");
   });
 
   it.each(values)("accepts %j", (v) => {
     expect(validateImageType(v)).toBeNull();
   });
 
-  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "polar_chords", "polarchords", "Polar-Chords", "polar-chords ", "polar-"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords.");
+  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "polar_chords", "polarchords", "Polar-Chords", "polar-chords ", "polar-", "energy_graphs", "energygraphs", "Energy-Graphs", "energy-graphs ", "energy-"])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs.");
   });
 
   it("knows the two circle types, and the grid settings apply to neither", () => {
@@ -663,7 +665,7 @@ describe("Decay Exp (feature 030)", () => {
   });
 });
 
-import { DEFAULT_POLAR_NOTES, POLAR_NOTES_RANGE, formatPolarNotes, isPolarType, validatePolarNotes } from "./validation";
+import { DEFAULT_POLAR_NOTES, POLAR_NOTES_RANGE, formatPolarNotes, isEnergyType, isPolarType, validatePolarNotes } from "./validation";
 
 describe("Polar Chords (feature 032)", () => {
   it("has Notes shown from 5 to 8 in steps of 1, 5 at the start", () => {
@@ -706,5 +708,25 @@ describe("Polar Chords (feature 032)", () => {
     for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp"]) {
       expect(peakSettingsShown(type, false) === (isRingsType(type)), type).toBe(true);
     }
+  });
+});
+
+describe("Energy graphs (feature 034)", () => {
+  it("is the energy type only for energy-graphs", () => {
+    expect(isEnergyType("energy-graphs")).toBe(true);
+    for (const type of IMAGE_TYPES.map((t) => t.value).filter((t) => t !== "energy-graphs")) expect(isEnergyType(type), type).toBe(false);
+  });
+
+  it("uses none of the settings of the other types", () => {
+    expect(gridSettingsApply("energy-graphs")).toBe(false);
+    expect(isCirclesType("energy-graphs")).toBe(false);
+    expect(isRingsType("energy-graphs")).toBe(false);
+    expect(isPolarType("energy-graphs")).toBe(false);
+    expect(beatColoringApplies("energy-graphs")).toBe(false);
+    for (const box of [true, false]) expect(peakSettingsShown("energy-graphs", box), String(box)).toBe(false);
+    expect(noteLayoutApplies("energy-graphs")).toBe(false);
+    expect(decayRateApplies("energy-graphs")).toBe(false);
+    expect(waveCountApplies("energy-graphs")).toBe(false);
+    expect(blendWidthApplies("energy-graphs")).toBe(false);
   });
 });

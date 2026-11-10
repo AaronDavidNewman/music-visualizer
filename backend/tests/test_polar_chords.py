@@ -63,9 +63,9 @@ def test_the_constants():
     assert len(POLAR_CHORD_TYPES) * CHORD_ROOTS == CHORD_ARCS  # one arc for each chord type on each of the 12 letters
 
 
-def test_polar_chords_is_the_ninth_and_last_image_type():
-    assert IMAGE_TYPES[-1] == "polar-chords" and len(IMAGE_TYPES) == 9
-    assert IMAGE_TYPES[-2] == "decay-exp"
+def test_polar_chords_is_the_ninth_image_type():
+    assert IMAGE_TYPES[8] == "polar-chords" and len(IMAGE_TYPES) == 10  # Energy Graphs (feature 034) follows
+    assert IMAGE_TYPES[7] == "decay-exp"
 
 
 # ---- the bars of the notes ---------------------------------------------------------------------------------------------------------------
