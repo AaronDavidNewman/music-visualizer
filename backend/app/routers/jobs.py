@@ -43,6 +43,7 @@ from ..services.circles import (
 from ..services.frame_interpolation import DEFAULT_INTERPOLATE, MAX_INTERPOLATE, MIN_INTERPOLATE
 from ..services.gaussian import DEFAULT_GAUSSIAN, MAX_GAUSSIAN, MIN_GAUSSIAN
 from ..services.beat_wave import DEFAULT_WAVE_COUNT, MAX_WAVE_COUNT, MIN_WAVE_COUNT
+from ..services.chromatic_decay import DEFAULT_RATE as DEFAULT_CHROMATIC_RATE, RATE_MESSAGE as CHROMATIC_RATE_MESSAGE, check_chromatic_rate
 from ..services.decay import (
     DEFAULT_DECAY_AMOUNTS,
     DECAY_RATE_MESSAGE,
@@ -267,15 +268,17 @@ def _parse_circle_memory(text: str | None, sent: bool) -> int:
     return int(value)
 
 
-def _parse_decay_rate(text: str | None, sent: bool) -> float:
-    """The requested number of frames between decay steps. Not sent means the default; anything sent must be a number 0.25..4 in steps of 0.25."""
+def _parse_decay_rate(text: str | None, sent: bool, image_type: str = DEFAULT_IMAGE_TYPE) -> float | int:
+    """The requested number of frames between decay steps. Not sent means the default; anything sent must be a number 0.25..4 in steps of 0.25, or, for
+    Chromatic Decay (feature 035), a whole number from 1 to 10."""
+    chromatic = image_type == "chromatic-decay"
     if text is None and not sent:
-        return DEFAULT_DECAY_RATE
+        return DEFAULT_CHROMATIC_RATE if chromatic else DEFAULT_DECAY_RATE
     text = text or ""
     try:
-        return check_decay_rate(float(text))
-    except ValueError:  # not a number, or not one of the allowed steps
-        raise HTTPException(status_code=400, detail=DECAY_RATE_MESSAGE) from None
+        return check_chromatic_rate(float(text)) if chromatic else check_decay_rate(float(text))
+    except ValueError:  # not a number, or not one of the allowed values
+        raise HTTPException(status_code=400, detail=CHROMATIC_RATE_MESSAGE if chromatic else DECAY_RATE_MESSAGE) from None
 
 
 def _parse_decay_amount(text: str | None, sent: bool, index: int) -> float:
@@ -518,7 +521,7 @@ def create_job(
     peak_distance_value = _parse_peak_setting(peak_distance, "peak_distance" in sent, DEFAULT_MIN_DISTANCE, check_min_distance)
     peak_prominence_value = _parse_peak_setting(peak_prominence, "peak_prominence" in sent, DEFAULT_PROMINENCE, check_prominence)
     note_layout_value = _parse_note_layout(note_layout, "note_layout" in sent)
-    decay_rate_value = _parse_decay_rate(decay_rate, "decay_rate" in sent)
+    decay_rate_value = _parse_decay_rate(decay_rate, "decay_rate" in sent, image_type_value)
     wave_count_value = _parse_wave_count(wave_count, "wave_count" in sent)
     polar_notes_value = _parse_polar_notes(polar_notes, "polar_notes" in sent)
     decay_amounts_value = tuple(
@@ -571,7 +574,7 @@ def create_job(
         # measurement. Concentric, Decay, Decay Exp and Polar Chords are always colored by it; tiles, blended tiles and contour (its beat wave) only with the beat coloring box on; the
         # other pictures and the box off never measure it
         beat = None
-        if image_type_value in ("concentric", "decay", "decay-exp", "polar-chords") or (beat_coloring_value and image_type_value in ("tiles", "blended", "contour")):
+        if image_type_value in ("concentric", "decay", "decay-exp", "polar-chords", "chromatic-decay") or (beat_coloring_value and image_type_value in ("tiles", "blended", "contour")):
             beat = measure_local_peaks(
                 left, right, file_rate, peak_distance_value, peak_prominence_value
             ).frame_positions(fps, frames)

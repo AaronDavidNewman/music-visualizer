@@ -234,3 +234,13 @@ describe("the request for Energy graphs (feature 034)", () => {
     expect(Object.keys(energy).sort()).toEqual(Object.keys(polar).sort());
   });
 });
+
+describe("the request for Chromatic Decay (feature 035)", () => {
+  it("sends the image type with its hyphen and the decay rate as text, with the same fields as any other type", async () => {
+    const chromatic = await posted({ ...SETTINGS, imageType: "chromatic-decay", decayRate: 7 });
+    const decay = await posted({ ...SETTINGS, imageType: "decay-exp" });
+    expect(chromatic.image_type).toBe("chromatic-decay");
+    expect(chromatic.decay_rate).toBe("7");
+    expect(Object.keys(chromatic).sort()).toEqual(Object.keys(decay).sort());
+  });
+});

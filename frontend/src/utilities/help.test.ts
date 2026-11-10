@@ -330,3 +330,21 @@ describe("the Polar Chords help (feature 032)", () => {
     expect(polarNotesHelp).toContain("loudest");
   });
 });
+
+
+describe("the image type help for the rings of Chromatic Decay (feature 036)", () => {
+  it("says what the rings in the middle show, how big they are and how they are colored", () => {
+    const text = imageTypeHelp.slice(imageTypeHelp.indexOf("Chromatic Decay:"));
+    expect(text).toContain("twelve concentric rings");
+    expect(text).toContain("140 pixels");
+    expect(text).toContain("the center is how far the current frame is from the top of the latest beat");
+    expect(text).toContain("average of the two moments before the ring inside it");
+    expect(text).toContain("whole colormap, from its first color at the top of a beat to its last color at the lowest point of the beat in the file");
+    expect(text).toContain("no setting of its own");
+  });
+
+  it("has nothing the page would have to escape", () => {
+    const text = imageTypeHelp.slice(imageTypeHelp.indexOf("Chromatic Decay:"));
+    expect(text).not.toMatch(/['"<>&]/);
+  });
+});

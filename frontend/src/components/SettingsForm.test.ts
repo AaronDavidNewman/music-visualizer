@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import SettingsForm from "./SettingsForm.vue";
 import formSource from "./SettingsForm.vue?raw";
 import { COLORMAPS, DEFAULT_COLORMAP } from "../utilities/validation";
-import { decayAmountHelp, decayExpRateHelp, decayRateHelp, polarNotesHelp } from "../utilities/help";
+import { chromaticRateHelp, decayAmountHelp, decayExpRateHelp, decayRateHelp, polarNotesHelp } from "../utilities/help";
 
 async function render(busy = false): Promise<string> {
   const app = createSSRApp(SettingsForm, { busy, file: null, sampleRate: 44100 });
@@ -78,9 +78,9 @@ describe("the image type controls", () => {
   const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
   const blended = (busy = false) => renderType("blended", busy);
 
-  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords and Energy graphs in a dropdown that starts at Tiles", async () => {
+  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords, Energy graphs and Chromatic Decay in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp", "Polar Chords", "Energy graphs"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp", "Polar Chords", "Energy graphs", "Chromatic Decay"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -491,7 +491,7 @@ describe("the groups of the chosen image type (Story 2)", () => {
   it("shares the values of Movement, Radius, Resize by volume and Notes between Circles and Circles paint", () => {
     // one ref each in the form, shown by either circle group, so that switching the type keeps what was entered
     for (const control of ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]) expect(formSource).toContain(`inTypeGroup('${control}')`);
-    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords"]');
+    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords", "chromatic-decay"]');
     expect((formSource.match(/const circleUnit = ref/g) ?? []).length).toBe(1);
     expect((formSource.match(/const circleNotes = ref/g) ?? []).length).toBe(1);
   });
@@ -792,7 +792,7 @@ describe("the page for Decay (feature 027)", () => {
   it("flags the Decay group and blocks the form when the rate is not allowed, and sends the rate", () => {
     expect(formSource).toContain('(inTypeGroup("decay-rate") && !!decayRateError.value)');
     expect(formSource).toContain("!decayRateError.value");
-    expect(formSource).toContain("decayRate: decayRate.value");
+    expect(formSource).toContain("decayRate: isChromaticType(imageType.value) ? chromaticRate.value : decayRate.value"); // the rate of the type: its own value for Chromatic Decay
     expect(formSource).toContain("validateDecayRate(decayRate.value)");
     expect(formSource).toContain("ref<number>(DEFAULT_DECAY_RATE)");
   });
@@ -1018,5 +1018,58 @@ describe("the page for Energy graphs (feature 034)", () => {
     for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"]) {
       expect(await renderType(type), type).toContain('data-group="data-smoothing"');
     }
+  });
+});
+
+describe("the page for Chromatic Decay (feature 035)", () => {
+  it("shows Analysis, Colormap, Image type, Chromatic Decay (the decay rate), Local peaks and Data smoothing, in this order", async () => {
+    const groups = groupsOf(await renderType("chromatic-decay"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+      ["chromatic-decay", "Chromatic Decay", ["chromatic-decay-rate"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
+    ]);
+  });
+
+  it("has the decay rate slider from 1 to 10 in steps of 1, starting at 1, with a label, a readout and an info button", async () => {
+    const html = await renderType("chromatic-decay");
+    const slider = html.match(/<input id="chromatic-decay-rate"[^>]*>/)?.[0] ?? "";
+    expect(slider).toContain('type="range"');
+    expect(slider).toContain('min="1"');
+    expect(slider).toContain('max="10"');
+    expect(slider).toContain('step="1"');
+    expect(slider).toContain('value="1"');
+    expect(html).toMatch(/<label[^>]*for="chromatic-decay-rate"[^>]*>Decay rate<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="chromatic-decay-rate"[^>]*>1 frame<\/output>/);
+    expect(html).toContain('aria-label="About decay rate"');
+    expect(html).toContain(chromaticRateHelp);
+  });
+
+  it("has none of the controls of the other types and no Note layout or Image smoothing", async () => {
+    const html = await renderType("chromatic-decay");
+    for (const id of ["decay-rate", "decay-low", "decay-medium", "note-layout", "polar-notes", "beat-coloring", "threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "wave-count"]) {
+      expect(html, id).not.toContain(`id="${id}"`);
+    }
+    for (const group of ["image-smoothing", "local-peaks", "note-layout"]) expect(html).not.toContain(`data-group="${group}"`);
+  });
+
+  it("does not show its control for any other type, and Decay and Decay Exp still show theirs", async () => {
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs"]) {
+      expect(await renderType(type), type).not.toContain('id="chromatic-decay-rate"');
+    }
+    expect(await renderType("decay")).toContain('id="decay-rate"');
+    expect(await renderType("decay-exp")).toContain('id="decay-rate"');
+  });
+
+  it("keeps its own decay rate and sends it as decay_rate only for its type (the other type's value is kept and sent for the others)", () => {
+    expect(formSource).toContain("const chromaticRate = ref<number>(DEFAULT_CHROMATIC_RATE)");
+    expect(formSource).toContain("decayRate: isChromaticType(imageType.value) ? chromaticRate.value : decayRate.value");
+    expect(formSource).toContain("validateChromaticRate(chromaticRate.value)");
+    expect(formSource).toMatch(/!decayRateError\.value &&\s+!chromaticRateError\.value &&/); // an invalid rate blocks Create frames
+    expect(formSource).toContain('(inTypeGroup("chromatic-decay-rate") && !!chromaticRateError.value)');
+    expect(formSource).toContain('"decay-exp", "polar-chords", "chromatic-decay"]');
   });
 });

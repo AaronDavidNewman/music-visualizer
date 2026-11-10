@@ -199,7 +199,7 @@ describe("smoothing window", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords and Energy graphs in that order and starts at tiles", () => {
+  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords, Energy graphs and Chromatic Decay in that order and starts at tiles", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["tiles", "Tiles"],
       ["blended", "Blended tiles"],
@@ -211,6 +211,7 @@ describe("image type", () => {
       ["decay-exp", "Decay Exp"],
       ["polar-chords", "Polar Chords"],
       ["energy-graphs", "Energy graphs"],
+      ["chromatic-decay", "Chromatic Decay"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
     expect(imageTypeLabel("tiles")).toBe("Tiles");
@@ -223,14 +224,15 @@ describe("image type", () => {
     expect(imageTypeLabel("decay-exp")).toBe("Decay Exp");
     expect(imageTypeLabel("polar-chords")).toBe("Polar Chords");
     expect(imageTypeLabel("energy-graphs")).toBe("Energy graphs");
+    expect(imageTypeLabel("chromatic-decay")).toBe("Chromatic Decay");
   });
 
   it.each(values)("accepts %j", (v) => {
     expect(validateImageType(v)).toBeNull();
   });
 
-  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "polar_chords", "polarchords", "Polar-Chords", "polar-chords ", "polar-", "energy_graphs", "energygraphs", "Energy-Graphs", "energy-graphs ", "energy-"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs.");
+  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "polar_chords", "polarchords", "Polar-Chords", "polar-chords ", "polar-", "energy_graphs", "energygraphs", "Energy-Graphs", "energy-graphs ", "energy-", "chromatic_decay", "chromaticdecay", "Chromatic-Decay", "chromatic-decay ", "chromatic"])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay.");
   });
 
   it("knows the two circle types, and the grid settings apply to neither", () => {
@@ -728,5 +730,55 @@ describe("Energy graphs (feature 034)", () => {
     expect(decayRateApplies("energy-graphs")).toBe(false);
     expect(waveCountApplies("energy-graphs")).toBe(false);
     expect(blendWidthApplies("energy-graphs")).toBe(false);
+  });
+});
+
+import { CHROMATIC_RATE_RANGE, DEFAULT_CHROMATIC_RATE, formatChromaticRate, isChromaticType, validateChromaticRate } from "./validation";
+
+describe("Chromatic Decay (feature 035)", () => {
+  it("is the chromatic type only for chromatic-decay", () => {
+    expect(isChromaticType("chromatic-decay")).toBe(true);
+    for (const type of IMAGE_TYPES.map((t) => t.value).filter((t) => t !== "chromatic-decay")) expect(isChromaticType(type), type).toBe(false);
+  });
+
+  it("has a decay rate of a whole number of frames from 1 to 10, starting at 1", () => {
+    expect(CHROMATIC_RATE_RANGE).toEqual({ min: 1, max: 10, step: 1 });
+    expect(DEFAULT_CHROMATIC_RATE).toBe(1);
+  });
+
+  it.each([1, 2, 5, 9, 10, "1", "10", "3", 3.0])("accepts the decay rate %j", (v) => {
+    expect(validateChromaticRate(v)).toBeNull();
+  });
+
+  it.each([0, 11, -1, 0.5, 0.25, 2.5, 10.5, "", " ", "x", "nan", "1,5", NaN, Infinity, -Infinity])("refuses the decay rate %j with the message", (v) => {
+    expect(validateChromaticRate(v)).toBe("The decay rate must be a whole number from 1 to 10.");
+  });
+
+  it("shows the readout as 1 frame, 2 frames, 10 frames", () => {
+    expect(formatChromaticRate(1)).toBe("1 frame");
+    expect(formatChromaticRate(2)).toBe("2 frames");
+    expect(formatChromaticRate(10)).toBe("10 frames");
+  });
+
+  it("uses the Local peaks settings (the beat always charges it) but no grid, layout, beat coloring, decay-amount or wave setting", () => {
+    expect(peakSettingsShown("chromatic-decay", true)).toBe(true);
+    expect(peakSettingsShown("chromatic-decay", false)).toBe(true);
+    expect(gridSettingsApply("chromatic-decay")).toBe(false);
+    expect(isCirclesType("chromatic-decay")).toBe(false);
+    expect(isRingsType("chromatic-decay")).toBe(false);
+    expect(isPolarType("chromatic-decay")).toBe(false);
+    expect(isEnergyType("chromatic-decay")).toBe(false);
+    expect(beatColoringApplies("chromatic-decay")).toBe(false);
+    expect(noteLayoutApplies("chromatic-decay")).toBe(false);
+    expect(decayRateApplies("chromatic-decay")).toBe(false); // the old decay rate control (0.25 to 4) is not for it
+    expect(waveCountApplies("chromatic-decay")).toBe(false);
+    expect(blendWidthApplies("chromatic-decay")).toBe(false);
+  });
+
+  it("leaves the decay rate of Decay and Decay Exp as it was", () => {
+    expect(decayRateApplies("decay")).toBe(true);
+    expect(decayRateApplies("decay-exp")).toBe(true);
+    expect(validateDecayRate(0.25)).toBeNull();
+    expect(validateDecayRate(5)).not.toBeNull();
   });
 });

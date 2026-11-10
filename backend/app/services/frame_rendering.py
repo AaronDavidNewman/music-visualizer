@@ -48,6 +48,7 @@ from .colormaps import DEFAULT_COLORMAP, check_beat, check_colormap, colorize, l
 from .concentric import write_concentric_frames
 from .beat_wave import DEFAULT_WAVE_COUNT, check_wave_count
 from .decay import DEFAULT_DECAY_AMOUNTS, DEFAULT_DECAY_RATE, check_decay_amounts, check_decay_rate, circle_points, write_decay_frames
+from .chromatic_decay import check_chromatic_rate, circle_points as chromatic_points, write_chromatic_frames
 from .decay_exp import circle_points as decay_exp_points
 from .energy_graphs import EnergyGraphData, write_energy_frames
 from .polar_chords import DEFAULT_POLAR_NOTES, check_polar_notes, polar_bars, write_polar_frames
@@ -366,6 +367,12 @@ def write_frames(
     a circle with ``p`` points gives each neighbour ``sin(pi / 2 * p / 64) ** 2`` per frame instead of the amount of its saturation level. ``decay_rate``,
     ``beat``, ``note_layout``, smoothing and the colormap apply; ``decay_amounts`` and every other setting are checked and ignored.
 
+    ``image_type="chromatic-decay"`` is ``decay-exp`` for the 12 chromatic tones only (see ``chromatic_decay``): 12 circles on a ring in circle-of-fifths order,
+    charged by the loudest octave of each letter, whose points decay to the letters 5 and 7 above. ``decay_rate`` is for this type a **whole number from 1 to 10**
+    (frames between decay steps; anything else is refused with ``ValueError``); ``beat``, smoothing and the colormap apply; ``note_layout``, ``decay_amounts``
+    and every other setting are checked and ignored. With a ``beat`` the middle of the ring of letters also has a target of 12 concentric rings, 140 pixels
+    across, that shows the distance from the local peak of the current frame and of the frames before it (feature 036); without one there is no target.
+
     ``image_type="energy-graphs"`` draws a running histogram of the notes with two data sets, the rank points and the quasi-decibel amplitudes (see
     ``energy_graphs``), from ``energy``, the totals of every frame made by ``energy_graphs.frame_energy`` (required for this type, ignored by the others; it
     must have one frame for each row of ``frames``). Only the colormap applies; every other setting is checked and ignored.
@@ -398,7 +405,7 @@ def write_frames(
     circle_resize = check_circle_resize(circle_resize)
     gaussian = check_gaussian(gaussian)
     note_layout = check_note_layout(note_layout)
-    decay_rate = check_decay_rate(decay_rate)
+    decay_rate = check_chromatic_rate(decay_rate) if image_type == "chromatic-decay" else check_decay_rate(decay_rate)  # a whole number from 1 to 10 for Chromatic Decay
     decay_amounts = check_decay_amounts(decay_amounts)
     wave_count = check_wave_count(wave_count)
     polar_notes = check_polar_notes(polar_notes)
@@ -445,6 +452,9 @@ def write_frames(
     if image_type == "decay-exp":  # the same discs with the points gained and lost along an exponential curve; decay_amounts is checked and not used
         points = decay_exp_points(smoothed, beat, note_layout, decay_rate)
         write_decay_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
+        return
+    if image_type == "chromatic-decay":  # the 12 letters on a ring, decaying to the letters 5 and 7 above; note_layout and decay_amounts are checked and not used
+        write_chromatic_frames(chromatic_points(smoothed, beat, decay_rate), colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, beat=beat)  # the beat also fills the target in the middle
         return
     if image_type == "energy-graphs":  # a histogram of two data sets, made from ``energy`` (the rest of the settings above are checked and not used)
         if energy is None:

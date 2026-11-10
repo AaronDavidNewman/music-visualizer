@@ -18,10 +18,11 @@ const EXPECTED: Record<string, string[]> = {
   "decay-exp": [...COMMON_TOP, "decay-rate", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   "polar-chords": [...COMMON_TOP, "polar-notes", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   "energy-graphs": [...COMMON_TOP], // no setting of its own, and the data is not smoothed
+  "chromatic-decay": [...COMMON_TOP, "chromatic-decay-rate", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
 };
 
 describe("the groups", () => {
-  it("are the sixteen groups of the data model, with their titles and controls in order", () => {
+  it("are the seventeen groups of the data model, with their titles and controls in order", () => {
     expect(GROUPS.map((g) => [g.id, g.title, [...g.controls]])).toEqual([
       ["analysis", "Analysis", ["window-size", "frame-rate", "window-spacing"]],
       ["colormap", "Colormap", ["colormap"]],
@@ -34,6 +35,7 @@ describe("the groups", () => {
       ["decay", "Decay", ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]],
       ["decay-exp", "Decay", ["decay-rate"]],
       ["polar-chords", "Polar chords", ["polar-notes"]],
+      ["chromatic-decay", "Chromatic Decay", ["chromatic-decay-rate"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance", "peak-prominence"]],
       ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
@@ -54,12 +56,12 @@ describe("the groups", () => {
 describe("the groups shown for each image type", () => {
   it.each(TYPES)("are, for %s, in this order: the top group, Colormap, Image type, the type's group, Data smoothing, Image smoothing", (type) => {
     const want = ["analysis", "colormap", "image-type"];
-    if (type !== "concentric" && type !== "energy-graphs") want.push(type); // Concentric and Energy graphs have no group of their own
+    if (type !== "concentric" && type !== "energy-graphs") want.push(type); // Concentric and Energy graphs have no group of their own; Chromatic Decay has
     if (type === "tiles" || type === "blended" || type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("note-layout");
     if (type === "tiles" || type === "blended" || type === "contour") want.push("local-peaks");
-    if (type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("concentric-peaks");
+    if (type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords" || type === "chromatic-decay") want.push("concentric-peaks");
     if (type !== "energy-graphs") want.push("data-smoothing"); // Energy graphs does not smooth the data
-    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay" && type !== "decay-exp" && type !== "polar-chords" && type !== "energy-graphs") want.push("image-smoothing");
+    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay" && type !== "decay-exp" && type !== "polar-chords" && type !== "energy-graphs" && type !== "chromatic-decay") want.push("image-smoothing");
     expect(groupsFor(type)).toEqual(want);
   });
 
@@ -384,5 +386,33 @@ describe("the groups of Energy graphs (feature 034)", () => {
 
   it("leave Data smoothing in the other nine types as it was", () => {
     for (const type of TYPES.filter((t) => t !== "energy-graphs")) expect(groupsFor(type), type).toContain("data-smoothing");
+  });
+});
+
+describe("the groups of Chromatic Decay (feature 035)", () => {
+  it("are Analysis, Colormap, Image type, Chromatic Decay (its decay rate), Local peaks (no checkbox) and Data smoothing, in this order", () => {
+    expect(groupsFor("chromatic-decay")).toEqual(["analysis", "colormap", "image-type", "chromatic-decay", "concentric-peaks", "data-smoothing"]);
+  });
+
+  it("has a group of its own with one control, the decay rate, in a row of one", () => {
+    expect(groupTitle("chromatic-decay")).toBe("Chromatic Decay");
+    expect([...controlsIn("chromatic-decay")]).toEqual(["chromatic-decay-rate"]);
+    expect(rowsOf(controlsIn("chromatic-decay").length)).toEqual([1]);
+  });
+
+  it("shows neither the Note layout nor Image smoothing nor the old decay controls for it", () => {
+    for (const control of ["note-layout", "decay-rate", "decay-low", "polar-notes", "threshold", "resolution", "beat-coloring"]) {
+      expect(groupOf(control, "chromatic-decay"), control).toBeUndefined();
+    }
+    expect(groupOf("chromatic-decay-rate", "chromatic-decay")).toBe("chromatic-decay");
+    expect(groupOf("peak-distance", "chromatic-decay")).toBe("concentric-peaks");
+    expect(groupOf("smoothing", "chromatic-decay")).toBe("data-smoothing");
+  });
+
+  it("adds no group and no control to any other type", () => {
+    for (const type of TYPES.filter((t) => t !== "chromatic-decay")) {
+      expect(groupsFor(type), type).not.toContain("chromatic-decay");
+      expect(groupOf("chromatic-decay-rate", type), type).toBeUndefined();
+    }
   });
 });

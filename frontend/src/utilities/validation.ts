@@ -102,6 +102,7 @@ export const IMAGE_TYPES = [
   { value: "decay-exp", label: "Decay Exp" },
   { value: "polar-chords", label: "Polar Chords" },
   { value: "energy-graphs", label: "Energy graphs" },
+  { value: "chromatic-decay", label: "Chromatic Decay" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -318,7 +319,7 @@ export function isCirclesType(imageType: string): boolean {
 
 /** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate, Gaussian) mean anything: not for circles, Concentric and Decay. */
 export function gridSettingsApply(imageType: string): boolean {
-  return !isCirclesType(imageType) && !isRingsType(imageType) && !isPolarType(imageType) && !isEnergyType(imageType);
+  return !isCirclesType(imageType) && !isRingsType(imageType) && !isPolarType(imageType) && !isEnergyType(imageType) && !isChromaticType(imageType);
 }
 
 /** Whether the picture is one with a circle for each of the 84 notes that the beat always colors or charges: Concentric, Decay (feature 027) and Decay Exp (feature 030). */
@@ -336,9 +337,14 @@ export function isEnergyType(imageType: string): boolean {
   return imageType === "energy-graphs";
 }
 
-/** Whether Minimum distance and Prominence are used: always by Concentric, Decay, Decay Exp and Polar Chords (the beat colors, charges or lengthens them), by Tiles, Blended tiles and Contour with the Beat coloring box on, never by the others. */
+/** Whether the picture is Chromatic Decay (feature 035): Decay Exp for the 12 chromatic tones, on a ring, with its own decay rate (a whole number of frames from 1 to 10). */
+export function isChromaticType(imageType: string): boolean {
+  return imageType === "chromatic-decay";
+}
+
+/** Whether Minimum distance and Prominence are used: always by Concentric, Decay, Decay Exp, Polar Chords and Chromatic Decay (the beat colors, charges or lengthens them), by Tiles, Blended tiles and Contour with the Beat coloring box on, never by the others. */
 export function peakSettingsShown(imageType: string, beatColoring: boolean): boolean {
-  return isRingsType(imageType) || isPolarType(imageType) || (beatColoringApplies(imageType) && beatColoring);
+  return isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || (beatColoringApplies(imageType) && beatColoring);
 }
 
 /** Notes shown by Polar Chords (feature 032): how many of the loudest notes of a frame get a bar, from 5 to 8. */
@@ -376,6 +382,27 @@ export function validateDecayRate(value: string | number): string | null {
 /** The readout beside the slider and the summary item: "0.25 frames", "1 frame", "2.5 frames". */
 export function formatDecayRate(value: number): string {
   return value === 1 ? "1 frame" : `${value} frames`;
+}
+
+/**
+ * The decay rate of Chromatic Decay (feature 035): the number of frames between two decay steps, a **whole number from 1 to 10** (the other types keep 0.25 to
+ * 4 in steps of 0.25). It is its own value on the page (the request sends it as ``decay_rate`` for this type only).
+ */
+export const CHROMATIC_RATE_RANGE = { min: 1, max: 10, step: 1 } as const;
+export const DEFAULT_CHROMATIC_RATE = 1;
+
+const chromaticRateMessage = `The decay rate must be a whole number from ${CHROMATIC_RATE_RANGE.min} to ${CHROMATIC_RATE_RANGE.max}.`;
+
+/** Returns an error message, or null when the decay rate is a whole number from 1 to 10. */
+export function validateChromaticRate(value: string | number): string | null {
+  const n = parseNumber(value);
+  const ok = Number.isFinite(n) && Number.isInteger(n) && n >= CHROMATIC_RATE_RANGE.min && n <= CHROMATIC_RATE_RANGE.max;
+  return ok ? null : chromaticRateMessage;
+}
+
+/** The readout beside the slider and the summary item: "1 frame", "2 frames", "10 frames". */
+export function formatChromaticRate(value: number): string {
+  return formatDecayRate(value);
 }
 
 /**

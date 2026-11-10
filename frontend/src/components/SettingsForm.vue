@@ -8,12 +8,14 @@ import {
   DECAY_AMOUNT_RANGE,
   DECAY_LEVELS,
   DEFAULT_DECAY_AMOUNTS,
+  DEFAULT_CHROMATIC_RATE,
   DEFAULT_DECAY_RATE,
   DEFAULT_WAVE_COUNT,
   WAVE_COUNT_RANGE,
   DEFAULT_POLAR_NOTES,
   POLAR_NOTES_RANGE,
   DEFAULT_NOTE_LAYOUT,
+  CHROMATIC_RATE_RANGE,
   DECAY_RATE_RANGE,
   NOTE_LAYOUTS,
   DEFAULT_BLEND_WIDTH,
@@ -51,6 +53,7 @@ import {
   formatBeatColoring,
   formatBlendWidth,
   formatDecayAmount,
+  formatChromaticRate,
   formatDecayRate,
   formatPolarNotes,
   formatWaveCount,
@@ -70,10 +73,12 @@ import {
   validateBlendWidth,
   validatePeakDistance,
   validateDecayAmount,
+  validateChromaticRate,
   validateDecayRate,
   validatePolarNotes,
   validateWaveCount,
   validateNoteLayout,
+  isChromaticType,
   noteLayoutApplies,
   validatePeakProminence,
   validateColormap,
@@ -116,6 +121,7 @@ import {
   beatColoringHelp,
   decayAmountHelp,
   decayExpRateHelp,
+  chromaticRateHelp,
   decayRateHelp,
   polarNotesHelp,
   waveCountHelp,
@@ -158,6 +164,7 @@ const circleRadius = ref<number>(DEFAULT_CIRCLE_RADIUS);
 const circleResize = ref<boolean>(DEFAULT_CIRCLE_RESIZE);
 const noteLayout = ref<string>(DEFAULT_NOTE_LAYOUT);
 const decayRate = ref<number>(DEFAULT_DECAY_RATE);
+const chromaticRate = ref<number>(DEFAULT_CHROMATIC_RATE); // the decay rate of Chromatic Decay (1 to 10): its own value, so each type keeps its own
 const decayAmounts = ref<number[]>([...DEFAULT_DECAY_AMOUNTS]); // low, medium, high, saturated
 const waveCount = ref<number>(DEFAULT_WAVE_COUNT);
 const polarNotes = ref<number>(DEFAULT_POLAR_NOTES);
@@ -198,6 +205,7 @@ const circleNotesError = computed(() => validateCircleNotes(circleNotes.value));
 const circleRadiusError = computed(() => validateCircleRadius(circleRadius.value));
 const noteLayoutError = computed(() => validateNoteLayout(noteLayout.value));
 const decayRateError = computed(() => validateDecayRate(decayRate.value));
+const chromaticRateError = computed(() => validateChromaticRate(chromaticRate.value));
 const decayAmountErrors = computed(() => DECAY_LEVELS.map((level, index) => validateDecayAmount(decayAmounts.value[index], level.name)));
 const waveCountError = computed(() => validateWaveCount(waveCount.value));
 const polarNotesError = computed(() => validatePolarNotes(polarNotes.value));
@@ -225,6 +233,7 @@ const canSubmit = computed(
     !circleRadiusError.value &&
     !noteLayoutError.value &&
     !decayRateError.value &&
+    !chromaticRateError.value &&
     decayAmountErrors.value.every((e) => !e) &&
     !waveCountError.value &&
     !polarNotesError.value &&
@@ -234,7 +243,7 @@ const canSubmit = computed(
 
 // The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
 // shown. Every value stays in its ref, so it is kept when a group is folded or the type is changed, and is still sent.
-const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords"];
+const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords", "chromatic-decay"];
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showDataSmoothing = computed(() => shownGroups.value.includes("data-smoothing")); // not for Energy graphs (feature 034)
@@ -266,6 +275,7 @@ const typeGroupProblem = computed(
     (inTypeGroup("circle-memory") && !!circleMemoryError.value) ||
     (inTypeGroup("circle-notes") && !!circleNotesError.value) ||
     (inTypeGroup("decay-rate") && !!decayRateError.value) ||
+    (inTypeGroup("chromatic-decay-rate") && !!chromaticRateError.value) ||
     (inTypeGroup("decay-low") && decayAmountErrors.value.some((e) => !!e)) ||
     (inTypeGroup("polar-notes") && !!polarNotesError.value) ||
     (inTypeGroup("wave-count") && !!waveCountError.value),
@@ -308,7 +318,7 @@ function onSubmit() {
     circleRadius: circleRadius.value,
     circleResize: circleResize.value,
     noteLayout: noteLayout.value,
-    decayRate: decayRate.value,
+    decayRate: isChromaticType(imageType.value) ? chromaticRate.value : decayRate.value,
     decayLow: decayAmounts.value[0],
     decayMedium: decayAmounts.value[1],
     decayHigh: decayAmounts.value[2],
@@ -586,6 +596,24 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="decayRateError" class="error">{{ decayRateError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('chromatic-decay-rate')" class="field">
+        <div class="field-head">
+          <label for="chromatic-decay-rate">Decay rate</label>
+          <InfoPopover label="decay rate" :text="chromaticRateHelp" />
+          <output class="slider-value" for="chromatic-decay-rate">{{ formatChromaticRate(chromaticRate) }}</output>
+        </div>
+        <input
+          id="chromatic-decay-rate"
+          v-model.number="chromaticRate"
+          type="range"
+          :min="CHROMATIC_RATE_RANGE.min"
+          :max="CHROMATIC_RATE_RANGE.max"
+          :step="CHROMATIC_RATE_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="chromaticRateError" class="error">{{ chromaticRateError }}</small>
       </div>
 
       <template v-for="(level, index) in DECAY_LEVELS" :key="level.control">

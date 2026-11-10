@@ -194,6 +194,7 @@ describe("the result summary for Polar Chords (feature 032)", () => {
 
   it("shows Notes shown, as a number of notes, for Polar Chords only", () => {
     expect(line("Notes shown:")).toContain("isPolarType(result.image_type)");
+    expect(line("Chromatic decay rate:")).toContain("isChromaticType(result.image_type)");
     expect(line("Notes shown:")).toContain("formatPolarNotes(result.polar_notes)");
   });
 

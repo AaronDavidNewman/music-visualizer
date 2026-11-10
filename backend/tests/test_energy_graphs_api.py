@@ -72,9 +72,9 @@ def expected_heights(second):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_energy_graphs_is_the_tenth_and_last_image_type_and_the_message_lists_it():
-    assert IMAGE_TYPES[-1] == "energy-graphs" and len(IMAGE_TYPES) == 10
-    assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs.")
+def test_energy_graphs_is_the_tenth_image_type_and_the_message_lists_it():
+    assert IMAGE_TYPES[9] == "energy-graphs" and len(IMAGE_TYPES) == 11  # Chromatic Decay (feature 035) follows
+    assert "polar-chords, energy-graphs" in TYPE_MESSAGE
 
 
 @pytest.mark.parametrize("name", ["energy_graphs", "energygraphs", "Energy-Graphs", "energy-graphs ", "energy-", "ENERGY-GRAPHS", ""])
