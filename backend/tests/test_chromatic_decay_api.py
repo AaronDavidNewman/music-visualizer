@@ -245,7 +245,7 @@ def test_the_same_file_and_settings_make_identical_frames(client):
 SETTINGS = [
     {"note_layout": "spiral"},
     {"decay_low": "2", "decay_medium": "2.5", "decay_high": "3", "decay_saturated": "1"},
-    {"threshold": "5", "note_count": "20"},
+    {"note_count": "20"},  # (the threshold applies to this type since feature 037)
     {"resolution": "3", "interpolate": "2", "gaussian": "1"},
     {"polar_notes": "7", "blend_width": "15", "wave_count": "6"},
     {"beat_coloring": "true"},
@@ -388,3 +388,99 @@ def test_a_real_beat_goes_through_the_whole_colormap_from_the_first_color_to_the
     rows = sorted({int(np.argmin(np.abs(table.astype(int) - np.array(c)).sum(axis=1))) for c in centers})
     assert rows[0] <= 2 and rows[-1] >= 250  # both ends of the colormap are used
     assert any(r > 140 for r in rows)  # past the middle color (128), which is as far as the plain 1 - position would go on a beat that stays above 0.5
+
+
+# --- the threshold (feature 037) ----------------------------------------------------------------------------------------------
+
+from app.services.frame_rendering import smooth_frames  # noqa: E402
+
+THRESHOLD_MESSAGE = "The threshold must be a number from 0 to 10."
+E4 = 31  # the letter E
+
+
+def loud_and_faint_file(faint=0.008):
+    """C4 at 0.4 and E4 at a fiftieth of that (2 percent of the loudest), both in the centre of the spectrum position of their note, for 28 windows."""
+    return wav_bytes(0.4 * note_tone(C4, 3.0)[:SAMPLES] + faint * note_tone(E4, 3.0)[:SAMPLES])
+
+
+def circle_color(client, job, letter, index=-1):
+    image = picture(client, job, job["frame_count"] - 1 if index == -1 else index)
+    return color_at_position(image, cd.ring_position(letter))
+
+
+def test_the_threshold_removes_the_faint_note_from_the_picture_and_without_it_the_faint_circle_grows(client):
+    first = tuple(int(v) for v in lookup_table(COLORMAP)[0])  # a circle with no points
+    data = loud_and_faint_file()
+    e = cd.letter_at(cd.ring_position(7))  # the letter E is 7 (counting from A)
+    for text in (None, "0", "1"):  # off, and 1 percent: the faint note (2 percent of the loudest) is above the floor and charges its circle (the exact boundary is tested on arrays)
+        fields = {} if text is None else {"threshold": text}
+        assert circle_color(client, chromatic(client, data, **fields).json(), e) != first, text
+    job = chromatic(client, data, threshold="5").json()
+    assert circle_color(client, job, e) == first  # 2 percent is under 5 percent: E is never charged
+    assert circle_color(client, job, 3) != first  # the loud C is
+    assert job["threshold"] == 5
+
+
+@pytest.mark.parametrize("text, value", [("1", 1), ("5", 5), ("10", 10), ("2.5", 2.5), ("0", 0)])
+def test_a_threshold_from_0_to_10_is_accepted_and_echoed(client, text, value):
+    assert chromatic(client, tiny(), threshold=text).json()["threshold"] == value
+
+
+def test_no_threshold_and_a_threshold_of_0_give_the_same_frames(client):
+    data = loud_and_faint_file()
+    plain = frames(client, chromatic(client, data).json())
+    zero = frames(client, chromatic(client, data, threshold="0").json())
+    assert all(np.array_equal(a, b) for a, b in zip(plain, zero))
+
+
+@pytest.mark.parametrize("text", ["-1", "11", "10.5", "x", "", "nan", "inf", "-0.5"])
+def test_a_threshold_outside_0_to_10_is_refused_with_the_message_before_the_file_is_read(client, text):
+    r = chromatic(client, tiny(), threshold=text)
+    assert r.status_code == 400 and r.json()["detail"] == THRESHOLD_MESSAGE, text
+    assert leftovers() == []
+
+
+@pytest.mark.parametrize("threshold", [0, 5, 10])
+def test_write_frames_passes_the_threshold_to_the_points(tmp_path, threshold):
+    values = np.zeros((10, 88))
+    values[:, C4] = 100.0
+    values[:, E4] = 4.0
+    beat = np.linspace(0.0, 1.0, 10)
+    write_frames(values, tmp_path / "out", colormap=COLORMAP, image_type="chromatic-decay", decay_rate=2, threshold=threshold, beat=beat)
+    expected = tmp_path / "expected"
+    cd.write_chromatic_frames(cd.circle_points(values, beat, 2, threshold), COLORMAP, expected, WIDTH, HEIGHT, beat=beat)
+    for i in range(10):
+        assert (tmp_path / "out" / f"frame_{i:06d}.png").read_bytes() == (expected / f"frame_{i:06d}.png").read_bytes()
+    if threshold == 5:  # 4 percent of the loudest is under 5 percent: the threshold really changes the picture
+        other = tmp_path / "other"
+        write_frames(values, other, colormap=COLORMAP, image_type="chromatic-decay", decay_rate=2, threshold=0, beat=beat)
+        assert (tmp_path / "out/frame_000009.png").read_bytes() != (other / "frame_000009.png").read_bytes()
+
+
+def test_write_frames_refuses_a_bad_threshold_before_writing(tmp_path):
+    with pytest.raises(ValueError) as error:
+        write_frames(np.zeros((2, 88)), tmp_path / "out", colormap=COLORMAP, image_type="chromatic-decay", threshold=11)
+    assert str(error.value) == THRESHOLD_MESSAGE
+    assert not (tmp_path / "out").exists()
+
+
+def test_the_data_smoothing_acts_before_the_threshold(tmp_path):
+    values = np.zeros((12, 88))
+    values[:6, C4] = 100.0  # a loud tone that stops half way; its smoothed tail lingers
+    values[:, E4] = 3.0
+    beat = np.zeros(12)
+    write_frames(values, tmp_path / "out", colormap=COLORMAP, image_type="chromatic-decay", threshold=5, smoothing=0.8, smoothing_window=5, beat=beat)
+    smoothed = smooth_frames(values, 0.8, 5)
+    expected = tmp_path / "expected"
+    cd.write_chromatic_frames(cd.circle_points(smoothed, beat, 1, 5), COLORMAP, expected, WIDTH, HEIGHT, beat=beat)
+    for i in range(12):
+        assert (tmp_path / "out" / f"frame_{i:06d}.png").read_bytes() == (expected / f"frame_{i:06d}.png").read_bytes()
+    unsmoothed = tmp_path / "unsmoothed"
+    cd.write_chromatic_frames(cd.circle_points(values, beat, 1, 5), COLORMAP, unsmoothed, WIDTH, HEIGHT, beat=beat)
+    assert (tmp_path / "out/frame_000011.png").read_bytes() != (unsmoothed / "frame_000011.png").read_bytes()  # the smoothing really changed the result
+
+
+def test_the_threshold_does_not_change_the_other_image_types_their_own_tests_say_so_and_the_response_has_the_same_fields(client):
+    with_threshold = chromatic(client, tiny(), threshold="5").json()
+    plain = chromatic(client, tiny()).json()
+    assert set(with_threshold) == set(plain)

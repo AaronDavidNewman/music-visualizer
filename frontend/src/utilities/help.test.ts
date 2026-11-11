@@ -348,3 +348,22 @@ describe("the image type help for the rings of Chromatic Decay (feature 036)", (
     expect(text).not.toMatch(/['"<>&]/);
   });
 });
+
+describe("the Threshold help for Chromatic Decay (feature 037)", () => {
+  it("keeps the sentence about Tiles and says what the threshold does for Chromatic Decay", () => {
+    expect(thresholdHelp).toContain("with Tiles its tile is black");
+    expect(thresholdHelp).toContain("Chromatic Decay");
+    expect(thresholdHelp).toContain("treated as silent");
+    expect(thresholdHelp).toContain("does not charge its letter");
+  });
+
+  it("is named in the Chromatic Decay part of the image type help", () => {
+    const text = imageTypeHelp.slice(imageTypeHelp.indexOf("Chromatic Decay:"));
+    expect(text).toContain("The Threshold");
+    expect(text).toContain("quieter than");
+  });
+
+  it("has nothing the page would have to escape in the Threshold help", () => {
+    expect(thresholdHelp).not.toMatch(/['"<>&]/);
+  });
+});

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import SettingsForm from "./SettingsForm.vue";
 import formSource from "./SettingsForm.vue?raw";
 import { COLORMAPS, DEFAULT_COLORMAP } from "../utilities/validation";
-import { chromaticRateHelp, decayAmountHelp, decayExpRateHelp, decayRateHelp, polarNotesHelp } from "../utilities/help";
+import { chromaticRateHelp, decayAmountHelp, decayExpRateHelp, decayRateHelp, polarNotesHelp, thresholdHelp } from "../utilities/help";
 
 async function render(busy = false): Promise<string> {
   const app = createSSRApp(SettingsForm, { busy, file: null, sampleRate: 44100 });
@@ -1028,7 +1028,7 @@ describe("the page for Chromatic Decay (feature 035)", () => {
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
-      ["chromatic-decay", "Chromatic Decay", ["chromatic-decay-rate"]],
+      ["chromatic-decay", "Chromatic Decay", ["threshold", "chromatic-decay-rate"]],
       ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
@@ -1050,7 +1050,7 @@ describe("the page for Chromatic Decay (feature 035)", () => {
 
   it("has none of the controls of the other types and no Note layout or Image smoothing", async () => {
     const html = await renderType("chromatic-decay");
-    for (const id of ["decay-rate", "decay-low", "decay-medium", "note-layout", "polar-notes", "beat-coloring", "threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "wave-count"]) {
+    for (const id of ["decay-rate", "decay-low", "decay-medium", "note-layout", "polar-notes", "beat-coloring", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "wave-count"]) {
       expect(html, id).not.toContain(`id="${id}"`);
     }
     for (const group of ["image-smoothing", "local-peaks", "note-layout"]) expect(html).not.toContain(`data-group="${group}"`);
@@ -1071,5 +1071,35 @@ describe("the page for Chromatic Decay (feature 035)", () => {
     expect(formSource).toMatch(/!decayRateError\.value &&\s+!chromaticRateError\.value &&/); // an invalid rate blocks Create frames
     expect(formSource).toContain('(inTypeGroup("chromatic-decay-rate") && !!chromaticRateError.value)');
     expect(formSource).toContain('"decay-exp", "polar-chords", "chromatic-decay"]');
+  });
+});
+
+describe("the Threshold of Chromatic Decay (feature 037)", () => {
+  it("has the Threshold slider from 0 to 10 in steps of 1, starting at Off, before the decay rate and the Local peaks", async () => {
+    const html = await renderType("chromatic-decay");
+    const slider = html.match(/<input id="threshold"[^>]*>/)?.[0] ?? "";
+    expect(slider).toContain('type="range"');
+    expect(slider).toContain('min="0"');
+    expect(slider).toContain('max="10"');
+    expect(slider).toContain('step="1"');
+    expect(slider).toContain('value="0"');
+    expect(html).toMatch(/<label[^>]*for="threshold"[^>]*>Threshold<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="threshold"[^>]*>Off<\/output>/);
+    expect(html).toContain('aria-label="About threshold"');
+    expect(html).toContain(thresholdHelp);
+    expect(html.indexOf('id="threshold"')).toBeLessThan(html.indexOf('id="chromatic-decay-rate"'));
+    expect(html.indexOf('id="chromatic-decay-rate"')).toBeLessThan(html.indexOf('for="peak-distance"'));
+  });
+
+  it("is the same value and the same control as the other types use, and counts in the problem flag of the group", () => {
+    expect(formSource).toContain("(inTypeGroup(\"threshold\") && !!thresholdError.value)");
+    expect(formSource).toContain("threshold: threshold.value");
+  });
+
+  it("is not shown for the types that did not have it before", async () => {
+    for (const type of ["circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs"]) {
+      expect(await renderType(type), type).not.toContain('id="threshold"');
+    }
+    for (const type of ["tiles", "blended", "contour"]) expect(await renderType(type), type).toContain('id="threshold"');
   });
 });

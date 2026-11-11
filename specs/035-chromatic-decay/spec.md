@@ -10,6 +10,8 @@
 
 **Revised 2026-11-10 (second note)**: the user restored `decay.NEIGHBOURS` to 8 for Decay and Decay Exp and gave Chromatic Decay **its own constant, `PRETEND_NEIGHBORS = 6`**, in `chromatic_decay.py`. Wherever these documents say `NEIGHBOURS` for Chromatic Decay, read `PRETEND_NEIGHBORS` (6: a circle gives away 6 times the loss per frame, one sixth to each receiver, four sixths lost). Decay and Decay Exp are unchanged.
 
+**Revised 2026-11-10 (feature 037)**: the **Threshold** setting is no longer ignored by Chromatic Decay: it applies (see `specs/037-chromatic-threshold/`), and the Chromatic Decay group on the page has the Threshold control (before the Decay rate). Wherever this document lists the Threshold among the settings that are accepted and ignored, read that it now applies.
+
 **Input**: User description: "Create a new flavor of Decay Exp image type that only has the 12 chromatic tones.  The 'points' are added based on highest energy of all the octaves.  The 'decay' goes to the same rate but it only goes to the notes that are 5 and 7 above the note, mod 12.  So C would decay to F and G, F to Bb and C (So a note does decay to itself to some extent).  Keep the same point levels, size and colors for now, but make the decay rate to between 1 and 10 frames, integer-only.  Call the image type 'Chromatic Decay'."
 
 ## User Scenarios & Testing *(mandatory)*

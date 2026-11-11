@@ -370,7 +370,8 @@ def write_frames(
     ``image_type="chromatic-decay"`` is ``decay-exp`` for the 12 chromatic tones only (see ``chromatic_decay``): 12 circles on a ring in circle-of-fifths order,
     charged by the loudest octave of each letter, whose points decay to the letters 5 and 7 above. ``decay_rate`` is for this type a **whole number from 1 to 10**
     (frames between decay steps; anything else is refused with ``ValueError``); ``beat``, smoothing and the colormap apply; ``note_layout``, ``decay_amounts``
-    and every other setting are checked and ignored. With a ``beat`` the middle of the ring of letters also has a target of 12 concentric rings, 140 pixels
+    and every other setting are checked and ignored; ``threshold`` (0 to 10, 0 off) applies as a percent of the largest smoothed note value of the whole file: a
+    note strictly below it is 0 before the letters are charged (feature 037). With a ``beat`` the middle of the ring of letters also has a target of 12 concentric rings, 140 pixels
     across, that shows the distance from the local peak of the current frame and of the frames before it (feature 036); without one there is no target.
 
     ``image_type="energy-graphs"`` draws a running histogram of the notes with two data sets, the rank points and the quasi-decibel amplitudes (see
@@ -454,7 +455,8 @@ def write_frames(
         write_decay_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
     if image_type == "chromatic-decay":  # the 12 letters on a ring, decaying to the letters 5 and 7 above; note_layout and decay_amounts are checked and not used
-        write_chromatic_frames(chromatic_points(smoothed, beat, decay_rate), colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, beat=beat)  # the beat also fills the target in the middle
+        points = chromatic_points(smoothed, beat, decay_rate, threshold)  # a note under the threshold of the whole file is 0 before the letters are charged
+        write_chromatic_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, beat=beat)  # the beat also fills the target in the middle
         return
     if image_type == "energy-graphs":  # a histogram of two data sets, made from ``energy`` (the rest of the settings above are checked and not used)
         if energy is None:

@@ -210,3 +210,18 @@ describe("the result summary for Polar Chords (feature 032)", () => {
     expect(line("Low saturation decay:")).toContain("result.image_type === 'decay'");
   });
 });
+
+describe("the result summary: the threshold of Chromatic Decay (feature 037)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows Threshold for the types of the grid and for Chromatic Decay, and still not Notes, Interpolate, Oversampling or Gaussian smoothing for Chromatic Decay", () => {
+    expect(line("Threshold:")).toContain("gridSettingsApply(result.image_type)");
+    expect(line("Threshold:")).toContain("isChromaticType(result.image_type)");
+    expect(line("Threshold:")).toContain("formatThresholdSummary(result.threshold)");
+    for (const label of ["Notes:", "Interpolate:", "Oversampling:", "Gaussian smoothing:"]) {
+      expect(line(label), label).toContain("gridSettingsApply(result.image_type)");
+      expect(line(label), label).not.toContain("isChromaticType");
+    }
+  });
+});

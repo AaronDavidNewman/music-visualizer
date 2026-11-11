@@ -51,6 +51,10 @@ MARGIN = 10  # pixels between the outermost circle of the ring and the nearer ed
 PEAK_RINGS = 12  # the concentric rings in the middle that show the beat (feature 036)
 PEAK_RADIUS = 70  # pixels on a 600 x 400 picture: the rings fill a circle 140 across
 PEAK_REFERENCE_SIZE = 400  # the smaller side of the picture that PEAK_RADIUS is for
+MIN_THRESHOLD = 0  # the threshold is a percent of the largest smoothed note value of the file: 0 (off) to 10, as for the other image types
+MAX_THRESHOLD = 10
+DEFAULT_THRESHOLD = 0
+THRESHOLD_MESSAGE = f"The threshold must be a number from {MIN_THRESHOLD} to {MAX_THRESHOLD}."
 PEAK_BOTTOM_PERCENTILE = 1  # the percentile of the positions inside the peaks that is the bottom of the beat of a file: the last color of the rings
 RING_SIN = math.sin(math.pi / LETTERS)  # sin 15 degrees: half the distance between two neighbouring centers, in ring radii
 PRETEND_NEIGHBORS = 6  # the number of neighbours a circle's total is split between, as if it had them (its own constant: Decay and Decay Exp keep decay.NEIGHBOURS)
@@ -158,24 +162,55 @@ def chromatic_step(points, frames=1) -> np.ndarray:
     return after
 
 
-def circle_points(values, beat=None, decay_rate=DEFAULT_RATE) -> np.ndarray:
+def check_threshold(value) -> float:
+    """Return ``value`` as a ``float`` when it is a number from 0 to 10 (a bool, a string, None, a non-finite number or a number outside 0 to 10 is refused with
+    ``THRESHOLD_MESSAGE``). It answers as ``frame_rendering._check_threshold`` does for the other image types (it cannot import it: that module imports this one)."""
+    if (
+        isinstance(value, (bool, np.bool_))
+        or not isinstance(value, numbers.Real)
+        or not math.isfinite(value)
+        or not MIN_THRESHOLD <= value <= MAX_THRESHOLD
+    ):
+        raise ValueError(THRESHOLD_MESSAGE)
+    return float(value)
+
+
+def apply_threshold(values, threshold=DEFAULT_THRESHOLD) -> np.ndarray:
+    """The smoothed note values with the faint ones set to 0: a float64 copy of ``(frames, 84 or more)`` ``values``.
+
+    Every value **strictly below** ``threshold`` percent of the largest of **all** the values (every frame, every column: the whole file, as the Threshold of the
+    other image types does) is 0; every other value, a value exactly at the floor included, is unchanged. With a threshold of 0, or when the largest value is 0, nothing
+    is changed. The input is not changed.
+    """
+    threshold = check_threshold(threshold)
+    values = _check_values(values)
+    result = values.copy()
+    if threshold > 0 and values.size:
+        result[values < threshold / 100.0 * float(values.max())] = 0.0
+    return result
+
+
+def circle_points(values, beat=None, decay_rate=DEFAULT_RATE, threshold=DEFAULT_THRESHOLD) -> np.ndarray:
     """The points of the 12 circles after every frame: a float64 array ``(frames, 12)`` in letter order, each from 0 to 64.
 
     ``values`` is ``(frames, 84 or more)``, the smoothed note values; ``beat`` is ``None`` or one position from 0 to 1 for each frame; ``decay_rate`` is the
-    number of frames between decay steps, a whole number from 1 to 10. Frame ``i`` (counting from 0) adds its gains (:func:`letter_gains` at the taper of the
-    frame), then, when ``i + 1`` is a multiple of ``decay_rate``, takes a decay step of ``decay_rate`` frames' worth (:func:`chromatic_step`), and is recorded;
-    the taper of the next frame is then worked out as in ``decay_exp`` from the circles with more than 32 points.
+    number of frames between decay steps, a whole number from 1 to 10; ``threshold`` is a number from 0 to 10 (0, off, by default): the values strictly below that
+    percent of the largest of all of ``values`` are set to 0 first (:func:`apply_threshold`), so they add nothing to their letters. Frame ``i`` (counting from 0)
+    adds its gains (:func:`letter_gains` at the taper of the frame), then, when ``i + 1`` is a multiple of ``decay_rate``, takes a decay step of ``decay_rate``
+    frames' worth (:func:`chromatic_step`), and is recorded; the taper of the next frame is then worked out as in ``decay_exp`` from the circles with more than
+    32 points.
     """
-    return _simulate(values, beat, decay_rate)[0]
+    return _simulate(values, beat, decay_rate, threshold)[0]
 
 
-def circle_tapers(values, beat=None, decay_rate=DEFAULT_RATE) -> np.ndarray:
+def circle_tapers(values, beat=None, decay_rate=DEFAULT_RATE, threshold=DEFAULT_THRESHOLD) -> np.ndarray:
     """The taper that every frame of :func:`circle_points` gained its points with: a float64 array ``(frames,)``, 8 for the first frame."""
-    return _simulate(values, beat, decay_rate)[1]
+    return _simulate(values, beat, decay_rate, threshold)[1]
 
 
-def _simulate(values, beat, decay_rate) -> tuple[np.ndarray, np.ndarray]:
+def _simulate(values, beat, decay_rate, threshold=DEFAULT_THRESHOLD) -> tuple[np.ndarray, np.ndarray]:
     decay_rate = check_chromatic_rate(decay_rate)
+    values = apply_threshold(values, threshold)  # the faint notes are 0 before the letters are charged
     raw = _raw_gains(values, beat)  # the gains before the taper
     points = np.zeros(LETTERS)
     recorded = np.zeros((raw.shape[0], LETTERS))

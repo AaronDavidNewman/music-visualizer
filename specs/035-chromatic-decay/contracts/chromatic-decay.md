@@ -74,3 +74,5 @@ Background: the middle color of the colormap. 12 circles on a ring centered at (
 | Edges | smooth: coverage `clip(radius - distance + 0.5, 0, 1)` |
 
 A circle with 0 points is the smallest circle (`full / 12`, in the first color), as in Decay. Frames are identical for identical input. Other frame sizes scale the ring by `min(w, h)`.
+
+(Revised 2026-11-10, feature 037: `threshold` is no longer among the settings that are ignored for `chromatic-decay`: it applies, see `specs/037-chromatic-threshold/contracts/chromatic-threshold.md`.)

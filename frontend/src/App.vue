@@ -84,7 +84,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li>Colormap: {{ colormapLabel(result.colormap) }}</li>
             <li>Smoothing: {{ result.smoothing.toFixed(2) }}</li>
             <li>Smoothing window: {{ result.smoothing_window }}</li>
-            <li v-if="gridSettingsApply(result.image_type)">Threshold: {{ formatThresholdSummary(result.threshold) }}</li>
+            <li v-if="gridSettingsApply(result.image_type) || isChromaticType(result.image_type)">Threshold: {{ formatThresholdSummary(result.threshold) }}</li>
             <li v-if="gridSettingsApply(result.image_type)">Notes: {{ formatNoteCountSummary(result.note_count) }}</li>
             <li v-if="gridSettingsApply(result.image_type)">Interpolate: {{ result.interpolate }}</li>
             <li>Image type: {{ imageTypeLabel(result.image_type) }}</li>

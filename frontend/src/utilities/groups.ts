@@ -33,8 +33,9 @@ export const GROUPS: readonly GroupDefinition[] = [
   { id: "decay-exp", title: "Decay", controls: ["decay-rate"] },
   // Notes shown by Polar Chords (feature 032): how many of the loudest notes get a bar
   { id: "polar-chords", title: "Polar chords", controls: ["polar-notes"] },
-  // the decay rate of Chromatic Decay (feature 035): a whole number of frames from 1 to 10, its own control (the decay rate of Decay and Decay Exp is 0.25 to 4)
-  { id: "chromatic-decay", title: "Chromatic Decay", controls: ["chromatic-decay-rate"] },
+  // the decay rate of Chromatic Decay (feature 035): a whole number of frames from 1 to 10, its own control (the decay rate of Decay and Decay Exp is 0.25 to 4), and its
+  // Threshold (feature 037), the same control and value as the one of Tiles, Contour and Blended tiles
+  { id: "chromatic-decay", title: "Chromatic Decay", controls: ["threshold", "chromatic-decay-rate"] },
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
   // the beat coloring of Tiles and Blended tiles (feature 024) and the beat wave of Contour (feature 028): its own group, after the group of the type

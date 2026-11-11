@@ -18,7 +18,7 @@ const EXPECTED: Record<string, string[]> = {
   "decay-exp": [...COMMON_TOP, "decay-rate", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   "polar-chords": [...COMMON_TOP, "polar-notes", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   "energy-graphs": [...COMMON_TOP], // no setting of its own, and the data is not smoothed
-  "chromatic-decay": [...COMMON_TOP, "chromatic-decay-rate", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
+  "chromatic-decay": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
 };
 
 describe("the groups", () => {
@@ -35,7 +35,7 @@ describe("the groups", () => {
       ["decay", "Decay", ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]],
       ["decay-exp", "Decay", ["decay-rate"]],
       ["polar-chords", "Polar chords", ["polar-notes"]],
-      ["chromatic-decay", "Chromatic Decay", ["chromatic-decay-rate"]],
+      ["chromatic-decay", "Chromatic Decay", ["threshold", "chromatic-decay-rate"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance", "peak-prominence"]],
       ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
@@ -394,14 +394,22 @@ describe("the groups of Chromatic Decay (feature 035)", () => {
     expect(groupsFor("chromatic-decay")).toEqual(["analysis", "colormap", "image-type", "chromatic-decay", "concentric-peaks", "data-smoothing"]);
   });
 
-  it("has a group of its own with one control, the decay rate, in a row of one", () => {
+  it("has a group of its own with two controls, the threshold and the decay rate (feature 037), in a row of two", () => {
     expect(groupTitle("chromatic-decay")).toBe("Chromatic Decay");
-    expect([...controlsIn("chromatic-decay")]).toEqual(["chromatic-decay-rate"]);
-    expect(rowsOf(controlsIn("chromatic-decay").length)).toEqual([1]);
+    expect([...controlsIn("chromatic-decay")]).toEqual(["threshold", "chromatic-decay-rate"]);
+    expect(rowsOf(controlsIn("chromatic-decay").length)).toEqual([2]);
+  });
+
+  it("has the Threshold control in its group, and the other types keep theirs (Tiles, Contour and Blended tiles only)", () => {
+    expect(groupOf("threshold", "chromatic-decay")).toBe("chromatic-decay");
+    expect(groupOf("threshold", "tiles")).toBe("tiles");
+    expect(groupOf("threshold", "contour")).toBe("contour");
+    expect(groupOf("threshold", "blended")).toBe("blended");
+    for (const type of TYPES.filter((t) => !["tiles", "contour", "blended", "chromatic-decay"].includes(t))) expect(groupOf("threshold", type), type).toBeUndefined();
   });
 
   it("shows neither the Note layout nor Image smoothing nor the old decay controls for it", () => {
-    for (const control of ["note-layout", "decay-rate", "decay-low", "polar-notes", "threshold", "resolution", "beat-coloring"]) {
+    for (const control of ["note-layout", "decay-rate", "decay-low", "polar-notes", "notes", "resolution", "beat-coloring"]) {
       expect(groupOf(control, "chromatic-decay"), control).toBeUndefined();
     }
     expect(groupOf("chromatic-decay-rate", "chromatic-decay")).toBe("chromatic-decay");
