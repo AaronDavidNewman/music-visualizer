@@ -78,9 +78,9 @@ describe("the image type controls", () => {
   const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
   const blended = (busy = false) => renderType("blended", busy);
 
-  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords, Energy graphs and Chromatic Decay in a dropdown that starts at Tiles", async () => {
+  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay and Rhythm Circles in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp", "Polar Chords", "Energy graphs", "Chromatic Decay"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp", "Polar Chords", "Energy graphs", "Chromatic Decay", "Rhythm Circles"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -1014,8 +1014,8 @@ describe("the page for Energy graphs (feature 034)", () => {
     expect(await renderType("energy-graphs")).not.toContain("The image type must be one of");
   });
 
-  it("is the one type that hides Data smoothing", async () => {
-    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"]) {
+  it("is the one type that hides Data smoothing, with Rhythm Circles (feature 038)", async () => {
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "chromatic-decay"]) {
       expect(await renderType(type), type).toContain('data-group="data-smoothing"');
     }
   });
@@ -1057,7 +1057,7 @@ describe("the page for Chromatic Decay (feature 035)", () => {
   });
 
   it("does not show its control for any other type, and Decay and Decay Exp still show theirs", async () => {
-    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs"]) {
+    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs", "rhythm-circles"]) {
       expect(await renderType(type), type).not.toContain('id="chromatic-decay-rate"');
     }
     expect(await renderType("decay")).toContain('id="decay-rate"');
@@ -1097,9 +1097,38 @@ describe("the Threshold of Chromatic Decay (feature 037)", () => {
   });
 
   it("is not shown for the types that did not have it before", async () => {
-    for (const type of ["circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs"]) {
+    for (const type of ["circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs", "rhythm-circles"]) {
       expect(await renderType(type), type).not.toContain('id="threshold"');
     }
     for (const type of ["tiles", "blended", "contour"]) expect(await renderType(type), type).toContain('id="threshold"');
+  });
+});
+
+describe("the page for Rhythm Circles (feature 038)", () => {
+  it("shows Analysis, Colormap, Image type and Local peaks (the two settings, no checkbox), in this order", async () => {
+    const groups = groupsOf(await renderType("rhythm-circles"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+    ]);
+  });
+
+  it("has none of the other controls and no group but those four", async () => {
+    const html = await renderType("rhythm-circles");
+    for (const id of ["smoothing", "smoothing-window", "threshold", "notes", "resolution", "interpolate", "gaussian", "note-layout", "decay-rate", "chromatic-decay-rate", "polar-notes", "beat-coloring", "blend-width", "wave-count", "circle-unit"]) {
+      expect(html, id).not.toContain(`id="${id}"`);
+    }
+    for (const group of ["data-smoothing", "image-smoothing", "local-peaks", "note-layout", "chromatic-decay"]) expect(html).not.toContain(`data-group="${group}"`);
+  });
+
+  it("is a valid choice: the form is not in a problem state with it", async () => {
+    expect(await renderType("rhythm-circles")).not.toContain("The image type must be one of");
+  });
+
+  it("does not take the Local peaks group away from the types that had it, nor give Data smoothing back to Energy graphs", async () => {
+    for (const type of ["concentric", "decay", "decay-exp", "polar-chords", "chromatic-decay"]) expect(await renderType(type), type).toContain('data-group="concentric-peaks"');
+    expect(await renderType("energy-graphs")).not.toContain('data-group="concentric-peaks"');
   });
 });

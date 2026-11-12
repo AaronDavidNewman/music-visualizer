@@ -64,7 +64,7 @@ def test_the_constants():
 
 
 def test_polar_chords_is_the_ninth_image_type():
-    assert IMAGE_TYPES[8] == "polar-chords" and len(IMAGE_TYPES) == 11  # Energy Graphs (feature 034) and Chromatic Decay (feature 035) follow
+    assert IMAGE_TYPES[8] == "polar-chords" and len(IMAGE_TYPES) == 12  # Energy Graphs (feature 034) Chromatic Decay (feature 035) and Rhythm Circles (feature 038) follow
     assert IMAGE_TYPES[7] == "decay-exp"
 
 

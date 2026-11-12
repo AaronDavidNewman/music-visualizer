@@ -244,3 +244,14 @@ describe("the request for Chromatic Decay (feature 035)", () => {
     expect(Object.keys(chromatic).sort()).toEqual(Object.keys(decay).sort());
   });
 });
+
+describe("the request for Rhythm Circles (feature 038)", () => {
+  it("sends the image type with its hyphen and the same fields as for any other type, the two Local peaks settings among them", async () => {
+    const rhythm = await posted({ ...SETTINGS, imageType: "rhythm-circles", peakDistance: 700, peakProminence: 30 });
+    const polar = await posted({ ...SETTINGS, imageType: "polar-chords" });
+    expect(rhythm.image_type).toBe("rhythm-circles");
+    expect(rhythm.peak_distance).toBe("700");
+    expect(rhythm.peak_prominence).toBe("30");
+    expect(Object.keys(rhythm).sort()).toEqual(Object.keys(polar).sort());
+  });
+});

@@ -367,3 +367,57 @@ describe("the Threshold help for Chromatic Decay (feature 037)", () => {
     expect(thresholdHelp).not.toMatch(/['"<>&]/);
   });
 });
+
+describe("the image type help for Rhythm Circles (feature 038)", () => {
+  const text = () => imageTypeHelp.slice(imageTypeHelp.indexOf("Rhythm Circles:"));
+
+  it("is the last paragraph and keeps the paragraphs before it", () => {
+    expect(imageTypeHelp.indexOf("Rhythm Circles:")).toBeGreaterThan(imageTypeHelp.indexOf("Chromatic Decay:"));
+    expect(imageTypeHelp).toContain("Energy graphs:");
+  });
+
+  it("names the eight circles, the four layers and what turns each of them", () => {
+    expect(text()).toContain("eight concentric circles");
+    expect(text()).toContain("four layers");
+    expect(text()).toContain("beats per minute");
+    expect(text()).toContain("rate of change of the tempo");
+    expect(text()).toContain("rate of change of that tempo");
+  });
+
+  it("says that an aggregated tempo is the average or the fastest, whichever is closer to the current tempo", () => {
+    expect(text()).toContain("either their average or the fastest of them");
+    expect(text()).toContain("whichever is closer to the current tempo");
+    expect(text()).not.toContain("not an average"); // the version in which it was always the fastest
+  });
+
+  it("puts the longest aggregation on the outside and the plain tempo in the middle", () => {
+    const t = text();
+    const order = ["The outer circle turns at the tempo of the last 8 peaks", "the same for the last 4 peaks", "the fifth and sixth for the last 2 peaks", "The seventh turns at the current tempo", "the eighth, the innermost"];
+    const places = order.map((phrase) => t.indexOf(phrase));
+    expect(places.every((p) => p >= 0)).toBe(true);
+    expect([...places].sort((a, b) => a - b)).toEqual(places); // in the order of the rings, from the outside in
+  });
+
+  it("does not describe the circles of the earlier versions of the feature", () => {
+    expect(imageTypeHelp.slice(imageTypeHelp.indexOf("Rhythm Circles:"))).not.toContain("second rate of change");
+    expect(text()).not.toContain("averaged"); // the first version of the circles averaged the tempos
+    expect(text()).not.toContain("six concentric");
+  });
+
+  it("says which way they turn and what the notch is", () => {
+    expect(text()).toContain("clockwise");
+    expect(text()).toContain("either direction");
+    expect(text()).toContain("notch");
+    expect(text()).toContain("an eighth");
+  });
+
+  it("names the Local peaks settings as the only ones", () => {
+    expect(text()).toContain("Minimum distance");
+    expect(text()).toContain("Prominence");
+    expect(text()).toContain("the others are ignored");
+  });
+
+  it("has nothing the page would have to escape", () => {
+    expect(text()).not.toMatch(/['"<>&]/);
+  });
+});

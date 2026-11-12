@@ -57,7 +57,7 @@ DEFAULT_THRESHOLD = 0
 THRESHOLD_MESSAGE = f"The threshold must be a number from {MIN_THRESHOLD} to {MAX_THRESHOLD}."
 PEAK_BOTTOM_PERCENTILE = 1  # the percentile of the positions inside the peaks that is the bottom of the beat of a file: the last color of the rings
 RING_SIN = math.sin(math.pi / LETTERS)  # sin 15 degrees: half the distance between two neighbouring centers, in ring radii
-PRETEND_NEIGHBORS = 6  # the number of neighbours a circle's total is split between, as if it had them (its own constant: Decay and Decay Exp keep decay.NEIGHBOURS)
+PRETEND_NEIGHBORS = 4  # the number of neighbours a circle's total is split between, as if it had them (its own constant: Decay and Decay Exp keep decay.NEIGHBOURS)
 
 def check_chromatic_rate(value) -> int:
     """Return ``value`` as an ``int`` when it is a whole number from 1 to 10 (3 and 3.0 are; a bool, a string, None, a non-finite number, 2.5, 0 and 11 are

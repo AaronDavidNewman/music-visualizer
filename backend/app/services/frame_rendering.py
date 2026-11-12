@@ -51,6 +51,7 @@ from .decay import DEFAULT_DECAY_AMOUNTS, DEFAULT_DECAY_RATE, check_decay_amount
 from .chromatic_decay import check_chromatic_rate, circle_points as chromatic_points, write_chromatic_frames
 from .decay_exp import circle_points as decay_exp_points
 from .energy_graphs import EnergyGraphData, write_energy_frames
+from .rhythm_circles import RhythmData, write_rhythm_frames
 from .polar_chords import DEFAULT_POLAR_NOTES, check_polar_notes, polar_bars, write_polar_frames
 from .contour import write_contour_frames
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
@@ -281,6 +282,7 @@ def write_frames(
     decay_amounts: tuple[float, float, float, float] = DEFAULT_DECAY_AMOUNTS,
     polar_notes: int = DEFAULT_POLAR_NOTES,
     energy: EnergyGraphData | None = None,
+    rhythm: RhythmData | None = None,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -378,6 +380,10 @@ def write_frames(
     ``energy_graphs``), from ``energy``, the totals of every frame made by ``energy_graphs.frame_energy`` (required for this type, ignored by the others; it
     must have one frame for each row of ``frames``). Only the colormap applies; every other setting is checked and ignored.
 
+    ``image_type="rhythm-circles"`` draws eight concentric notched rings turned by the tempo of the local peaks, the aggregated tempos (the average or the fastest) of its latest 2, 4 and 8 peaks and the rates of change of all four (see
+    ``rhythm_circles``), from ``rhythm``, the angles of every frame made by ``rhythm_circles.rhythm_angles`` (required for this type, ignored by the others; it
+    must have one frame for each row of ``frames``). Only the colormap applies; every other setting is checked and ignored.
+
     ``image_type="polar-chords"`` draws a polar bar graph (see ``polar_chords``): the ``polar_notes`` loudest notes of a frame (a whole number from 5 to 8,
     default 5, checked for every image type and used by this one only) as bars clockwise from the top, one arc of 84 for each note (in the order of the
     cells of ``note_layout``: ``rows`` is the order of pitch), and the chord that
@@ -464,6 +470,13 @@ def write_frames(
         if energy.frame_count != len(frames):
             raise ValueError(f"The energy data has {energy.frame_count} frames but {len(frames)} were given.")
         write_energy_frames(energy, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
+        return
+    if image_type == "rhythm-circles":  # eight notched rings turned by ``rhythm`` (the rest of the settings above are checked and not used)
+        if rhythm is None:
+            raise ValueError("Rhythm Circles needs the rhythm data.")
+        if rhythm.frame_count != len(frames):
+            raise ValueError(f"The rhythm data has {rhythm.frame_count} frames but {len(frames)} were given.")
+        write_rhythm_frames(rhythm, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
     if image_type == "polar-chords":  # a polar bar graph: the loudest notes clockwise, the chord counterclockwise; the grid settings above are checked and not used
         write_polar_frames(polar_bars(smoothed, beat, polar_notes, note_layout), colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)

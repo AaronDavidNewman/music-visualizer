@@ -1,4 +1,4 @@
-import { beatColoringApplies, gridSettingsApply, isChromaticType, isEnergyType, isPolarType, isRingsType, noteLayoutApplies } from "./validation";
+import { beatColoringApplies, gridSettingsApply, isChromaticType, isEnergyType, isPolarType, isRhythmType, isRingsType, noteLayoutApplies } from "./validation";
 
 /**
  * The groups of the settings form (feature 020): which groups there are, what is in each, which are shown for an image type, and
@@ -63,16 +63,16 @@ export function controlsIn(id: string): readonly string[] {
  * The ids of the groups shown for an image type, top to bottom: the top group, Colormap, Image type, the group of the type
  * (none for Concentric, which has no controls of its own, nor for a type that is not one of the eight), Note layout for Tiles, Blended
  * tiles, Concentric, Decay and Decay Exp, Local peaks for Tiles, Blended tiles and Contour (with the checkbox) and for Concentric, Decay and Decay Exp
- * (without it), Data smoothing (not for Energy graphs, which does not smooth the data), and Image smoothing when the type draws a grid. Energy graphs has
- * no group of its own: only the top group, Colormap and Image type.
+ * (without it), Data smoothing (not for Energy graphs and Rhythm Circles, which do not smooth the data), and Image smoothing when the type draws a grid. Energy graphs has
+ * no group of its own: only the top group, Colormap and Image type. Rhythm Circles has none either, and adds only Local peaks (without the checkbox) to those three.
  */
 export function groupsFor(imageType: string): string[] {
   const ids = ["analysis", "colormap", "image-type"];
   if (TYPE_GROUPS.includes(imageType)) ids.push(imageType);
   if (noteLayoutApplies(imageType)) ids.push("note-layout");
   if (beatColoringApplies(imageType)) ids.push("local-peaks");
-  if (isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType)) ids.push("concentric-peaks");
-  if (!isEnergyType(imageType)) ids.push("data-smoothing");
+  if (isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || isRhythmType(imageType)) ids.push("concentric-peaks");
+  if (!isEnergyType(imageType) && !isRhythmType(imageType)) ids.push("data-smoothing");
   if (gridSettingsApply(imageType)) ids.push("image-smoothing");
   return ids;
 }

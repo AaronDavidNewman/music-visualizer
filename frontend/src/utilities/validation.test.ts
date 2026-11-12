@@ -199,7 +199,7 @@ describe("smoothing window", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords, Energy graphs and Chromatic Decay in that order and starts at tiles", () => {
+  it("offers Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay and Rhythm Circles in that order and starts at tiles", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["tiles", "Tiles"],
       ["blended", "Blended tiles"],
@@ -212,6 +212,7 @@ describe("image type", () => {
       ["polar-chords", "Polar Chords"],
       ["energy-graphs", "Energy graphs"],
       ["chromatic-decay", "Chromatic Decay"],
+      ["rhythm-circles", "Rhythm Circles"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("tiles");
     expect(imageTypeLabel("tiles")).toBe("Tiles");
@@ -225,14 +226,15 @@ describe("image type", () => {
     expect(imageTypeLabel("polar-chords")).toBe("Polar Chords");
     expect(imageTypeLabel("energy-graphs")).toBe("Energy graphs");
     expect(imageTypeLabel("chromatic-decay")).toBe("Chromatic Decay");
+    expect(imageTypeLabel("rhythm-circles")).toBe("Rhythm Circles");
   });
 
   it.each(values)("accepts %j", (v) => {
     expect(validateImageType(v)).toBeNull();
   });
 
-  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "polar_chords", "polarchords", "Polar-Chords", "polar-chords ", "polar-", "energy_graphs", "energygraphs", "Energy-Graphs", "energy-graphs ", "energy-", "chromatic_decay", "chromaticdecay", "Chromatic-Decay", "chromatic-decay ", "chromatic"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay.");
+  it.each(["", "Tiles", " blended", "Contour", "contour ", "contours", "Circles", "circle", "gradient", "tiles,blended", "circle_paint", "Circles_paint", "circles paint", "circles-paint", " circles_paint", "Concentric", "concentrics", "concentric ", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "polar_chords", "polarchords", "Polar-Chords", "polar-chords ", "polar-", "energy_graphs", "energygraphs", "Energy-Graphs", "energy-graphs ", "energy-", "chromatic_decay", "chromaticdecay", "Chromatic-Decay", "chromatic-decay ", "chromatic", "rhythm_circles", "rhythmcircles", "Rhythm-Circles", "rhythm-circles ", "rhythm-", "rhythm"])("rejects %j", (v) => {
+    expect(validateImageType(v)).toBe("The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles.");
   });
 
   it("knows the two circle types, and the grid settings apply to neither", () => {
@@ -780,5 +782,37 @@ describe("Chromatic Decay (feature 035)", () => {
     expect(decayRateApplies("decay-exp")).toBe(true);
     expect(validateDecayRate(0.25)).toBeNull();
     expect(validateDecayRate(5)).not.toBeNull();
+  });
+});
+
+import { isRhythmType } from "./validation";
+
+describe("Rhythm Circles (feature 038)", () => {
+  it("is the rhythm type only for rhythm-circles", () => {
+    expect(isRhythmType("rhythm-circles")).toBe(true);
+    for (const type of IMAGE_TYPES.map((t) => t.value).filter((t) => t !== "rhythm-circles")) expect(isRhythmType(type), type).toBe(false);
+  });
+
+  it("uses the Local peaks settings with or without the Beat coloring box, and none of the other settings", () => {
+    for (const box of [true, false]) expect(peakSettingsShown("rhythm-circles", box), String(box)).toBe(true);
+    expect(gridSettingsApply("rhythm-circles")).toBe(false);
+    expect(isCirclesType("rhythm-circles")).toBe(false);
+    expect(isRingsType("rhythm-circles")).toBe(false);
+    expect(isPolarType("rhythm-circles")).toBe(false);
+    expect(isEnergyType("rhythm-circles")).toBe(false);
+    expect(isChromaticType("rhythm-circles")).toBe(false);
+    expect(beatColoringApplies("rhythm-circles")).toBe(false);
+    expect(noteLayoutApplies("rhythm-circles")).toBe(false);
+    expect(decayRateApplies("rhythm-circles")).toBe(false);
+    expect(waveCountApplies("rhythm-circles")).toBe(false);
+    expect(blendWidthApplies("rhythm-circles")).toBe(false);
+  });
+
+  it("leaves the Local peaks of the other types as they were", () => {
+    for (const type of ["energy-graphs", "circles", "circles_paint"]) for (const box of [true, false]) expect(peakSettingsShown(type, box), `${type} ${box}`).toBe(false);
+    for (const type of ["tiles", "blended", "contour"]) {
+      expect(peakSettingsShown(type, true), type).toBe(true);
+      expect(peakSettingsShown(type, false), type).toBe(false);
+    }
   });
 });

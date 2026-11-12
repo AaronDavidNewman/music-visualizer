@@ -60,13 +60,13 @@ def color_at_position(image, position):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_chromatic_decay_is_the_eleventh_and_last_image_type_and_the_message_lists_it():
-    assert IMAGE_TYPES[-1] == "chromatic-decay" and len(IMAGE_TYPES) == 11
-    assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay.")
+def test_chromatic_decay_is_the_eleventh_image_type_and_the_message_lists_it():
+    assert IMAGE_TYPES[10] == "chromatic-decay" and len(IMAGE_TYPES) == 12
+    assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles.")
 
 
 @pytest.mark.parametrize("name", ["chromatic_decay", "chromaticdecay", "Chromatic-Decay", "chromatic-decay ", "chromatic", "chromatic-", "CHROMATIC-DECAY", ""])
-def test_a_name_that_is_not_exactly_chromatic_decay_is_refused_with_the_eleven_names(client, name):
+def test_a_name_that_is_not_exactly_chromatic_decay_is_refused_with_the_twelve_names(client, name):
     r = post(client, tiny(), image_type=name)
     assert r.status_code == 400 and r.json()["detail"] == TYPE_MESSAGE
     assert leftovers() == []

@@ -19,6 +19,7 @@ const EXPECTED: Record<string, string[]> = {
   "polar-chords": [...COMMON_TOP, "polar-notes", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   "energy-graphs": [...COMMON_TOP], // no setting of its own, and the data is not smoothed
   "chromatic-decay": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
+  "rhythm-circles": [...COMMON_TOP, "peak-distance", "peak-prominence"], // the two Local peaks settings and nothing else: the data is not smoothed
 };
 
 describe("the groups", () => {
@@ -56,12 +57,12 @@ describe("the groups", () => {
 describe("the groups shown for each image type", () => {
   it.each(TYPES)("are, for %s, in this order: the top group, Colormap, Image type, the type's group, Data smoothing, Image smoothing", (type) => {
     const want = ["analysis", "colormap", "image-type"];
-    if (type !== "concentric" && type !== "energy-graphs") want.push(type); // Concentric and Energy graphs have no group of their own; Chromatic Decay has
+    if (type !== "concentric" && type !== "energy-graphs" && type !== "rhythm-circles") want.push(type); // Concentric, Energy graphs and Rhythm Circles have no group of their own; Chromatic Decay has
     if (type === "tiles" || type === "blended" || type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("note-layout");
     if (type === "tiles" || type === "blended" || type === "contour") want.push("local-peaks");
-    if (type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords" || type === "chromatic-decay") want.push("concentric-peaks");
-    if (type !== "energy-graphs") want.push("data-smoothing"); // Energy graphs does not smooth the data
-    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay" && type !== "decay-exp" && type !== "polar-chords" && type !== "energy-graphs" && type !== "chromatic-decay") want.push("image-smoothing");
+    if (type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords" || type === "chromatic-decay" || type === "rhythm-circles") want.push("concentric-peaks");
+    if (type !== "energy-graphs" && type !== "rhythm-circles") want.push("data-smoothing"); // Energy graphs and Rhythm Circles do not smooth the data
+    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay" && type !== "decay-exp" && type !== "polar-chords" && type !== "energy-graphs" && type !== "chromatic-decay" && type !== "rhythm-circles") want.push("image-smoothing");
     expect(groupsFor(type)).toEqual(want);
   });
 
@@ -384,8 +385,8 @@ describe("the groups of Energy graphs (feature 034)", () => {
     }
   });
 
-  it("leave Data smoothing in the other nine types as it was", () => {
-    for (const type of TYPES.filter((t) => t !== "energy-graphs")) expect(groupsFor(type), type).toContain("data-smoothing");
+  it("leave Data smoothing in the other types as it was (all but Rhythm Circles, which does not smooth the data either)", () => {
+    for (const type of TYPES.filter((t) => t !== "energy-graphs" && t !== "rhythm-circles")) expect(groupsFor(type), type).toContain("data-smoothing");
   });
 });
 
@@ -422,5 +423,25 @@ describe("the groups of Chromatic Decay (feature 035)", () => {
       expect(groupsFor(type), type).not.toContain("chromatic-decay");
       expect(groupOf("chromatic-decay-rate", type), type).toBeUndefined();
     }
+  });
+});
+
+describe("the groups of Rhythm Circles (feature 038)", () => {
+  it("are Analysis, Colormap, Image type and Local peaks (no checkbox): no group of its own, no layout, no smoothing", () => {
+    expect(groupsFor("rhythm-circles")).toEqual(["analysis", "colormap", "image-type", "concentric-peaks"]);
+  });
+
+  it("shows the two Local peaks controls and none of the settings of the other types", () => {
+    expect(groupOf("peak-distance", "rhythm-circles")).toBe("concentric-peaks");
+    expect(groupOf("peak-prominence", "rhythm-circles")).toBe("concentric-peaks");
+    for (const control of ["smoothing", "smoothing-window", "threshold", "notes", "resolution", "interpolate", "gaussian", "note-layout", "decay-rate", "chromatic-decay-rate", "polar-notes", "beat-coloring"]) {
+      expect(groupOf(control, "rhythm-circles"), control).toBeUndefined();
+    }
+  });
+
+  it("adds no group to any other type and takes no Local peaks control from them", () => {
+    for (const type of TYPES.filter((t) => t !== "rhythm-circles")) expect(groupsFor(type), type).not.toContain("rhythm-circles");
+    expect(groupsFor("energy-graphs")).toEqual(["analysis", "colormap", "image-type"]);
+    expect(groupsFor("chromatic-decay")).toEqual(["analysis", "colormap", "image-type", "chromatic-decay", "concentric-peaks", "data-smoothing"]);
   });
 });

@@ -63,6 +63,7 @@ from ..services.local_peaks import (
     measure_local_peaks,
 )
 from ..services.energy_graphs import frame_energy
+from ..services.rhythm_circles import rhythm_angles
 from ..services.image_types import (
     DEFAULT_BLEND_WIDTH,
     DEFAULT_IMAGE_TYPE,
@@ -578,6 +579,10 @@ def create_job(
             beat = measure_local_peaks(
                 left, right, file_rate, peak_distance_value, peak_prominence_value
             ).frame_positions(fps, frames)
+        # Rhythm Circles (feature 038) turns its rings with the local peaks themselves, not with the beat: one measurement, with the same two settings
+        rhythm = None
+        if image_type_value == "rhythm-circles":
+            rhythm = rhythm_angles(measure_local_peaks(left, right, file_rate, peak_distance_value, peak_prominence_value), fps, frames)
         # write_frames smooths the note values (each frame is mixed with the earlier frames of the window), colors every
         # tile from the colormap at its own note's strength, blacks the tiles of notes below the threshold, and writes
         # the finished tile colors as the chosen image type; a resolution above 1 first interpolates the grid of smoothed
@@ -609,6 +614,7 @@ def create_job(
             polar_notes=polar_notes_value,
             decay_amounts=decay_amounts_value,
             energy=frame_energy(result, fps, frames) if image_type_value == "energy-graphs" else None,
+            rhythm=rhythm,
         )
         # The video made from these frames later (feature 029) needs the frame rate, and the frames do not hold it.
         (frames_dir / "render.json").write_text(json.dumps({"frame_rate": fps}), encoding="utf-8")

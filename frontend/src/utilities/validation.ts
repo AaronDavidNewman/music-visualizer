@@ -103,6 +103,7 @@ export const IMAGE_TYPES = [
   { value: "polar-chords", label: "Polar Chords" },
   { value: "energy-graphs", label: "Energy graphs" },
   { value: "chromatic-decay", label: "Chromatic Decay" },
+  { value: "rhythm-circles", label: "Rhythm Circles" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -319,7 +320,7 @@ export function isCirclesType(imageType: string): boolean {
 
 /** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate, Gaussian) mean anything: not for circles, Concentric and Decay. */
 export function gridSettingsApply(imageType: string): boolean {
-  return !isCirclesType(imageType) && !isRingsType(imageType) && !isPolarType(imageType) && !isEnergyType(imageType) && !isChromaticType(imageType);
+  return !isCirclesType(imageType) && !isRingsType(imageType) && !isPolarType(imageType) && !isEnergyType(imageType) && !isChromaticType(imageType) && !isRhythmType(imageType);
 }
 
 /** Whether the picture is one with a circle for each of the 84 notes that the beat always colors or charges: Concentric, Decay (feature 027) and Decay Exp (feature 030). */
@@ -342,9 +343,14 @@ export function isChromaticType(imageType: string): boolean {
   return imageType === "chromatic-decay";
 }
 
-/** Whether Minimum distance and Prominence are used: always by Concentric, Decay, Decay Exp, Polar Chords and Chromatic Decay (the beat colors, charges or lengthens them), by Tiles, Blended tiles and Contour with the Beat coloring box on, never by the others. */
+/** Whether the picture is Rhythm Circles (feature 038): eight notched rings turned by the tempo of the local peaks, its rates of change and its averages. Its only settings are Minimum distance and Prominence. */
+export function isRhythmType(imageType: string): boolean {
+  return imageType === "rhythm-circles";
+}
+
+/** Whether Minimum distance and Prominence are used: always by Concentric, Decay, Decay Exp, Polar Chords, Chromatic Decay (the beat colors, charges or lengthens them) and Rhythm Circles (the peaks turn its rings), by Tiles, Blended tiles and Contour with the Beat coloring box on, never by the others. */
 export function peakSettingsShown(imageType: string, beatColoring: boolean): boolean {
-  return isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || (beatColoringApplies(imageType) && beatColoring);
+  return isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || isRhythmType(imageType) || (beatColoringApplies(imageType) && beatColoring);
 }
 
 /** Notes shown by Polar Chords (feature 032): how many of the loudest notes of a frame get a bar, from 5 to 8. */

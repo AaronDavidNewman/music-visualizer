@@ -225,3 +225,23 @@ describe("the result summary: the threshold of Chromatic Decay (feature 037)", (
     }
   });
 });
+
+describe("the result summary for Rhythm Circles (feature 038)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split(String.fromCharCode(10)).find((l) => l.includes(label)) ?? "";
+
+  it("shows the Local peaks settings for it through the rule that includes it, with or without Beat coloring", () => {
+    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+  });
+
+  it("shows none of the settings of the grid, the decay, the layout or the beat coloring for it", () => {
+    for (const label of ["Notes:", "Interpolate:", "Oversampling:", "Gaussian smoothing:"]) {
+      expect(line(label), label).toContain("gridSettingsApply(result.image_type)");
+      expect(line(label), label).not.toContain("isRhythmType");
+    }
+    expect(line("Threshold:")).not.toContain("isRhythmType");
+    expect(line("Decay rate:")).toContain("decayRateApplies(result.image_type)");
+    expect(line("Note layout:")).toContain("noteLayoutApplies(result.image_type)");
+    expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
+  });
+});
