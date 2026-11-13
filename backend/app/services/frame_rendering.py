@@ -48,7 +48,8 @@ from .colormaps import DEFAULT_COLORMAP, check_beat, check_colormap, colorize, l
 from .concentric import write_concentric_frames
 from .beat_wave import DEFAULT_WAVE_COUNT, check_wave_count
 from .decay import DEFAULT_DECAY_AMOUNTS, DEFAULT_DECAY_RATE, check_decay_amounts, check_decay_rate, circle_points, write_decay_frames
-from .chromatic_decay import check_chromatic_rate, circle_points as chromatic_points, write_chromatic_frames
+from .chromatic_decay import CHROMATIC_TYPES, check_chromatic_rate, circle_points as chromatic_points, write_chromatic_frames
+from .chromatic_wireframe import write_wireframe_frames
 from .decay_exp import circle_points as decay_exp_points
 from .energy_graphs import EnergyGraphData, write_energy_frames
 from .rhythm_circles import RhythmData, write_rhythm_frames
@@ -380,6 +381,12 @@ def write_frames(
     ``energy_graphs``), from ``energy``, the totals of every frame made by ``energy_graphs.frame_energy`` (required for this type, ignored by the others; it
     must have one frame for each row of ``frames``). Only the colormap applies; every other setting is checked and ignored.
 
+    ``image_type="chromatic-wireframe"`` draws the points of ``chromatic-decay`` (the same simulation, with the same decay rate, whole number 1 to 10, and threshold) as
+    a ridge plot in three dimensions (see ``chromatic_wireframe``): one line across the 12 letters for each frame, the newest in front and the earlier frames behind it
+    as far as there is room, the height of a letter the radius of its circle times a sine of its points, every line in the colormap color of its frame's place in the
+    ``beat`` (the last color at the top of a peak; the first for every line without a beat). Smoothing, the colormap, the threshold and ``beat`` apply; ``note_layout``,
+    ``decay_amounts`` and every other setting are checked and ignored.
+
     ``image_type="rhythm-circles"`` draws eight concentric notched rings turned by the tempo of the local peaks, the aggregated tempos (the average or the fastest) of its latest 2, 4 and 8 peaks and the rates of change of all four (see
     ``rhythm_circles``), from ``rhythm``, the angles of every frame made by ``rhythm_circles.rhythm_angles`` (required for this type, ignored by the others; it
     must have one frame for each row of ``frames``). Only the colormap applies; every other setting is checked and ignored.
@@ -412,7 +419,7 @@ def write_frames(
     circle_resize = check_circle_resize(circle_resize)
     gaussian = check_gaussian(gaussian)
     note_layout = check_note_layout(note_layout)
-    decay_rate = check_chromatic_rate(decay_rate) if image_type == "chromatic-decay" else check_decay_rate(decay_rate)  # a whole number from 1 to 10 for Chromatic Decay
+    decay_rate = check_chromatic_rate(decay_rate) if image_type in CHROMATIC_TYPES else check_decay_rate(decay_rate)  # a whole number from 1 to 10 for Chromatic Decay and Chromatic Wireframe
     decay_amounts = check_decay_amounts(decay_amounts)
     wave_count = check_wave_count(wave_count)
     polar_notes = check_polar_notes(polar_notes)
@@ -463,6 +470,10 @@ def write_frames(
     if image_type == "chromatic-decay":  # the 12 letters on a ring, decaying to the letters 5 and 7 above; note_layout and decay_amounts are checked and not used
         points = chromatic_points(smoothed, beat, decay_rate, threshold)  # a note under the threshold of the whole file is 0 before the letters are charged
         write_chromatic_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, beat=beat)  # the beat also fills the target in the middle
+        return
+    if image_type == "chromatic-wireframe":  # the same points as chromatic-decay, drawn as a line for each frame in three dimensions; note_layout and decay_amounts are checked and not used
+        points = chromatic_points(smoothed, beat, decay_rate, threshold)
+        write_wireframe_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, beat=beat)  # the beat decides the color of every line
         return
     if image_type == "energy-graphs":  # a histogram of two data sets, made from ``energy`` (the rest of the settings above are checked and not used)
         if energy is None:

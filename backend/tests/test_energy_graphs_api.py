@@ -73,7 +73,7 @@ def expected_heights(second):
 
 
 def test_energy_graphs_is_the_tenth_image_type_and_the_message_lists_it():
-    assert IMAGE_TYPES[9] == "energy-graphs" and len(IMAGE_TYPES) == 12  # Chromatic Decay (feature 035) and Rhythm Circles (feature 038) follow
+    assert IMAGE_TYPES[9] == "energy-graphs" and len(IMAGE_TYPES) == 13  # Chromatic Decay (feature 035) and Rhythm Circles (feature 038) follow
     assert "polar-chords, energy-graphs" in TYPE_MESSAGE
 
 

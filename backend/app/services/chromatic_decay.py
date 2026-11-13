@@ -39,6 +39,7 @@ from .concentric import NOTES, RINGS, _check_values
 from .decay import BEAT_BONUS, GAINS, MAX_POINTS, NEGLIGIBLE, SIZE_POINTS, SMALLEST, ring_colors
 from .decay_exp import FULL_POINTS, TAPER, exp_loss_per_frame, next_taper, taper_of
 
+CHROMATIC_TYPES = ("chromatic-decay", "chromatic-wireframe")  # the image types that run this module's points and take its settings (the whole-number decay rate 1..10, the threshold)
 LETTERS = 12  # the chromatic tones: a note without its octave
 MIN_RATE = 1
 MAX_RATE = 10
@@ -57,7 +58,7 @@ DEFAULT_THRESHOLD = 0
 THRESHOLD_MESSAGE = f"The threshold must be a number from {MIN_THRESHOLD} to {MAX_THRESHOLD}."
 PEAK_BOTTOM_PERCENTILE = 1  # the percentile of the positions inside the peaks that is the bottom of the beat of a file: the last color of the rings
 RING_SIN = math.sin(math.pi / LETTERS)  # sin 15 degrees: half the distance between two neighbouring centers, in ring radii
-PRETEND_NEIGHBORS = 4  # the number of neighbours a circle's total is split between, as if it had them (its own constant: Decay and Decay Exp keep decay.NEIGHBOURS)
+PRETEND_NEIGHBORS = 6  # the number of neighbours a circle's total is split between, as if it had them (its own constant: Decay and Decay Exp keep decay.NEIGHBOURS)
 
 def check_chromatic_rate(value) -> int:
     """Return ``value`` as an ``int`` when it is a whole number from 1 to 10 (3 and 3.0 are; a bool, a string, None, a non-finite number, 2.5, 0 and 11 are

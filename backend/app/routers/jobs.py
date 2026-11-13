@@ -43,7 +43,7 @@ from ..services.circles import (
 from ..services.frame_interpolation import DEFAULT_INTERPOLATE, MAX_INTERPOLATE, MIN_INTERPOLATE
 from ..services.gaussian import DEFAULT_GAUSSIAN, MAX_GAUSSIAN, MIN_GAUSSIAN
 from ..services.beat_wave import DEFAULT_WAVE_COUNT, MAX_WAVE_COUNT, MIN_WAVE_COUNT
-from ..services.chromatic_decay import DEFAULT_RATE as DEFAULT_CHROMATIC_RATE, RATE_MESSAGE as CHROMATIC_RATE_MESSAGE, check_chromatic_rate
+from ..services.chromatic_decay import CHROMATIC_TYPES, DEFAULT_RATE as DEFAULT_CHROMATIC_RATE, RATE_MESSAGE as CHROMATIC_RATE_MESSAGE, check_chromatic_rate
 from ..services.decay import (
     DEFAULT_DECAY_AMOUNTS,
     DECAY_RATE_MESSAGE,
@@ -271,8 +271,8 @@ def _parse_circle_memory(text: str | None, sent: bool) -> int:
 
 def _parse_decay_rate(text: str | None, sent: bool, image_type: str = DEFAULT_IMAGE_TYPE) -> float | int:
     """The requested number of frames between decay steps. Not sent means the default; anything sent must be a number 0.25..4 in steps of 0.25, or, for
-    Chromatic Decay (feature 035), a whole number from 1 to 10."""
-    chromatic = image_type == "chromatic-decay"
+    Chromatic Decay (feature 035) and Chromatic Wireframe (feature 039), a whole number from 1 to 10."""
+    chromatic = image_type in CHROMATIC_TYPES
     if text is None and not sent:
         return DEFAULT_CHROMATIC_RATE if chromatic else DEFAULT_DECAY_RATE
     text = text or ""
@@ -575,7 +575,7 @@ def create_job(
         # measurement. Concentric, Decay, Decay Exp and Polar Chords are always colored by it; tiles, blended tiles and contour (its beat wave) only with the beat coloring box on; the
         # other pictures and the box off never measure it
         beat = None
-        if image_type_value in ("concentric", "decay", "decay-exp", "polar-chords", "chromatic-decay") or (beat_coloring_value and image_type_value in ("tiles", "blended", "contour")):
+        if image_type_value in ("concentric", "decay", "decay-exp", "polar-chords", *CHROMATIC_TYPES) or (beat_coloring_value and image_type_value in ("tiles", "blended", "contour")):
             beat = measure_local_peaks(
                 left, right, file_rate, peak_distance_value, peak_prominence_value
             ).frame_positions(fps, frames)

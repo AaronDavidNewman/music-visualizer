@@ -27,7 +27,8 @@ frame (counterclockwise) (``polar_chords.py``). A tenth, ``energy-graphs``, is a
 their accumulated amplitude (quasi-decibels), each softmaxed (``energy_graphs.py``). An eleventh, ``chromatic-decay``, is ``decay-exp`` for the 12 chromatic
 tones only: 12 circles on a ring in circle-of-fifths order, charged by the loudest octave of each letter, whose points decay to the letters 5 and 7 above
 (``chromatic_decay.py``). A twelfth, ``rhythm-circles``, is eight concentric notched rings that turn with the tempo of the local peaks, the aggregated tempos (the average or the fastest) of its latest 2, 4 and 8 peaks
-and the rates of change of all four (``rhythm_circles.py``).
+and the rates of change of all four (``rhythm_circles.py``). A thirteenth, ``chromatic-wireframe``, draws the points of ``chromatic-decay`` as a ridge plot in three
+dimensions: one line for each frame across the 12 letters, the newest in front, each in the color of its place in the beat (``chromatic_wireframe.py``).
 
 This module knows nothing about the note analysis or the grid of the application: the tile geometry is passed in.
 """
@@ -37,7 +38,7 @@ import numbers
 
 import numpy as np
 
-IMAGE_TYPES = ("tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles")
+IMAGE_TYPES = ("tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles", "chromatic-wireframe")
 DEFAULT_IMAGE_TYPE = "tiles"
 
 # The blend width is a percentage of the tile width: the reach of the fade on each side of an edge.

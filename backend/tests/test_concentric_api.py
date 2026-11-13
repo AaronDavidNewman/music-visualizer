@@ -35,9 +35,9 @@ def ring_row(client, job, index, ring, note=TONE_NOTE):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_concentric_is_the_sixth_image_type_and_the_message_lists_all_twelve():
-    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles")
-    assert TYPE_MESSAGE.endswith("circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles.")
+def test_concentric_is_the_sixth_image_type_and_the_message_lists_all_thirteen():
+    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles", "chromatic-wireframe")
+    assert TYPE_MESSAGE.endswith("circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe.")
 
 
 @pytest.mark.parametrize("name", ["concentrics", "Concentric", "concentric ", "concentric_circles", ""])

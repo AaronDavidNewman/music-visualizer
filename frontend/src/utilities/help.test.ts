@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   blendWidthHelp,
+  chromaticRateHelp,
   colormapHelp,
   frameRateHelp,
   imageTypeHelp,
@@ -371,7 +372,7 @@ describe("the Threshold help for Chromatic Decay (feature 037)", () => {
 describe("the image type help for Rhythm Circles (feature 038)", () => {
   const text = () => imageTypeHelp.slice(imageTypeHelp.indexOf("Rhythm Circles:"));
 
-  it("is the last paragraph and keeps the paragraphs before it", () => {
+  it("comes after Chromatic Decay, keeps the paragraphs before it, and is followed only by Chromatic Wireframe", () => {
     expect(imageTypeHelp.indexOf("Rhythm Circles:")).toBeGreaterThan(imageTypeHelp.indexOf("Chromatic Decay:"));
     expect(imageTypeHelp).toContain("Energy graphs:");
   });
@@ -419,5 +420,55 @@ describe("the image type help for Rhythm Circles (feature 038)", () => {
 
   it("has nothing the page would have to escape", () => {
     expect(text()).not.toMatch(/['"<>&]/);
+  });
+});
+
+describe("the image type help for Chromatic Wireframe (feature 039)", () => {
+  const text = () => imageTypeHelp.slice(imageTypeHelp.indexOf("Chromatic Wireframe:"));
+
+  it("is the last paragraph and keeps the paragraphs before it", () => {
+    expect(imageTypeHelp.indexOf("Chromatic Wireframe:")).toBeGreaterThan(imageTypeHelp.indexOf("Rhythm Circles:"));
+    expect(imageTypeHelp).toContain("Chromatic Decay:");
+  });
+
+  it("says what the picture shows: the 12 letters across the width, a line for each frame with the newest in front, the sine and the radius of the circle", () => {
+    expect(text()).toContain("12 letters");
+    expect(text()).toContain("one line for each frame");
+    expect(text()).toContain("newest in front");
+    expect(text()).toContain("radius of its circle");
+    expect(text()).toContain("sine");
+    expect(text()).toContain("the sum of 12 sine waves");
+    expect(text()).toContain("how many waves it makes, from none at 0 points to 4 at 64 points");
+    expect(text()).toContain("a letter that starts a quarter of the way along the axis begins a quarter turn later");
+    expect(text()).toContain("is a flat line");
+    expect(text()).toContain("The waves are sines squared, so they only add up and never cancel");
+    expect(text()).toContain("stretched to use the height of the picture");
+  });
+
+  it("says how a line is colored: by its place in the beat, the last color at the top of a peak", () => {
+    expect(text()).toContain("place in the beat");
+    expect(text()).toContain("last color of the colormap at the top of a beat");
+    expect(text()).toContain("one color");
+  });
+
+  it("says that nearer lines hide the ones behind and that the settings of Chromatic Decay apply", () => {
+    expect(text()).toContain("hide");
+    expect(text()).toContain("settings of Chromatic Decay");
+    expect(text()).toContain("The background is black");
+  });
+
+  it("has nothing the page would have to escape", () => {
+    expect(text()).not.toMatch(/['"<>&]/);
+  });
+});
+
+describe("the Threshold help and the decay rate help name Chromatic Wireframe (feature 039)", () => {
+  it("says that the threshold treats a quiet note as silent for Chromatic Wireframe too", () => {
+    expect(thresholdHelp).toContain("For Chromatic Decay and Chromatic Wireframe a note below the threshold is treated as silent");
+  });
+
+  it("says that the decay rate is also the one of the points that Chromatic Wireframe draws", () => {
+    expect(chromaticRateHelp).toContain("Chromatic Wireframe");
+    expect(chromaticRateHelp).not.toMatch(/['"<>&]/);
   });
 });

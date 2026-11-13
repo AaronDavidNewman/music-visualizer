@@ -31,9 +31,9 @@ def decay(client, data=None, **fields):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_decay_exp_is_the_eighth_image_type_and_the_message_lists_all_twelve():
-    assert IMAGE_TYPES[6:8] == ("decay", "decay-exp") and len(IMAGE_TYPES) == 12
-    assert TYPE_MESSAGE == "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles."
+def test_decay_exp_is_the_eighth_image_type_and_the_message_lists_all_thirteen():
+    assert IMAGE_TYPES[6:8] == ("decay", "decay-exp") and len(IMAGE_TYPES) == 13
+    assert TYPE_MESSAGE == "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe."
 
 
 @pytest.mark.parametrize("name", ["decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "DECAY-EXP", ""])

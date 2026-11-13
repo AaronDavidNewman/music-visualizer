@@ -50,10 +50,10 @@ def chord(seconds=3.0):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_polar_chords_is_the_ninth_image_type_and_the_message_lists_all_twelve():
-    assert IMAGE_TYPES[8] == "polar-chords" and len(IMAGE_TYPES) == 12
+def test_polar_chords_is_the_ninth_image_type_and_the_message_lists_all_thirteen():
+    assert IMAGE_TYPES[8] == "polar-chords" and len(IMAGE_TYPES) == 13
     assert TYPE_MESSAGE == (
-        "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles."
+        "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe."
     )
 
 

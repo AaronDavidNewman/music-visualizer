@@ -96,13 +96,13 @@ def expected_turns(peaks, job):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_rhythm_circles_is_the_twelfth_and_last_image_type_and_the_message_lists_all_twelve():
-    assert IMAGE_TYPES[-1] == "rhythm-circles" and len(IMAGE_TYPES) == 12
-    assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles.")
+def test_rhythm_circles_is_the_twelfth_image_type_and_the_message_lists_all_thirteen():
+    assert IMAGE_TYPES[11] == "rhythm-circles" and len(IMAGE_TYPES) == 13
+    assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe.")
 
 
 @pytest.mark.parametrize("name", ["rhythm_circles", "rhythmcircles", "Rhythm-Circles", "rhythm-circles ", "rhythm", "rhythm-", "RHYTHM-CIRCLES", "rhythm-circle", ""])
-def test_a_name_that_is_not_exactly_rhythm_circles_is_refused_with_the_twelve_names(client, name):
+def test_a_name_that_is_not_exactly_rhythm_circles_is_refused_with_the_thirteen_names(client, name):
     r = post(client, tiny(), image_type=name)
     assert r.status_code == 400 and r.json()["detail"] == TYPE_MESSAGE
     assert leftovers() == []
@@ -166,7 +166,7 @@ def test_the_local_peaks_settings_are_the_ones_the_peaks_are_measured_with_and_t
     assert spy.calls == [(700, 30), (DEFAULT_MIN_DISTANCE, DEFAULT_PROMINENCE)]
 
 
-@pytest.mark.parametrize("image_type, measurements", [("tiles", 0), ("energy-graphs", 0), ("decay", 1), ("decay-exp", 1), ("concentric", 1), ("polar-chords", 1), ("chromatic-decay", 1), ("rhythm-circles", 1)])
+@pytest.mark.parametrize("image_type, measurements", [("tiles", 0), ("energy-graphs", 0), ("decay", 1), ("decay-exp", 1), ("concentric", 1), ("polar-chords", 1), ("chromatic-decay", 1), ("chromatic-wireframe", 1), ("rhythm-circles", 1)])
 def test_the_rhythm_is_measured_for_this_type_only_and_never_a_second_time(client, monkeypatch, image_type, measurements):
     spy = Spy(monkeypatch)
     assert post(client, tiny(), image_type=image_type).status_code == 200

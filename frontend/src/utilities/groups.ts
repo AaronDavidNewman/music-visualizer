@@ -36,6 +36,8 @@ export const GROUPS: readonly GroupDefinition[] = [
   // the decay rate of Chromatic Decay (feature 035): a whole number of frames from 1 to 10, its own control (the decay rate of Decay and Decay Exp is 0.25 to 4), and its
   // Threshold (feature 037), the same control and value as the one of Tiles, Contour and Blended tiles
   { id: "chromatic-decay", title: "Chromatic Decay", controls: ["threshold", "chromatic-decay-rate"] },
+  // Chromatic Wireframe (feature 039) draws the points of Chromatic Decay, so it has the same two controls (and the same values) in a group of its own
+  { id: "chromatic-wireframe", title: "Chromatic Wireframe", controls: ["threshold", "chromatic-decay-rate"] },
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
   // the beat coloring of Tiles and Blended tiles (feature 024) and the beat wave of Contour (feature 028): its own group, after the group of the type
@@ -47,7 +49,7 @@ export const GROUPS: readonly GroupDefinition[] = [
 ];
 
 /** The ids of the groups that belong to one image type: exactly one of them follows the Image type group. */
-const TYPE_GROUPS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords", "chromatic-decay"];
+const TYPE_GROUPS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"];
 
 const byId = new Map(GROUPS.map((g) => [g.id, g]));
 

@@ -104,6 +104,7 @@ export const IMAGE_TYPES = [
   { value: "energy-graphs", label: "Energy graphs" },
   { value: "chromatic-decay", label: "Chromatic Decay" },
   { value: "rhythm-circles", label: "Rhythm Circles" },
+  { value: "chromatic-wireframe", label: "Chromatic Wireframe" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "tiles";
 
@@ -338,9 +339,12 @@ export function isEnergyType(imageType: string): boolean {
   return imageType === "energy-graphs";
 }
 
-/** Whether the picture is Chromatic Decay (feature 035): Decay Exp for the 12 chromatic tones, on a ring, with its own decay rate (a whole number of frames from 1 to 10). */
+/**
+ * Whether the picture runs the points of Chromatic Decay (feature 035: Decay Exp for the 12 chromatic tones, with its own decay rate, a whole number of frames from 1 to 10)
+ * and so has its settings: Chromatic Decay itself, and Chromatic Wireframe (feature 039), which draws the same points as a plot in three dimensions.
+ */
 export function isChromaticType(imageType: string): boolean {
-  return imageType === "chromatic-decay";
+  return imageType === "chromatic-decay" || imageType === "chromatic-wireframe";
 }
 
 /** Whether the picture is Rhythm Circles (feature 038): eight notched rings turned by the tempo of the local peaks, its rates of change and its averages. Its only settings are Minimum distance and Prominence. */

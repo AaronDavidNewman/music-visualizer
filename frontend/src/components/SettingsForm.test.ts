@@ -78,9 +78,9 @@ describe("the image type controls", () => {
   const slider = (html: string) => html.match(/<input id="blend-width"[^>]*>/)?.[0] ?? "";
   const blended = (busy = false) => renderType("blended", busy);
 
-  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay and Rhythm Circles in a dropdown that starts at Tiles", async () => {
+  it("offer Tiles, Blended tiles, Contour, Circles, Circles paint, Concentric, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay, Rhythm Circles and Chromatic Wireframe in a dropdown that starts at Tiles", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp", "Polar Chords", "Energy graphs", "Chromatic Decay", "Rhythm Circles"]);
+    expect(options(html, "image-type")).toEqual(["Tiles", "Blended tiles", "Contour", "Circles", "Circles paint", "Concentric", "Decay", "Decay Exp", "Polar Chords", "Energy graphs", "Chromatic Decay", "Rhythm Circles", "Chromatic Wireframe"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="tiles"[^>]*selected/);
     expect(html).toContain(">Image type</label>");
@@ -491,7 +491,7 @@ describe("the groups of the chosen image type (Story 2)", () => {
   it("shares the values of Movement, Radius, Resize by volume and Notes between Circles and Circles paint", () => {
     // one ref each in the form, shown by either circle group, so that switching the type keeps what was entered
     for (const control of ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]) expect(formSource).toContain(`inTypeGroup('${control}')`);
-    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords", "chromatic-decay"]');
+    expect(formSource).toContain('TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"]');
     expect((formSource.match(/const circleUnit = ref/g) ?? []).length).toBe(1);
     expect((formSource.match(/const circleNotes = ref/g) ?? []).length).toBe(1);
   });
@@ -1070,7 +1070,7 @@ describe("the page for Chromatic Decay (feature 035)", () => {
     expect(formSource).toContain("validateChromaticRate(chromaticRate.value)");
     expect(formSource).toMatch(/!decayRateError\.value &&\s+!chromaticRateError\.value &&/); // an invalid rate blocks Create frames
     expect(formSource).toContain('(inTypeGroup("chromatic-decay-rate") && !!chromaticRateError.value)');
-    expect(formSource).toContain('"decay-exp", "polar-chords", "chromatic-decay"]');
+    expect(formSource).toContain('"decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"]');
   });
 });
 
@@ -1130,5 +1130,43 @@ describe("the page for Rhythm Circles (feature 038)", () => {
   it("does not take the Local peaks group away from the types that had it, nor give Data smoothing back to Energy graphs", async () => {
     for (const type of ["concentric", "decay", "decay-exp", "polar-chords", "chromatic-decay"]) expect(await renderType(type), type).toContain('data-group="concentric-peaks"');
     expect(await renderType("energy-graphs")).not.toContain('data-group="concentric-peaks"');
+  });
+});
+
+describe("the page for Chromatic Wireframe (feature 039)", () => {
+  it("shows Analysis, Colormap, Image type, Chromatic Wireframe (the Threshold and the decay rate), Local peaks and Data smoothing, in this order", async () => {
+    const groups = groupsOf(await renderType("chromatic-wireframe"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+      ["chromatic-wireframe", "Chromatic Wireframe", ["threshold", "chromatic-decay-rate"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
+    ]);
+  });
+
+  it("has the decay rate slider of Chromatic Decay, from 1 to 10 in steps of 1, starting at 1, with its help", async () => {
+    const html = await renderType("chromatic-wireframe");
+    const slider = html.match(/<input id="chromatic-decay-rate"[^>]*>/)?.[0] ?? "";
+    expect(slider).toContain('min="1"');
+    expect(slider).toContain('max="10"');
+    expect(slider).toContain('step="1"');
+    expect(slider).toContain('value="1"');
+    expect(html).toMatch(/<output[^>]*for="chromatic-decay-rate"[^>]*>1 frame<\/output>/);
+    expect(html).toContain(chromaticRateHelp);
+    expect(html).toContain('id="threshold"');
+  });
+
+  it("has none of the controls of the other types and no Note layout or Image smoothing", async () => {
+    const html = await renderType("chromatic-wireframe");
+    for (const id of ["decay-rate", "decay-low", "note-layout", "polar-notes", "beat-coloring", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "wave-count"]) {
+      expect(html, id).not.toContain(`id="${id}"`);
+    }
+    for (const group of ["image-smoothing", "local-peaks", "note-layout", "chromatic-decay"]) expect(html).not.toContain(`data-group="${group}"`);
+  });
+
+  it("sends the rate of Chromatic Decay as decay_rate for its type (the same value as Chromatic Decay)", () => {
+    expect(formSource).toContain("decayRate: isChromaticType(imageType.value) ? chromaticRate.value : decayRate.value");
   });
 });

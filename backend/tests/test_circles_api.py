@@ -50,7 +50,7 @@ def steady_note(seconds=3.0, changing=True):
 
 
 def test_circles_is_the_fourth_image_type_circles_paint_the_fifth_concentric_the_sixth_and_tiles_stays_the_first():
-    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles")
+    assert IMAGE_TYPES == ("tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles", "chromatic-wireframe")
 
 
 @pytest.mark.parametrize("name", COLORMAPS)

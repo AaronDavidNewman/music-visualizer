@@ -255,3 +255,13 @@ describe("the request for Rhythm Circles (feature 038)", () => {
     expect(Object.keys(rhythm).sort()).toEqual(Object.keys(polar).sort());
   });
 });
+
+describe("the request for Chromatic Wireframe (feature 039)", () => {
+  it("sends the image type with its hyphen and the decay rate as text, with the same fields as any other type", async () => {
+    const wireframe = await posted({ ...SETTINGS, imageType: "chromatic-wireframe", decayRate: 6, threshold: 3 });
+    const decay = await posted({ ...SETTINGS, imageType: "decay-exp" });
+    expect(wireframe.image_type).toBe("chromatic-wireframe");
+    expect(wireframe.decay_rate).toBe("6");
+    expect(Object.keys(wireframe).sort()).toEqual(Object.keys(decay).sort());
+  });
+});
