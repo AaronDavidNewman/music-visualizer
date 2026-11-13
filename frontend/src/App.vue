@@ -8,8 +8,6 @@ import { submitJob, type JobResult, type JobSettings } from "./api";
 import { DEFAULT_SAMPLE_RATE, formatSpacing } from "./utilities/spacing";
 import {
   colormapLabel,
-  formatBlendWidthSummary,
-  formatCircleMemory,
   formatDecayAmount,
   formatChromaticRate,
   formatDecayRate,
@@ -18,10 +16,6 @@ import {
   formatPolarNotes,
   isPolarType,
   formatWaveCount,
-  formatCircleNotes,
-  formatCircleResize,
-  formatCircleRadius,
-  formatCircleUnit,
   formatBeatColoring,
   formatGaussian,
   formatPeakDistance,
@@ -31,7 +25,6 @@ import {
   noteLayoutApplies,
   noteLayoutLabel,
   gridSettingsApply,
-  isCirclesType,
   formatNoteCountSummary,
   formatResolution,
   formatThresholdSummary,
@@ -90,13 +83,6 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li>Image type: {{ imageTypeLabel(result.image_type) }}</li>
             <li v-if="gridSettingsApply(result.image_type)">Oversampling: {{ formatResolution(result.resolution) }}</li>
             <li v-if="gridSettingsApply(result.image_type)">Gaussian smoothing: {{ formatGaussian(result.gaussian) }}</li>
-            <template v-if="isCirclesType(result.image_type)">
-              <li>Movement: {{ formatCircleUnit(result.circle_unit) }}</li>
-              <li>Radius: {{ formatCircleRadius(result.circle_radius) }}</li>
-              <li>Resize by volume: {{ formatCircleResize(result.circle_resize) }}</li>
-              <li v-if="result.image_type === 'circles'">Memory: {{ formatCircleMemory(result.circle_memory) }}</li>
-              <li>Notes: {{ formatCircleNotes(result.circle_notes) }}</li>
-            </template>
             <li v-if="decayRateApplies(result.image_type)">Decay rate: {{ formatDecayRate(result.decay_rate) }}</li>
             <li v-if="isChromaticType(result.image_type)">Chromatic decay rate: {{ formatChromaticRate(result.decay_rate) }}</li>
             <li v-if="result.image_type === 'decay'">Low saturation decay: {{ formatDecayAmount(result.decay_low) }}</li>
@@ -109,7 +95,6 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li v-if="peakSettingsShown(result.image_type, result.beat_coloring)">Minimum distance: {{ formatPeakDistance(result.peak_distance) }}</li>
             <li v-if="peakSettingsShown(result.image_type, result.beat_coloring)">Prominence: {{ formatPeakProminence(result.peak_prominence) }}</li>
             <li v-if="result.image_type === 'contour' && result.beat_coloring">Wave count: {{ formatWaveCount(result.wave_count) }}</li>
-            <li v-if="result.image_type === 'blended'">Blend width: {{ formatBlendWidthSummary(result.blend_width) }}</li>
             <li>Window spacing: {{ formatSpacing(result.window_spacing) }}</li>
             <li>Step: {{ Number(result.step_samples.toFixed(2)) }} samples</li>
             <li>Windows analyzed: {{ result.window_count }}</li>

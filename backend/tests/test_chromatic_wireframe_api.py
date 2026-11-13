@@ -10,7 +10,7 @@ from app.services import chromatic_decay as cd
 from app.services import chromatic_wireframe as cw
 from app.services.frame_rendering import smooth_frames, write_frames
 from app.services.image_types import IMAGE_TYPES
-from app.services.local_peaks import DEFAULT_MIN_DISTANCE, DEFAULT_PROMINENCE, measure_local_peaks
+from app.services.local_peaks import measure_local_peaks
 
 from .frame_size import HEIGHT, WIDTH
 from .test_chromatic_decay_api import C4, E4, SAMPLES, WINDOWS, loud_and_faint_file, tone_file  # noqa: F401
@@ -62,8 +62,8 @@ def spying(monkeypatch):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_it_is_the_thirteenth_image_type_and_the_message_lists_all_thirteen():
-    assert IMAGE_TYPES[-1] == TYPE and len(IMAGE_TYPES) == 13
+def test_it_is_the_last_of_the_eight_image_types_and_the_message_lists_them():
+    assert IMAGE_TYPES[-1] == TYPE and len(IMAGE_TYPES) == 8
     assert TYPE_MESSAGE.endswith("chromatic-decay, rhythm-circles, chromatic-wireframe.")
 
 
@@ -190,7 +190,7 @@ def test_a_bad_rate_is_refused_before_the_file_is_read_even_without_a_file(clien
     assert r.status_code == 400 and r.json()["detail"] == RATE_MESSAGE
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "decay", "decay-exp", "polar-chords", "energy-graphs", "rhythm-circles"])
+@pytest.mark.parametrize("image_type", ["decay", "decay-exp", "polar-chords", "energy-graphs", "rhythm-circles"])
 def test_the_other_types_keep_their_own_range_and_message(client, image_type):
     for text in ("5", "10", "4.5", "0"):
         r = post(client, tiny(), image_type=image_type, decay_rate=text)
@@ -256,7 +256,7 @@ def test_the_other_image_types_never_reach_the_wireframe(tmp_path, monkeypatch):
     monkeypatch.setattr(fr, "write_wireframe_frames", refuse)
     values = np.zeros((3, 88))
     values[:, C4] = 2.0
-    for image_type in ("tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "chromatic-decay"):
+    for image_type in ("contour", "decay", "decay-exp", "polar-chords", "chromatic-decay"):
         write_frames(values, tmp_path / image_type, colormap=COLORMAP, image_type=image_type, beat=np.zeros(3))
 
 
@@ -267,7 +267,7 @@ SETTINGS = [
     {"decay_low": "2", "decay_medium": "2.5", "decay_high": "3", "decay_saturated": "1"},
     {"note_count": "20"},
     {"resolution": "3", "interpolate": "2", "gaussian": "1"},
-    {"polar_notes": "7", "blend_width": "15", "wave_count": "6"},
+    {"polar_notes": "7", "wave_count": "6"},
     {"beat_coloring": "true"},
 ]
 

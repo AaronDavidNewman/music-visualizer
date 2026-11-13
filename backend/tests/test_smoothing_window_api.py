@@ -18,7 +18,6 @@ from .test_jobs_api import (  # noqa: F401
 )
 
 MESSAGE = "The smoothing window must be a whole number from 1 to 20."
-NOTE = 36
 
 
 def post_window(client, data, **fields):
@@ -81,57 +80,12 @@ def test_with_smoothing_zero_every_window_gives_the_frames_of_no_smoothing(clien
             assert frame_bytes(client, job, i) == frame_bytes(client, plain, i), (w, i)
 
 
-@pytest.mark.parametrize("window", [1, 3, 6])
-def test_frames_are_the_windowed_average_of_each_note_and_a_stopped_note_is_exactly_gone(full_client, window):
-    data = burst_wav()
-    off = post_window(full_client, data).json()
-    last = int(np.flatnonzero(frame_values(off)[:, NOTE] > 0)[-1])  # the last frame in which the note has a value
-    job = post_window(full_client, data, smoothing="0.5", smoothing_window=str(window)).json()
-    assert job["smoothing"] == 0.5 and job["smoothing_window"] == window
-    expected = expected_pixels(job, 0.5, window=window)
-    for index in (0, 1, 2, 15, 29, last, last + 1, last + window, last + window + 1, last + window + 2):
-        assert np.array_equal(frame_levels(full_client, job, index), expected[index]), (window, index)
-    assert int(expected[last + window][NOTE]) > 0  # still visible on the last frame of the window
-    assert int(frame_levels(full_client, job, last + window)[NOTE]) > 0
-    assert int(frame_levels(full_client, job, last + window + 1)[NOTE]) == 0  # then exactly gone
-    assert (frame_levels(full_client, job, last + window + 1)[NOTE:] >= 0).all()
-
-
-def test_a_larger_window_keeps_a_stopped_note_visible_for_longer(full_client):
-    data = burst_wav()
-    visible_until = {}
-    for window in (1, 4, 8):
-        job = post_window(full_client, data, smoothing="0.5", smoothing_window=str(window)).json()
-        levels = [int(frame_levels(full_client, job, i)[NOTE]) for i in range(job["frame_count"])]
-        visible_until[window] = max(i for i, level in enumerate(levels) if level > 0)
-    assert visible_until[1] < visible_until[4] < visible_until[8]
-    assert visible_until[4] - visible_until[1] == 3 and visible_until[8] - visible_until[4] == 4
-
-
 def test_the_same_request_twice_gives_identical_frames(client):
     data = burst_wav()
     a = post_window(client, data, smoothing="0.6", smoothing_window="5").json()
     b = post_window(client, data, smoothing="0.6", smoothing_window="5").json()
     for i in (0, 20, 30, 40, 59):
         assert frame_bytes(client, a, i) == frame_bytes(client, b, i)
-
-
-def test_the_threshold_works_on_the_smoothed_values(client):
-    from .test_jobs_api import frame_levels, frame_rgb
-
-    data = burst_wav()
-    settings = dict(smoothing="0.8", smoothing_window="8")
-    off = post_window(client, data, threshold="0", **settings).json()
-    on = post_window(client, data, threshold="10", **settings).json()
-    expected = expected_pixels(off, 0.8, window=8)  # the table rows from the smoothed values, worked out independently
-    hidden = 0
-    for i in range(off["frame_count"]):
-        a, b = frame_rgb(client, off, i), frame_rgb(client, on, i)
-        black = ~b.any(axis=1)
-        assert (a[~black] == b[~black]).all(), i  # every tile is black or the tile without the threshold
-        assert (frame_levels(client, off, i) == expected[i]).all(), i  # the colours follow the smoothed strengths
-        hidden += int(black.sum())
-    assert hidden > 0
 
 
 def test_silence_at_the_end_differs_only_where_it_does_without_the_threshold(client):

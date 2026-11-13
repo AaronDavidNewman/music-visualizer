@@ -41,8 +41,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from .chromatic_decay import LETTERS, MAX_POINTS, _check_beat, _check_points, beat_distances, circle_radii, ring_geometry
-from .circles import _SAVE_WORKERS
 from .colormaps import COLORMAP_STEPS, check_colormap, lookup_table
+from .frame_saving import SAVE_WORKERS
 
 MARGIN = 10  # pixels between the plot and every edge of the picture
 AMPLITUDE_SHARE = 2 / 5  # the highest height of a line above its base (it is never below it: the waves are sine squared), as a share of the picture's height
@@ -239,6 +239,6 @@ def write_wireframe_frames(points, colormap: str, directory: Path, width: int, h
         picture = _frame(heights, colors, index, X, background, width, height)
         Image.fromarray(picture, "RGB").save(directory / f"frame_{index:06d}.png", compress_level=1)
 
-    with ThreadPoolExecutor(max_workers=_SAVE_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=SAVE_WORKERS) as pool:
         for future in [pool.submit(write, i) for i in range(points.shape[0])]:
             future.result()  # raises the first error of a worker, if there was one

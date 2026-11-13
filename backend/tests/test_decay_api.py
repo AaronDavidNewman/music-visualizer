@@ -7,7 +7,8 @@ import pytest
 
 import app.routers.jobs as jobs
 from app.services.colormaps import COLORMAPS, lookup_table
-from app.services.image_types import IMAGE_TYPES, tile_edges
+from app.services.image_types import IMAGE_TYPES
+from app.services.note_grid import tile_edges
 
 from .frame_size import HEIGHT, WIDTH
 from .test_jobs_api import SR, client, leftovers, note_tone, wav_bytes  # noqa: F401
@@ -41,9 +42,9 @@ def row_at(client, job, index, cell=TONE_NOTE) -> int:
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_decay_is_the_seventh_image_type_and_the_message_lists_all_thirteen():
-    assert IMAGE_TYPES[6] == "decay" and len(IMAGE_TYPES) == 13
-    assert TYPE_MESSAGE == "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe."
+def test_decay_is_the_second_image_type_and_the_message_lists_all_eight():
+    assert IMAGE_TYPES[1] == "decay" and len(IMAGE_TYPES) == 8
+    assert TYPE_MESSAGE == "The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe."
 
 
 @pytest.mark.parametrize("name", ["decays", "Decay", "decay ", "DECAY", ""])
@@ -63,7 +64,7 @@ def test_decay_is_accepted_and_echoed_with_every_colormap_and_the_defaults(clien
 
 
 def test_the_response_has_the_same_keys_as_for_the_other_types_and_decay_rate_is_in_all_of_them(client):
-    keys = set(post(client, tiny(), image_type="tiles").json())
+    keys = set(post(client, tiny(), image_type="contour").json())
     assert "decay_rate" in keys
     assert set(decay(client, tiny()).json()) == keys
 
@@ -71,7 +72,7 @@ def test_the_response_has_the_same_keys_as_for_the_other_types_and_decay_rate_is
 def test_the_frames_are_600_by_400_rgb_pictures_and_their_count_is_that_of_the_other_types(client):
     audio = pulse_wav(seconds=3.0)
     job = decay(client, audio).json()
-    tiles = post(client, audio, image_type="tiles").json()
+    tiles = post(client, audio, image_type="contour").json()
     assert job["frame_count"] == tiles["frame_count"] > 0
     assert picture(client, job, 0).shape == (HEIGHT, WIDTH, 3)
     assert picture(client, job, job["frame_count"] - 1).shape == (HEIGHT, WIDTH, 3)
@@ -100,7 +101,7 @@ def test_the_rate_is_checked_before_the_file_is_read(client):
     assert leftovers() == []
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric"])
+@pytest.mark.parametrize("image_type", ["contour"])
 def test_a_rate_sent_with_another_type_is_checked_echoed_and_has_no_effect(client, image_type):
     audio = tiny()
     plain = post(client, audio, image_type=image_type).json()
@@ -189,15 +190,14 @@ def test_the_settings_of_the_other_pictures_are_accepted_and_ignored(client):
     audio = pulse_wav(seconds=3.0)
     plain = all_frames(client, decay(client, audio).json())
     for fields in (
-        {"threshold": "5"}, {"note_count": "20"}, {"resolution": "3"}, {"interpolate": "3"}, {"gaussian": "2"}, {"blend_width": "10"},
-        {"circle_unit": "9"}, {"circle_memory": "100"}, {"circle_notes": "12"}, {"circle_radius": "8"}, {"circle_resize": "true"},
+        {"threshold": "5"}, {"note_count": "20"}, {"resolution": "3"}, {"interpolate": "3"}, {"gaussian": "2"},
     ):
         r = decay(client, audio, **fields)
         assert r.status_code == 200, (fields, r.text)
         assert all_frames(client, r.json()) == plain, fields
 
 
-@pytest.mark.parametrize("fields", [{"threshold": "11"}, {"note_count": "5"}, {"resolution": "6"}, {"interpolate": "9"}, {"gaussian": "-1"}, {"circle_notes": "99"}])
+@pytest.mark.parametrize("fields", [{"threshold": "11"}, {"note_count": "5"}, {"resolution": "6"}, {"interpolate": "9"}, {"gaussian": "-1"}])
 def test_those_settings_are_still_checked(client, fields):
     assert decay(client, tiny(), **fields).status_code == 400
 
@@ -279,7 +279,7 @@ def amount_message(level):
     return f"The {level} saturation decay must be a number from 0.5 to 3."
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"])
+@pytest.mark.parametrize("image_type", ["contour", "decay", "decay-exp", "polar-chords"])
 def test_the_defaults_are_reported_for_every_image_type(client, image_type):
     r = post(client, tiny(), image_type=image_type)
     assert r.status_code == 200, r.text
@@ -311,7 +311,7 @@ def test_the_amounts_are_checked_before_the_file_is_read(client, field, level):
     assert leftovers() == []
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric"])
+@pytest.mark.parametrize("image_type", ["contour"])
 def test_amounts_sent_with_another_type_are_checked_echoed_and_have_no_effect(client, image_type):
     audio = tiny()
     plain = post(client, audio, image_type=image_type).json()

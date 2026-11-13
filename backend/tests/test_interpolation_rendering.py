@@ -18,7 +18,7 @@ from .colormap_names import INVALID
 from .test_frame_interpolation import INTERPOLATE_MESSAGE
 from .test_resolution_rendering import rgb
 
-TYPES = ["tiles", "blended", "contour"]
+TYPES = ["contour"]
 
 
 def random_notes(frames=12, seed=1):
@@ -105,32 +105,24 @@ def counting(monkeypatch, target, attribute):
 
 @pytest.mark.parametrize("count", [1, 2, 3, 11, 12, 13, 31])
 @pytest.mark.parametrize("n", [1, 2, 3, 4, 5])
-def test_only_the_drawn_frames_are_drawn_tiles_blended_and_contour(tmp_path, monkeypatch, count, n):
+def test_only_the_drawn_frames_are_drawn_for_the_contour(tmp_path, monkeypatch, count, n):
     from matplotlib.axes import Axes
 
-    palette = counting(monkeypatch, frame_rendering, "_palette_frame")
-    blended = counting(monkeypatch, frame_rendering, "_save_blended")
     contour = counting(monkeypatch, Axes, "contourf")
     frames = random_notes(count, seed=n + count)
     expected = len(key_frames(count, n))
     multiples = len(range(0, count, n))
     assert expected == multiples + (0 if (count - 1) % n == 0 else 1)  # the formula of FR-009
-    for image_type, calls in (("tiles", palette), ("blended", blended), ("contour", contour)):
-        write(frames, tmp_path / image_type, image_type=image_type, interpolate=n)
-        assert len(calls) == expected, (image_type, n, count)
-
-
-@pytest.mark.parametrize("n", [2, 5])
-def test_only_the_drawn_true_color_tiles_are_drawn_at_a_finer_grid(tmp_path, monkeypatch, n):
-    from_array = counting(monkeypatch, Image, "fromarray")
-    write(random_notes(12, seed=2), tmp_path, resolution=2, interpolate=n)
-    assert len(from_array) == len(key_frames(12, n))
+    write(frames, tmp_path / "contour", image_type="contour", interpolate=n)
+    assert len(contour) == expected, (n, count)
 
 
 def test_three_hundred_frames_at_five_draw_sixty_one_pictures_the_users_example(tmp_path, monkeypatch):
-    palette = counting(monkeypatch, frame_rendering, "_palette_frame")
-    write(random_notes(300, seed=5), tmp_path, interpolate=5)
-    assert len(palette) == 60 + 1  # frames 1, 6, 11 ... 296 (counted from 1) and the last, 300
+    from matplotlib.axes import Axes
+
+    contour = counting(monkeypatch, Axes, "contourf")
+    write(random_notes(300, seed=5), tmp_path, image_type="contour", interpolate=5)
+    assert len(contour) == 60 + 1  # frames 1, 6, 11 ... 296 (counted from 1) and the last, 300
     assert key_frames(300, 5)[:3] == [0, 5, 10]
 
 
@@ -166,8 +158,6 @@ def test_the_last_gap_is_shorter_and_its_position_is_counted_within_it(tmp_path)
 
 
 def test_drawn_frames_keep_their_kind_and_in_between_frames_are_rgb(tmp_path):
-    write(random_notes(11, seed=7), tmp_path / "tiles", interpolate=5)
-    assert [Image.open(tmp_path / "tiles" / name(i)).mode for i in range(11)] == ["P"] + ["RGB"] * 4 + ["P"] + ["RGB"] * 4 + ["P"]
     write(random_notes(11, seed=7), tmp_path / "contour", image_type="contour", interpolate=5)
     modes = [Image.open(tmp_path / "contour" / name(i)).mode for i in range(11)]
     assert modes[0] == modes[5] == modes[10] == "RGBA" and set(modes[1:5]) == {"RGB"}

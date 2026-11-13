@@ -93,22 +93,6 @@ def test_submission_creates_frames_in_separate_dirs(client):
     assert not (frames_dir / "audio.wav").exists()
 
 
-def test_steady_note_has_one_brightest_square(client):
-    # Note 36 (440 Hz) reads spectrum position 40 at window 4096 / 44100 Hz. Use the tone exactly
-    # at the centre of that position so leakage into neighbouring positions is minimal.
-    audio = tone(40 * SR / 4096, 1.0)
-    job = post(client, wav_bytes(audio, audio)).json()
-    hits = sum(frame_levels(client, job, i).argmax() == 36 for i in range(job["frame_count"]))
-    assert hits / job["frame_count"] >= 0.95
-
-
-def test_loudest_note_reaches_white_somewhere(full_client):
-    audio = tone(440, 1.0)
-    job = post(full_client, wav_bytes(audio, audio)).json()
-    peak = max(frame_levels(full_client, job, i).max() for i in range(job["frame_count"]))
-    assert peak == 255
-
-
 def test_silent_file_gives_the_first_colour_of_the_colormap_in_every_tile(client):
     job = post(client, wav_bytes(np.zeros(SR), np.zeros(SR))).json()
     assert job["frame_count"] == 30
@@ -317,25 +301,6 @@ def test_same_settings_give_identical_frames(client):
         assert ra == rb
 
 
-def test_spacing_one_matches_consecutive_window_analysis(client):
-    """SC-002: spacing 1 gives the frames the application produced before spacing existed."""
-    from app.services.frame_rendering import average_frames, frame_count
-    from app.services.noise_floor import floor_analysis
-    from app.services.note_analysis import analyze_channels, read_wav
-
-    left, right = tone(440, 2.0), tone(660, 2.0)
-    job = post(client, wav_bytes(left, right), window="4096", spacing="1").json()
-    rate, l, r = read_wav(settings.audio_temp_dir / job["job_id"] / "audio.wav")
-    # consecutive windows: starts at multiples of the window size, the previous default behavior
-    result = analyze_channels(l, r, rate, 4096)
-    assert result.starts.tolist() == [i * 4096 for i in range(math.ceil(len(l) / 4096))]
-    # the job cuts the notes more than 60 dB below the loudest (feature 033) before the frames are averaged: the notes under the floor are 0 here too
-    values = average_frames(floor_analysis(result), 30, frame_count(len(l), rate, 30))
-    expected = np.rint(np.sqrt(values[:, :84] / values.max()) * 255).astype(int)
-    for index in (0, 7, 30, 59):
-        assert np.array_equal(frame_levels(client, job, index), expected[index])
-
-
 @pytest.mark.parametrize("spacing", [None, "", "   "])
 def test_missing_spacing_uses_the_default_44100(client, spacing):
     audio = tone(440, 3.0)
@@ -445,19 +410,6 @@ def note_tone(note, seconds=1.0, window=4096):
     return tone(NoteBinAnalyzer(SR, window).bin_indices[note] * SR / window, seconds)
 
 
-def tile_means(client, job, index):
-    """The table row of each tile as a 7 x 12 array, found from the pixels alone (rows = octaves, columns = notes)."""
-    return frame_levels(client, job, index).reshape(7, 12).astype(float)
-
-
-def brightest_tile_share(client, job, row, col):
-    hits = sum(
-        np.unravel_index(tile_means(client, job, i).argmax(), (7, 12)) == (row, col)
-        for i in range(job["frame_count"])
-    )
-    return hits / job["frame_count"]
-
-
 def test_frame_images_are_the_image_size_and_exactly_three_to_two(client):
     audio = tone(440, 0.5)
     job = post(client, wav_bytes(audio, audio)).json()
@@ -466,23 +418,6 @@ def test_frame_images_are_the_image_size_and_exactly_three_to_two(client):
         img = Image.open(io.BytesIO(r.content))
         assert img.size == (WIDTH, HEIGHT)
         assert img.size[0] * 2 == img.size[1] * 3
-
-
-@pytest.mark.parametrize("note, row, col", [(36, 3, 0), (48, 4, 0), (60, 5, 0), (83, 6, 11)])
-def test_a_steady_note_lights_the_tile_for_its_octave_and_note_name(full_client, note, row, col):
-    audio = note_tone(note)
-    job = post(full_client, wav_bytes(audio, audio)).json()
-    assert brightest_tile_share(full_client, job, row, col) >= 0.95
-
-
-def test_the_tile_below_a_lit_tile_is_the_next_octave(full_client):
-    """Note 36 is at row 3, column 0; note 48, an octave up (double the frequency), is directly below it."""
-    low = post(full_client, wav_bytes(*(2 * [note_tone(36)]))).json()
-    high = post(full_client, wav_bytes(*(2 * [note_tone(48)]))).json()
-    (r1, c1), (r2, c2) = (
-        np.unravel_index(tile_means(full_client, job, 5).argmax(), (7, 12)) for job in (low, high)
-    )
-    assert (r2, c2) == (r1 + 1, c1)
 
 
 def test_one_of_the_four_omitted_notes_leaves_no_visible_tile_at_full_white(client):
@@ -537,15 +472,6 @@ def burst_then_silence():
     return np.concatenate([note_tone(36, 1.0), np.zeros(SR)])
 
 
-def test_no_smoothing_means_zero_and_matches_the_unsmoothed_pipeline(full_client):
-    audio = burst_then_silence()
-    job = post(full_client, wav_bytes(audio, audio)).json()
-    assert job["smoothing"] == 0.0
-    expected = expected_pixels(job, 0)
-    for index in (0, 20, 29, 31, 40, 59):
-        assert np.array_equal(frame_levels(full_client, job, index), expected[index])
-
-
 @pytest.mark.parametrize("smoothing", ["0", "0.0", "-0.0"])
 def test_zero_smoothing_gives_byte_identical_frames_to_no_field(client, smoothing):
     audio = burst_then_silence()
@@ -557,32 +483,6 @@ def test_zero_smoothing_gives_byte_identical_frames_to_no_field(client, smoothin
         a = client.get(plain["frame_url_template"].replace("{index}", str(index))).content
         b = client.get(zero["frame_url_template"].replace("{index}", str(index))).content
         assert a == b
-
-
-def test_half_smoothing_gives_the_windowed_average_of_each_note(full_client):
-    audio = burst_then_silence()
-    job = post(full_client, wav_bytes(audio, audio), smoothing="0.5").json()
-    assert job["smoothing"] == 0.5
-    expected = expected_pixels(job, 0.5)
-    for index in (0, 1, 15, 29, 30, 31, 33, 40, 59):
-        assert np.array_equal(frame_levels(full_client, job, index), expected[index]), index
-
-
-def test_a_stopped_note_is_gone_one_frame_after_it_stops_with_the_default_window(full_client):
-    audio = burst_then_silence()
-    data = wav_bytes(audio, audio)
-    off = post(full_client, data).json()
-    last = int(np.flatnonzero(frame_values(off)[:, 36] > 0)[-1])  # the last frame in which the note has a value
-    assert 25 < last < 40
-    for s in ("0.5", "0.8"):
-        job = post(full_client, data, smoothing=s).json()
-        expected = expected_pixels(job, float(s))
-        assert int(frame_levels(full_client, job, last + 2)[36]) == 0  # exactly gone: no endless trace
-        assert int(expected[last + 2][36]) == 0
-        # the frame right after still shows the note, weakly, as the previous frame is mixed in
-        assert int(expected[last + 1][36]) > 0
-        assert np.array_equal(frame_levels(full_client, job, last + 1), expected[last + 1])
-    assert int(frame_levels(full_client, off, last + 1)[36]) == 0  # without smoothing it is already black
 
 
 def test_smoothing_does_not_change_counts_or_timing(client):
@@ -610,12 +510,6 @@ def test_the_same_smoothing_gives_identical_frames(client):
         ra = client.get(a["frame_url_template"].replace("{index}", str(index))).content
         rb = client.get(b["frame_url_template"].replace("{index}", str(index))).content
         assert ra == rb
-
-
-def test_the_loudest_smoothed_value_still_reaches_white(client):
-    audio = burst_then_silence()
-    job = post(client, wav_bytes(audio, audio), smoothing="0.8").json()
-    assert max(frame_levels(client, job, i).max() for i in range(job["frame_count"])) == 255
 
 
 @pytest.mark.parametrize("smoothing, expected", [("0.8", 0.8), ("0.35", 0.35), ("0.123456", 0.123456)])
@@ -666,18 +560,6 @@ def chord_wav(seconds=3):
     audio = sum(a * np.sin(2 * np.pi * f * t) for f, a in ((220, 0.5), (277.18, 0.35), (329.63, 0.3), (440, 0.2)))
     audio = audio * np.interp(t, [0, 1, 2, 3], [1.0, 0.3, 0.9, 0.05])
     return wav_bytes(0.8 * audio / np.abs(audio).max())
-
-
-def test_served_frames_are_rgb_images_of_the_same_size_and_shape(client):
-    audio = two_notes()
-    job = post(client, wav_bytes(audio, audio)).json()
-    for index in (0, job["frame_count"] - 1):
-        r = client.get(job["frame_url_template"].replace("{index}", str(index)))
-        img = Image.open(io.BytesIO(r.content))
-        assert img.mode in ("P", "RGB")  # saved as an indexed-colour PNG; it decodes to exact RGB values
-        assert np.asarray(img.convert("RGB")).shape == (HEIGHT, WIDTH, 3)
-        assert img.size == (WIDTH, HEIGHT)
-        assert img.size[0] * 2 == img.size[1] * 3
 
 
 def test_counts_and_timing_do_not_depend_on_colour(client):

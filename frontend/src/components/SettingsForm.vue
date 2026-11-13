@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import {
-  BLEND_WIDTH_RANGE,
   COLORMAPS,
   DEFAULT_COLORMAP,
   DEFAULT_BEAT_COLORING,
@@ -18,16 +17,10 @@ import {
   CHROMATIC_RATE_RANGE,
   DECAY_RATE_RANGE,
   NOTE_LAYOUTS,
-  DEFAULT_BLEND_WIDTH,
   DEFAULT_PEAK_DISTANCE,
   DEFAULT_PEAK_PROMINENCE,
   PEAK_DISTANCE_RANGE,
   PEAK_PROMINENCE_RANGE,
-  DEFAULT_CIRCLE_MEMORY,
-  DEFAULT_CIRCLE_NOTES,
-  DEFAULT_CIRCLE_RESIZE,
-  DEFAULT_CIRCLE_RADIUS,
-  DEFAULT_CIRCLE_UNIT,
   DEFAULT_IMAGE_TYPE,
   DEFAULT_GAUSSIAN,
   DEFAULT_INTERPOLATE,
@@ -37,10 +30,6 @@ import {
   DEFAULT_SMOOTHING_WINDOW,
   DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
-  CIRCLE_MEMORY_RANGE,
-  CIRCLE_NOTES_RANGE,
-  CIRCLE_RADIUS_RANGE,
-  CIRCLE_UNIT_RANGE,
   IMAGE_TYPES,
   GAUSSIAN_RANGE,
   INTERPOLATE_RANGE,
@@ -51,7 +40,6 @@ import {
   THRESHOLD_RANGE,
   WINDOW_SIZES,
   formatBeatColoring,
-  formatBlendWidth,
   formatDecayAmount,
   formatChromaticRate,
   formatDecayRate,
@@ -59,18 +47,12 @@ import {
   formatWaveCount,
   formatPeakDistance,
   formatPeakProminence,
-  formatCircleMemory,
-  formatCircleNotes,
-  formatCircleResize,
-  formatCircleRadius,
-  formatCircleUnit,
   formatGaussian,
   formatInterpolate,
   formatNoteCount,
   formatResolution,
   formatSmoothing,
   formatThreshold,
-  validateBlendWidth,
   validatePeakDistance,
   validateDecayAmount,
   validateChromaticRate,
@@ -84,10 +66,6 @@ import {
   validateColormap,
   validateFile,
   validateFrameRate,
-  validateCircleMemory,
-  validateCircleNotes,
-  validateCircleRadius,
-  validateCircleUnit,
   validateImageType,
   validateGaussian,
   validateInterpolate,
@@ -108,14 +86,8 @@ import {
   validateSpacing,
 } from "../utilities/spacing";
 import {
-  blendWidthHelp,
   colormapHelp,
   frameRateHelp,
-  circleMemoryHelp,
-  circleNotesHelp,
-  circleResizeHelp,
-  circleRadiusHelp,
-  circleUnitHelp,
   imageTypeHelp,
   gaussianHelp,
   beatColoringHelp,
@@ -152,16 +124,10 @@ const smoothing = ref<number>(DEFAULT_SMOOTHING);
 const smoothingWindowText = ref(String(DEFAULT_SMOOTHING_WINDOW));
 const threshold = ref<number>(DEFAULT_THRESHOLD);
 const imageType = ref<string>(props.initialImageType ?? DEFAULT_IMAGE_TYPE);
-const blendWidth = ref<number>(DEFAULT_BLEND_WIDTH);
 const resolution = ref<number>(DEFAULT_RESOLUTION);
 const noteCount = ref<number>(DEFAULT_NOTE_COUNT);
 const interpolate = ref<number>(DEFAULT_INTERPOLATE);
 const gaussian = ref<number>(DEFAULT_GAUSSIAN);
-const circleUnit = ref<number>(DEFAULT_CIRCLE_UNIT);
-const circleMemory = ref<number>(DEFAULT_CIRCLE_MEMORY);
-const circleNotes = ref<number>(DEFAULT_CIRCLE_NOTES);
-const circleRadius = ref<number>(DEFAULT_CIRCLE_RADIUS);
-const circleResize = ref<boolean>(DEFAULT_CIRCLE_RESIZE);
 const noteLayout = ref<string>(DEFAULT_NOTE_LAYOUT);
 const decayRate = ref<number>(DEFAULT_DECAY_RATE);
 const chromaticRate = ref<number>(DEFAULT_CHROMATIC_RATE); // the decay rate of Chromatic Decay (1 to 10): its own value, so each type keeps its own
@@ -193,16 +159,11 @@ const smoothingError = computed(() => validateSmoothing(smoothing.value));
 const smoothingWindowError = computed(() => validateSmoothingWindow(smoothingWindowText.value));
 const thresholdError = computed(() => validateThreshold(threshold.value));
 const imageTypeError = computed(() => validateImageType(imageType.value));
-const blendWidthError = computed(() => validateBlendWidth(blendWidth.value));
 const colormapError = computed(() => validateColormap(colormap.value));
 const resolutionError = computed(() => validateResolution(resolution.value));
 const noteCountError = computed(() => validateNoteCount(noteCount.value));
 const interpolateError = computed(() => validateInterpolate(interpolate.value));
 const gaussianError = computed(() => validateGaussian(gaussian.value));
-const circleUnitError = computed(() => validateCircleUnit(circleUnit.value));
-const circleMemoryError = computed(() => validateCircleMemory(circleMemory.value));
-const circleNotesError = computed(() => validateCircleNotes(circleNotes.value));
-const circleRadiusError = computed(() => validateCircleRadius(circleRadius.value));
 const noteLayoutError = computed(() => validateNoteLayout(noteLayout.value));
 const decayRateError = computed(() => validateDecayRate(decayRate.value));
 const chromaticRateError = computed(() => validateChromaticRate(chromaticRate.value));
@@ -221,16 +182,11 @@ const canSubmit = computed(
     !smoothingWindowError.value &&
     !thresholdError.value &&
     !imageTypeError.value &&
-    !blendWidthError.value &&
     !colormapError.value &&
     !resolutionError.value &&
     !noteCountError.value &&
     !interpolateError.value &&
     !gaussianError.value &&
-    !circleUnitError.value &&
-    !circleMemoryError.value &&
-    !circleNotesError.value &&
-    !circleRadiusError.value &&
     !noteLayoutError.value &&
     !decayRateError.value &&
     !chromaticRateError.value &&
@@ -243,12 +199,12 @@ const canSubmit = computed(
 
 // The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
 // shown. Every value stays in its ref, so it is kept when a group is folded or the type is changed, and is still sent.
-const TYPE_GROUP_IDS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"];
+const TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"];
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showDataSmoothing = computed(() => shownGroups.value.includes("data-smoothing")); // not for Energy graphs (feature 034)
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
-// the Local peaks group has one of two ids: local-peaks (Tiles, Blended tiles and Contour: with the checkbox) or concentric-peaks (Concentric, Decay and Decay Exp: without)
+// the Local peaks group has one of two ids: local-peaks (Contour: with the checkbox) or concentric-peaks (Decay, Decay Exp, Polar Chords, Chromatic Decay and Chromatic Wireframe: without; the id is from the first picture that had it)
 const showNoteLayout = computed(() => noteLayoutApplies(imageType.value));
 const peaksGroup = computed(() => shownGroups.value.find((id) => id === "local-peaks" || id === "concentric-peaks") ?? "");
 function inTypeGroup(control: string): boolean {
@@ -269,11 +225,6 @@ const typeGroupProblem = computed(
   () =>
     (inTypeGroup("threshold") && !!thresholdError.value) ||
     (inTypeGroup("notes") && !!noteCountError.value) ||
-    (inTypeGroup("blend-width") && !!blendWidthError.value) ||
-    (inTypeGroup("circle-unit") && !!circleUnitError.value) ||
-    (inTypeGroup("circle-radius") && !!circleRadiusError.value) ||
-    (inTypeGroup("circle-memory") && !!circleMemoryError.value) ||
-    (inTypeGroup("circle-notes") && !!circleNotesError.value) ||
     (inTypeGroup("decay-rate") && !!decayRateError.value) ||
     (inTypeGroup("chromatic-decay-rate") && !!chromaticRateError.value) ||
     (inTypeGroup("decay-low") && decayAmountErrors.value.some((e) => !!e)) ||
@@ -306,17 +257,11 @@ function onSubmit() {
     threshold: threshold.value,
     smoothingWindow: Number(smoothingWindowText.value),
     imageType: imageType.value,
-    blendWidth: blendWidth.value,
     colormap: colormap.value,
     resolution: resolution.value,
     noteCount: noteCount.value,
     interpolate: interpolate.value,
     gaussian: gaussian.value,
-    circleUnit: circleUnit.value,
-    circleMemory: circleMemory.value,
-    circleNotes: circleNotes.value,
-    circleRadius: circleRadius.value,
-    circleResize: circleResize.value,
     noteLayout: noteLayout.value,
     decayRate: isChromaticType(imageType.value) ? chromaticRate.value : decayRate.value,
     decayLow: decayAmounts.value[0],
@@ -418,7 +363,7 @@ function onSubmit() {
       </div>
     </SettingsGroup>
 
-    <!-- the group of the chosen image type: Tiles, Contour, Blended Tiles or Circles; a control that the type does not use is not shown -->
+    <!-- the group of the chosen image type (Contour, Decay, ...); a control that the type does not use is not shown -->
     <SettingsGroup
       v-if="typeGroup"
       :id="typeGroup"
@@ -461,105 +406,6 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="noteCountError" class="error">{{ noteCountError }}</small>
-      </div>
-
-      <div v-if="inTypeGroup('blend-width')" class="field">
-        <div class="field-head">
-          <label for="blend-width">Blend width</label>
-          <InfoPopover label="blend width" :text="blendWidthHelp" />
-          <output class="slider-value" for="blend-width">{{ formatBlendWidth(blendWidth) }}</output>
-        </div>
-        <input
-          id="blend-width"
-          v-model.number="blendWidth"
-          type="range"
-          :min="BLEND_WIDTH_RANGE.min"
-          :max="BLEND_WIDTH_RANGE.max"
-          :step="BLEND_WIDTH_RANGE.step"
-          :disabled="busy"
-        />
-        <small v-if="blendWidthError" class="error">{{ blendWidthError }}</small>
-      </div>
-
-      <div v-if="inTypeGroup('circle-unit')" class="field">
-        <div class="field-head">
-          <label for="circle-unit">Movement</label>
-          <InfoPopover label="circle movement" :text="circleUnitHelp" />
-          <output class="slider-value" for="circle-unit">{{ formatCircleUnit(circleUnit) }}</output>
-        </div>
-        <input
-          id="circle-unit"
-          v-model.number="circleUnit"
-          type="range"
-          :min="CIRCLE_UNIT_RANGE.min"
-          :max="CIRCLE_UNIT_RANGE.max"
-          :step="CIRCLE_UNIT_RANGE.step"
-          :disabled="busy"
-        />
-        <small v-if="circleUnitError" class="error">{{ circleUnitError }}</small>
-      </div>
-
-      <div v-if="inTypeGroup('circle-radius')" class="field">
-        <div class="field-head">
-          <label for="circle-radius">Radius</label>
-          <InfoPopover label="circle radius" :text="circleRadiusHelp" />
-          <output class="slider-value" for="circle-radius">{{ formatCircleRadius(circleRadius) }}</output>
-        </div>
-        <input
-          id="circle-radius"
-          v-model.number="circleRadius"
-          type="range"
-          :min="CIRCLE_RADIUS_RANGE.min"
-          :max="CIRCLE_RADIUS_RANGE.max"
-          :step="CIRCLE_RADIUS_RANGE.step"
-          :disabled="busy"
-        />
-        <small v-if="circleRadiusError" class="error">{{ circleRadiusError }}</small>
-      </div>
-
-      <div v-if="inTypeGroup('circle-resize')" class="field">
-        <div class="field-head">
-          <label for="circle-resize">Resize by volume</label>
-          <InfoPopover label="resize by volume" :text="circleResizeHelp" />
-          <output class="slider-value" for="circle-resize">{{ formatCircleResize(circleResize) }}</output>
-        </div>
-        <input id="circle-resize" v-model="circleResize" type="checkbox" :disabled="busy" />
-      </div>
-
-      <div v-if="inTypeGroup('circle-memory')" class="field">
-        <div class="field-head">
-          <label for="circle-memory">Memory</label>
-          <InfoPopover label="circle memory" :text="circleMemoryHelp" />
-          <output class="slider-value" for="circle-memory">{{ formatCircleMemory(circleMemory) }}</output>
-        </div>
-        <input
-          id="circle-memory"
-          v-model.number="circleMemory"
-          type="range"
-          :min="CIRCLE_MEMORY_RANGE.min"
-          :max="CIRCLE_MEMORY_RANGE.max"
-          :step="CIRCLE_MEMORY_RANGE.step"
-          :disabled="busy"
-        />
-        <small v-if="circleMemoryError" class="error">{{ circleMemoryError }}</small>
-      </div>
-
-      <div v-if="inTypeGroup('circle-notes')" class="field">
-        <div class="field-head">
-          <label for="circle-notes">Notes</label>
-          <InfoPopover label="circle notes" :text="circleNotesHelp" />
-          <output class="slider-value" for="circle-notes">{{ formatCircleNotes(circleNotes) }}</output>
-        </div>
-        <input
-          id="circle-notes"
-          v-model.number="circleNotes"
-          type="range"
-          :min="CIRCLE_NOTES_RANGE.min"
-          :max="CIRCLE_NOTES_RANGE.max"
-          :step="CIRCLE_NOTES_RANGE.step"
-          :disabled="busy"
-        />
-        <small v-if="circleNotesError" class="error">{{ circleNotesError }}</small>
       </div>
 
       <div v-if="inTypeGroup('polar-notes')" class="field">

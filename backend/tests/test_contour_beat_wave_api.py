@@ -15,7 +15,7 @@ from .test_resolution_api import picture, tiny
 MESSAGE = "The wave count must be a whole number from 2 to 10."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
 PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent."
-OTHER_TYPES = ["tiles", "blended", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"]
+OTHER_TYPES = ["decay", "decay-exp", "polar-chords"]
 
 
 def contour(client, data=None, **fields):
@@ -25,7 +25,7 @@ def contour(client, data=None, **fields):
 # --- the field -----------------------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"])
+@pytest.mark.parametrize("image_type", ["contour", "decay", "decay-exp", "polar-chords"])
 def test_the_default_is_4_and_is_reported_for_every_image_type(client, image_type):
     r = post(client, tiny(), image_type=image_type)
     assert r.status_code == 200, r.text
@@ -63,7 +63,7 @@ def test_a_count_sent_with_another_type_is_checked_echoed_and_has_no_effect(clie
 
 
 def test_the_response_has_the_same_keys_for_contour_as_for_the_other_types(client):
-    keys = set(post(client, tiny(), image_type="tiles").json())
+    keys = set(post(client, tiny(), image_type="contour").json())
     assert "wave_count" in keys
     assert set(contour(client, tiny()).json()) == keys
 
@@ -142,7 +142,7 @@ def test_the_minimum_distance_and_the_prominence_change_the_frames_with_the_box_
 def test_the_frames_are_600_by_400_rgb_pictures_and_their_count_is_that_of_the_other_types(client):
     audio = pulse_wav(seconds=3.0)
     job = contour(client, audio, beat_coloring="true").json()
-    tiles = post(client, audio, image_type="tiles").json()
+    tiles = post(client, audio, image_type="contour").json()
     assert job["frame_count"] == tiles["frame_count"] > 0
     assert picture(client, job, 0).shape == (HEIGHT, WIDTH, 3)
     assert picture(client, job, job["frame_count"] - 1).shape == (HEIGHT, WIDTH, 3)
@@ -163,7 +163,7 @@ def test_the_other_settings_still_apply_with_the_wave(client):
         assert all_frames(client, r.json()) != base, fields
 
 
-@pytest.mark.parametrize("fields", [{"note_layout": "spiral"}, {"decay_rate": "2"}, {"circle_unit": "9"}, {"circle_notes": "12"}])
+@pytest.mark.parametrize("fields", [{"note_layout": "spiral"}, {"decay_rate": "2"}])
 def test_the_settings_of_the_other_pictures_are_accepted_and_ignored_by_contour(client, fields):
     audio = pulse_wav(seconds=3.0)
     plain = all_frames(client, contour(client, audio, beat_coloring="true").json())

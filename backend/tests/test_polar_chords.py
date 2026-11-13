@@ -1,6 +1,5 @@
 """The bars of the ``polar-chords`` picture: the setting, the notes, the chord and its place, the lengths (feature 032)."""
 
-import itertools
 import math
 
 import numpy as np
@@ -63,9 +62,9 @@ def test_the_constants():
     assert len(POLAR_CHORD_TYPES) * CHORD_ROOTS == CHORD_ARCS  # one arc for each chord type on each of the 12 letters
 
 
-def test_polar_chords_is_the_ninth_image_type():
-    assert IMAGE_TYPES[8] == "polar-chords" and len(IMAGE_TYPES) == 13  # Energy Graphs (feature 034) Chromatic Decay (feature 035) and Rhythm Circles (feature 038) follow
-    assert IMAGE_TYPES[7] == "decay-exp"
+def test_polar_chords_is_the_fourth_image_type():
+    assert IMAGE_TYPES[3] == "polar-chords" and len(IMAGE_TYPES) == 8  # Energy Graphs, Chromatic Decay, Rhythm Circles and Chromatic Wireframe follow
+    assert IMAGE_TYPES[2] == "decay-exp"
 
 
 # ---- the bars of the notes ---------------------------------------------------------------------------------------------------------------

@@ -96,8 +96,8 @@ def expected_turns(peaks, job):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_rhythm_circles_is_the_twelfth_image_type_and_the_message_lists_all_thirteen():
-    assert IMAGE_TYPES[11] == "rhythm-circles" and len(IMAGE_TYPES) == 13
+def test_rhythm_circles_is_the_seventh_image_type_and_the_message_lists_all_eight():
+    assert IMAGE_TYPES[6] == "rhythm-circles" and len(IMAGE_TYPES) == 8
     assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe.")
 
 
@@ -166,7 +166,7 @@ def test_the_local_peaks_settings_are_the_ones_the_peaks_are_measured_with_and_t
     assert spy.calls == [(700, 30), (DEFAULT_MIN_DISTANCE, DEFAULT_PROMINENCE)]
 
 
-@pytest.mark.parametrize("image_type, measurements", [("tiles", 0), ("energy-graphs", 0), ("decay", 1), ("decay-exp", 1), ("concentric", 1), ("polar-chords", 1), ("chromatic-decay", 1), ("chromatic-wireframe", 1), ("rhythm-circles", 1)])
+@pytest.mark.parametrize("image_type, measurements", [("energy-graphs", 0), ("contour", 0), ("decay", 1), ("decay-exp", 1), ("polar-chords", 1), ("chromatic-decay", 1), ("chromatic-wireframe", 1), ("rhythm-circles", 1)])
 def test_the_rhythm_is_measured_for_this_type_only_and_never_a_second_time(client, monkeypatch, image_type, measurements):
     spy = Spy(monkeypatch)
     assert post(client, tiny(), image_type=image_type).status_code == 200
@@ -248,8 +248,7 @@ def test_the_settings_that_do_not_apply_are_accepted_and_change_nothing(client):
         client,
         pulse_wav(),
         smoothing="0.5", smoothing_window="4", threshold="7", note_count="40", resolution="2", interpolate="2", gaussian="2",
-        note_layout="spiral", decay_rate="3", polar_notes="6", circle_unit="5", circle_memory="300", circle_notes="8", circle_radius="6",
-        circle_resize="true", wave_count="3", beat_coloring="true", blend_width="15",
+        note_layout="spiral", decay_rate="3", polar_notes="6", wave_count="3", beat_coloring="true",
     )
     assert other.status_code == 200, other.text
     other = other.json()

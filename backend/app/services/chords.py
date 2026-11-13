@@ -40,7 +40,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .concentric import NOTES
+from .note_grid import NOTES
 from .noise_floor import apply_noise_floor
 from .note_selection import check_note_count, top_energy_notes
 

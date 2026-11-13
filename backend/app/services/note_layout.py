@@ -1,6 +1,6 @@
 """Which of the 84 drawn notes is drawn in which cell of the 12 x 7 grid: the ``rows`` layout and the ``spiral`` layout.
 
-The pictures that draw one shape per note (the tiles, the blended tiles and the concentric circles) take the note values of a
+The pictures that draw one shape per note (the decay circles and the polar bars) take the note values of a
 frame in **cell order**: value ``i`` is for the cell at row ``i // 12`` and column ``i % 12``, counted from the top left. This
 module decides which note that is.
 
@@ -15,7 +15,7 @@ module decides which note that is.
   Because a walker skips cells that are off the grid or taken, 13 semitone steps are not between neighbouring cells.
 
 The layout does not depend on the music. Only the order of the values changes (:func:`arrange_notes`): everything that is done with
-them afterwards (the threshold, the colors, the interpolation to a finer grid, the blend of tiles, the circles) works on cells, so
+them afterwards (the points of the circles, the neighbours that they give to) works on cells, so
 it works as before.
 """
 

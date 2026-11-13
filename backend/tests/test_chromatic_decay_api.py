@@ -60,8 +60,8 @@ def color_at_position(image, position):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_chromatic_decay_is_the_eleventh_image_type_and_the_message_lists_it():
-    assert IMAGE_TYPES[10] == "chromatic-decay" and len(IMAGE_TYPES) == 13
+def test_chromatic_decay_is_the_sixth_image_type_and_the_message_lists_it():
+    assert IMAGE_TYPES[5] == "chromatic-decay" and len(IMAGE_TYPES) == 8
     assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe.")
 
 
@@ -116,7 +116,7 @@ def test_a_bad_rate_is_refused_before_the_file_is_read_even_without_a_file(clien
     assert r.status_code == 400 and r.json()["detail"] == RATE_MESSAGE
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "decay", "decay-exp", "polar-chords", "energy-graphs"])
+@pytest.mark.parametrize("image_type", ["decay", "decay-exp", "polar-chords", "energy-graphs"])
 def test_the_other_types_keep_their_own_range_and_message(client, image_type):
     for text in ("5", "10", "4.5", "0"):
         r = post(client, tiny(), image_type=image_type, decay_rate=text)
@@ -183,7 +183,7 @@ def test_the_beat_is_measured_for_this_type_with_the_local_peaks_settings_and_no
     monkeypatch.setattr(jobs, "measure_local_peaks", spy)
     assert chromatic(client, tiny(), peak_distance="700", peak_prominence="30").status_code == 200
     assert calls == [(700, 30)]
-    assert post(client, tiny(), image_type="tiles").status_code == 200
+    assert post(client, tiny(), image_type="contour").status_code == 200
     assert calls == [(700, 30)]  # Tiles without the beat coloring never measures it
 
 
@@ -247,7 +247,7 @@ SETTINGS = [
     {"decay_low": "2", "decay_medium": "2.5", "decay_high": "3", "decay_saturated": "1"},
     {"note_count": "20"},  # (the threshold applies to this type since feature 037)
     {"resolution": "3", "interpolate": "2", "gaussian": "1"},
-    {"polar_notes": "7", "blend_width": "15", "wave_count": "6"},
+    {"polar_notes": "7", "wave_count": "6"},
     {"beat_coloring": "true"},
 ]
 

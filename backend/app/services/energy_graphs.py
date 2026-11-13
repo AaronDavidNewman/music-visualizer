@@ -33,8 +33,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from .circles import _SAVE_WORKERS, MIDDLE_COLOR_ROW
-from .colormaps import COLORMAP_STEPS, check_colormap, lookup_table
+from .colormaps import COLORMAP_STEPS, MIDDLE_COLOR_ROW, check_colormap, lookup_table
+from .frame_saving import SAVE_WORKERS
 from .note_analysis import AnalysisResult
 
 NOTES = 84  # the bars of the histogram: the 84 piano notes (the first 84 of the 88 note values)
@@ -278,6 +278,6 @@ def write_energy_frames(data: EnergyGraphData, colormap: str, directory: Path, w
     def write(index: int) -> None:
         _frame((frequency[index], amplitude[index]), base, layout, table).save(directory / f"frame_{index:06d}.png", compress_level=1)
 
-    with ThreadPoolExecutor(max_workers=_SAVE_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=SAVE_WORKERS) as pool:
         for future in [pool.submit(write, i) for i in range(data.frame_count)]:
             future.result()  # raises the first error of a worker, if there was one

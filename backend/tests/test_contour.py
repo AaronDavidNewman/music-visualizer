@@ -351,22 +351,6 @@ def test_bad_arguments_are_refused_before_anything_is_written(tmp_path):
     assert not (tmp_path / "out").exists()
 
 
-def test_the_blend_width_has_no_effect_on_a_contour(tmp_path):
-    frames = np.random.default_rng(2).random((3, 88)) ** 2
-    a = contour(frames, tmp_path / "a", blend_width=10)
-    b = contour(frames, tmp_path / "b", blend_width=25)
-    assert [f.read_bytes() for f in a] == [f.read_bytes() for f in b]
-
-
-def test_drawing_a_contour_does_not_change_the_tiles_or_blended_pictures_made_afterwards(tmp_path):
-    frames = np.random.default_rng(3).random((4, 88)) ** 2
-    before = {t: [f.read_bytes() for f in (write_frames(frames, tmp_path / f"b{t}", image_type=t), sorted((tmp_path / f"b{t}").glob("*.png")))[1]] for t in ("tiles", "blended")}
-    contour(frames, tmp_path / "c")
-    for t in ("tiles", "blended"):
-        write_frames(frames, tmp_path / f"a{t}", image_type=t)
-        assert [f.read_bytes() for f in sorted((tmp_path / f"a{t}").glob("*.png"))] == before[t]
-
-
 def test_matplotlib_is_imported_only_when_a_contour_is_drawn():
     code = (
         "import sys, tempfile, pathlib, numpy as np\n"
@@ -376,7 +360,7 @@ def test_matplotlib_is_imported_only_when_a_contour_is_drawn():
         "d = pathlib.Path(tempfile.mkdtemp())\n"
         "f = np.random.default_rng(1).random((2, 88))\n"
         "a = p()\n"
-        "write_frames(f, d / 't', image_type='tiles'); write_frames(f, d / 'b', image_type='blended')\n"
+        "write_frames(f, d / 't', image_type='decay'); write_frames(f, d / 'b', image_type='polar-chords')\n"
         "b = p()\n"
         "write_frames(f, d / 'c', image_type='contour')\n"
         "print(a, b, p())\n"

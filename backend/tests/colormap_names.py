@@ -30,8 +30,6 @@ def has_black(name: str) -> bool:
 DECODABLE = [name for name in COLORMAPS if distinct_rows(name) == 256]
 # the colormaps without pure black: a black tile is then always a hidden one
 WITHOUT_BLACK = [name for name in COLORMAPS if not has_black(name)]
-# the colormaps that are both: a tile's row can be decoded and a black tile is a hidden one
-TRACEABLE = [name for name in DECODABLE if name in WITHOUT_BLACK]
 
 
 def not_offered(candidates):

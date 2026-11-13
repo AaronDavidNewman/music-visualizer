@@ -33,9 +33,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .circles import _SAVE_WORKERS, MIDDLE_COLOR_ROW
-from .colormaps import COLORMAP_STEPS, check_beat, check_colormap, lookup_table
-from .concentric import NOTES, RINGS, _check_values
+from .colormaps import COLORMAP_STEPS, MIDDLE_COLOR_ROW, check_beat, check_colormap, lookup_table
+from .frame_saving import SAVE_WORKERS
+from .note_grid import NOTES, RINGS, _check_values
 from .decay import BEAT_BONUS, GAINS, MAX_POINTS, NEGLIGIBLE, SIZE_POINTS, SMALLEST, ring_colors
 from .decay_exp import FULL_POINTS, TAPER, exp_loss_per_frame, next_taper, taper_of
 
@@ -441,6 +441,6 @@ def write_chromatic_frames(points, colormap: str, directory: Path, width: int, h
         picture = _frame(points[index], colormap, background, geometry, width, height, None if targets is None else targets[index])
         Image.fromarray(picture, "RGB").save(directory / f"frame_{index:06d}.png", compress_level=1)
 
-    with ThreadPoolExecutor(max_workers=_SAVE_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=SAVE_WORKERS) as pool:
         for future in [pool.submit(write, i) for i in range(points.shape[0])]:
             future.result()  # raises the first error of a worker, if there was one

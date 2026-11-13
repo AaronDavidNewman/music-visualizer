@@ -50,10 +50,10 @@ def chord(seconds=3.0):
 # --- choosing it --------------------------------------------------------------------------------------------------------------
 
 
-def test_polar_chords_is_the_ninth_image_type_and_the_message_lists_all_thirteen():
-    assert IMAGE_TYPES[8] == "polar-chords" and len(IMAGE_TYPES) == 13
+def test_polar_chords_is_the_fourth_image_type_and_the_message_lists_all_eight():
+    assert IMAGE_TYPES[3] == "polar-chords" and len(IMAGE_TYPES) == 8
     assert TYPE_MESSAGE == (
-        "The image type must be one of tiles, blended, contour, circles, circles_paint, concentric, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe."
+        "The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe."
     )
 
 
@@ -74,7 +74,7 @@ def test_polar_chords_is_accepted_and_echoed_with_every_colormap_and_the_default
 
 
 def test_the_response_has_the_same_keys_as_for_the_other_types_and_polar_notes_is_in_all_of_them(client):
-    keys = set(post(client, tiny(), image_type="tiles").json())
+    keys = set(post(client, tiny(), image_type="contour").json())
     assert "polar_notes" in keys
     assert set(polar(client, tiny()).json()) == keys
 
@@ -82,7 +82,7 @@ def test_the_response_has_the_same_keys_as_for_the_other_types_and_polar_notes_i
 def test_the_frames_are_600_by_400_rgb_pictures_and_their_count_is_that_of_the_other_types(client):
     audio = pulse_wav(seconds=3.0)
     job = polar(client, audio).json()
-    tiles = post(client, audio, image_type="tiles").json()
+    tiles = post(client, audio, image_type="contour").json()
     assert job["frame_count"] == tiles["frame_count"] > 0
     assert picture(client, job, 0).shape == (HEIGHT, WIDTH, 3)
     assert picture(client, job, job["frame_count"] - 1).shape == (HEIGHT, WIDTH, 3)
@@ -111,7 +111,7 @@ def test_notes_shown_is_checked_before_the_file_is_read(client):
     assert leftovers() == []
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp"])
+@pytest.mark.parametrize("image_type", ["contour", "decay", "decay-exp"])
 def test_notes_shown_sent_with_another_type_is_checked_echoed_and_has_no_effect(client, image_type):
     audio = tiny()
     plain = post(client, audio, image_type=image_type).json()
@@ -226,8 +226,7 @@ def test_the_settings_of_the_other_pictures_are_accepted_and_ignored(client):
     audio = pulse_wav(seconds=3.0)
     plain = all_frames(client, polar(client, audio).json())
     for fields in (
-        {"threshold": "5"}, {"note_count": "20"}, {"resolution": "3"}, {"interpolate": "3"}, {"gaussian": "2"}, {"blend_width": "10"},
-        {"circle_unit": "9"}, {"circle_memory": "100"}, {"circle_notes": "12"}, {"circle_radius": "8"}, {"circle_resize": "true"},
+        {"threshold": "5"}, {"note_count": "20"}, {"resolution": "3"}, {"interpolate": "3"}, {"gaussian": "2"},
         {"decay_rate": "2"}, {"decay_low": "3"}, {"wave_count": "7"},
     ):
         r = polar(client, audio, **fields)
@@ -235,7 +234,7 @@ def test_the_settings_of_the_other_pictures_are_accepted_and_ignored(client):
         assert all_frames(client, r.json()) == plain, fields
 
 
-@pytest.mark.parametrize("fields", [{"threshold": "11"}, {"note_count": "5"}, {"resolution": "6"}, {"interpolate": "9"}, {"gaussian": "-1"}, {"circle_notes": "99"}, {"note_layout": "Spiral"}, {"decay_rate": "5"}])
+@pytest.mark.parametrize("fields", [{"threshold": "11"}, {"note_count": "5"}, {"resolution": "6"}, {"interpolate": "9"}, {"gaussian": "-1"}, {"note_layout": "Spiral"}, {"decay_rate": "5"}])
 def test_those_settings_are_still_checked(client, fields):
     assert polar(client, tiny(), **fields).status_code == 400
 

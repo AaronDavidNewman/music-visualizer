@@ -38,8 +38,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .circles import _SAVE_WORKERS, MIDDLE_COLOR_ROW
-from .colormaps import COLORMAP_STEPS, check_colormap, lookup_table
+from .colormaps import COLORMAP_STEPS, MIDDLE_COLOR_ROW, check_colormap, lookup_table
+from .frame_saving import SAVE_WORKERS
 from .local_peaks import DEFAULT_RATE, LocalPeaks
 
 AGGREGATE_PERIODS = (2, 4, 8)  # the peaks that the aggregated-tempo layers look back over; the tempo is the layer of 1 peak
@@ -249,6 +249,6 @@ def write_rhythm_frames(data: RhythmData, colormap: str, directory: Path, width:
         picture = _frame(angles[frame], background, rings, notches, geometry, width, height)
         Image.fromarray(picture, "RGB").save(directory / f"frame_{frame:06d}.png", compress_level=1)
 
-    with ThreadPoolExecutor(max_workers=_SAVE_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=SAVE_WORKERS) as pool:
         for future in [pool.submit(write, i) for i in range(angles.shape[0])]:
             future.result()  # raises the first error of a worker, if there was one

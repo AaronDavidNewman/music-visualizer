@@ -1,22 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
-  blendWidthHelp,
   chromaticRateHelp,
   colormapHelp,
   frameRateHelp,
   imageTypeHelp,
   gaussianHelp,
   interpolateHelp,
-  circleMemoryHelp,
-  circleResizeHelp,
-  circleRadiusHelp,
-  circleNotesHelp,
   decayAmountHelp,
   decayExpRateHelp,
   decayRateHelp,
   polarNotesHelp,
   waveCountHelp,
-  circleUnitHelp,
   noteCountHelp,
   resolutionHelp,
   smoothingHelp,
@@ -44,11 +38,11 @@ describe("setting explanations", () => {
     );
   });
 
-  it("explains the threshold: not drawn below it (black for Tiles, the background for Blended tiles), a share of the loudest note in the file, left end off, right end 10%", () => {
+  it("explains the threshold: not drawn below it (the value is 0 in the contour), a share of the loudest note in the file, left end off, right end 10%", () => {
     expect(thresholdHelp).toContain("is not drawn");
-    expect(thresholdHelp).toContain("Tiles its tile is black");
-    expect(thresholdHelp).toContain("Blended tiles");
-    expect(thresholdHelp).toContain("middle color of the colormap");
+    expect(thresholdHelp).toContain("with Contour its value is 0");
+    expect(thresholdHelp).not.toContain("Tiles");
+    expect(thresholdHelp).not.toContain("Blended");
     expect(thresholdHelp).toContain("loudest note in the whole file");
     expect(thresholdHelp).toContain("left end");
     expect(thresholdHelp).toContain("off");
@@ -74,36 +68,21 @@ describe("setting explanations", () => {
     expect(gaussianHelp).toContain("0 is off");
     expect(gaussianHelp).toContain("3:2");
     expect(gaussianHelp).toContain("6 pixels across and 4 down"); // the example of a setting of 4
-    expect(gaussianHelp).toContain("Only used by");
-    expect(gaussianHelp).toContain("Tiles");
+    expect(gaussianHelp).toContain("Only used by Contour");
+    expect(gaussianHelp).not.toContain("Tiles");
   });
 
-  it("explains Circles paint: no memory, a copy of the previous picture, solid circles that never fade", () => {
-    expect(imageTypeHelp).toContain("Circles paint:");
-    expect(imageTypeHelp).toContain("no memory");
-    expect(imageTypeHelp).toContain("previous");
-    expect(imageTypeHelp).toContain("solid");
-    expect(imageTypeHelp).toContain("never fade");
+  it("does not describe the five kinds of picture that were removed", () => {
+    expect(imageTypeHelp).not.toMatch(/(^|\. )(Tiles|Blended tiles|Circles|Circles paint|Concentric): /);
+    expect(imageTypeHelp).not.toContain("like Concentric");
   });
 
-  it("explains the four image types", () => {
-    expect(imageTypeHelp).toContain("Tiles:");
-    expect(imageTypeHelp).toContain("flat");
-    expect(imageTypeHelp).toContain("hard edges");
-    expect(imageTypeHelp).toContain("Blended tiles:");
-    expect(imageTypeHelp).toContain("fade into each other");
-    expect(imageTypeHelp).toContain("Contour:");
+  it("explains the image types that are left, starting with the contour", () => {
+    expect(imageTypeHelp.startsWith("Contour:")).toBe(true);
     expect(imageTypeHelp).toContain("contour map");
-    expect(imageTypeHelp).toContain("Circles:");
-    expect(imageTypeHelp).toContain("circles");
+    for (const kept of ["Decay:", "Decay Exp:", "Polar Chords:", "Energy graphs:", "Chromatic Decay:", "Rhythm Circles:", "Chromatic Wireframe:"]) expect(imageTypeHelp).toContain(kept);
   });
 
-  it("explains the blend width: the reach on each side of an edge, as a share of a tile, the range, and where it applies", () => {
-    expect(blendWidthHelp).toContain("10 to 25");
-    expect(blendWidthHelp).toContain("each side of an edge");
-    expect(blendWidthHelp).toContain("percentage of a tile");
-    expect(blendWidthHelp).toContain("Only used by Blended tiles");
-  });
 
   it("explains the colormap: what the four scales look like and that the same strength always gets the same color", () => {
     expect(colormapHelp).toContain("same strength always gets the same color");
@@ -115,13 +94,15 @@ describe("setting explanations", () => {
 });
 
 describe("resolution explanation", () => {
-  it("explains the interpolation, the original grid, the highest value and the smaller tiles", () => {
+  it("explains the interpolation, the original grid, the highest value and the finer contour", () => {
     expect(resolutionHelp).toContain("interpolat");
     expect(resolutionHelp).toContain("12 \u00d7 7");
     expect(resolutionHelp).toContain("5\u00d7");
     expect(resolutionHelp).toContain("60 \u00d7 35");
-    expect(resolutionHelp).toContain("smaller tiles");
-    expect(resolutionHelp).toContain("contour");
+    expect(resolutionHelp).toContain("finer steps");
+    expect(resolutionHelp).toContain("Oversampling");
+    expect(resolutionHelp).not.toMatch(/\bResolution\b/);
+    expect(resolutionHelp).toContain("Only used by Contour");
   });
 });
 
@@ -150,48 +131,15 @@ describe("interpolation explanation", () => {
   });
 });
 
-describe("circles explanations", () => {
-  it("explains the unit in pixels, the memory of the last circles, and how many of the strongest notes put a circle down", () => {
-    expect(circleUnitHelp).toContain("1 to 10");
-    expect(circleUnitHelp).toContain("pixels");
-    expect(circleMemoryHelp).toContain("100 to 500");
-    expect(circleMemoryHelp).toContain("oldest");
-    expect(circleNotesHelp).toContain("5 to 12");
-    expect(circleNotesHelp).toContain("strongest");
-  });
-
-  it("explains the size as the circumference, apart from the step, and the fading of old circles", () => {
-    expect(circleRadiusHelp).toContain("4 to 8");
-    for (const text of [circleUnitHelp, circleRadiusHelp]) {
-      expect(text).toContain("252 pixels wide"); // what the number is measured against
-      expect(text).toContain("2.4 times");
-    }
-    expect(circleRadiusHelp).toContain("radius");
-    expect(circleRadiusHelp).not.toContain("circumference");
-    expect(circleUnitHelp).toContain("Movement");
-    expect(circleUnitHelp).not.toMatch(/\bUnit\b/);
-    expect(resolutionHelp).toContain("Oversampling");
-    expect(resolutionHelp).not.toMatch(/\bResolution\b/);
-    expect(circleNotesHelp).toContain("Notes");
-    expect(circleUnitHelp).toContain("stays in place");
-    expect(circleResizeHelp).toContain("three times");
-    expect(circleResizeHelp).toContain("no circle is smaller");
-    expect(circleResizeHelp).not.toContain("half");
-    expect(circleResizeHelp).toContain("Off by default");
-    expect(circleMemoryHelp).toContain("fade");
-    expect(circleMemoryHelp).toContain("middle color");
-  });
-});
 
 import { beatColoringHelp, peakDistanceHelp, peakProminenceHelp } from "./help";
 
 describe("the Local peaks explanations (feature 024)", () => {
-  it("explain the half and half, that it is off by default and that hidden tiles are unchanged", () => {
+  it("explain that the box is off by default and turns on the beat wave of the contour only", () => {
     expect(beatColoringHelp).toContain("Off by default");
-    expect(beatColoringHelp).toContain("half");
-    expect(beatColoringHelp).toContain("100%");
-    expect(beatColoringHelp).toContain("Tiles and Blended tiles");
-    expect(beatColoringHelp).toMatch(/hidden/i);
+    expect(beatColoringHelp).toContain("Only used by Contour");
+    expect(beatColoringHelp).toContain("beat wave");
+    expect(beatColoringHelp).not.toContain("Tiles");
   });
 
   it("give the ranges and defaults of the two settings", () => {
@@ -203,18 +151,6 @@ describe("the Local peaks explanations (feature 024)", () => {
   });
 });
 
-describe("the Image type help for Concentric (feature 025)", () => {
-  it("describes the circles, the twelve rings, the sizes from the volume, the colors from the beat and the background", () => {
-    expect(imageTypeHelp).toContain("Concentric:");
-    expect(imageTypeHelp).toContain("84 circles");
-    expect(imageTypeHelp).toContain("12 rings");
-    expect(imageTypeHelp).toContain("a full circle is 12 rings");
-    expect(imageTypeHelp).toContain("loudest note");
-    expect(imageTypeHelp).toContain("beat");
-    expect(imageTypeHelp).toContain("middle color");
-    for (const earlier of ["Tiles:", "Blended tiles:", "Contour:", "Circles:", "Circles paint:"]) expect(imageTypeHelp).toContain(earlier);
-  });
-});
 
 import { noteLayoutHelp } from "./help";
 
@@ -228,8 +164,9 @@ describe("the Note layout help (feature 026)", () => {
     expect(noteLayoutHelp).toContain("6th column");
     expect(noteLayoutHelp).toContain("clockwise");
     expect(noteLayoutHelp).toContain("counterclockwise");
-    expect(noteLayoutHelp).toContain("Tiles");
-    expect(noteLayoutHelp).toContain("Concentric");
+    expect(noteLayoutHelp).toContain("Only used by Decay, Decay Exp and Polar Chords");
+    expect(noteLayoutHelp).not.toContain("Tiles");
+    expect(noteLayoutHelp).not.toContain("Concentric");
   });
 });
 
@@ -243,8 +180,8 @@ describe("the Decay help (feature 027)", () => {
     expect(imageTypeHelp).toContain("24");
     expect(imageTypeHelp).toContain("32");
     expect(imageTypeHelp).toContain("12 rings");
-    expect(imageTypeHelp).toContain("rings like Concentric");
-    for (const earlier of ["Tiles:", "Blended tiles:", "Contour:", "Circles:", "Circles paint:", "Concentric:"]) expect(imageTypeHelp).toContain(earlier);
+    expect(imageTypeHelp).toContain("12 flat rings");
+    expect(imageTypeHelp).toContain("Contour:");
   });
 
   it("explains the decay rate: the range, the default, what happens every so many frames and that it counts frames", () => {
@@ -351,8 +288,8 @@ describe("the image type help for the rings of Chromatic Decay (feature 036)", (
 });
 
 describe("the Threshold help for Chromatic Decay (feature 037)", () => {
-  it("keeps the sentence about Tiles and says what the threshold does for Chromatic Decay", () => {
-    expect(thresholdHelp).toContain("with Tiles its tile is black");
+  it("keeps the sentence about the contour and says what the threshold does for Chromatic Decay", () => {
+    expect(thresholdHelp).toContain("with Contour its value is 0");
     expect(thresholdHelp).toContain("Chromatic Decay");
     expect(thresholdHelp).toContain("treated as silent");
     expect(thresholdHelp).toContain("does not charge its letter");

@@ -39,8 +39,8 @@ import numpy as np
 from PIL import Image
 
 from .chords import check_chord_type, measure_chords
-from .circles import _SAVE_WORKERS, MIDDLE_COLOR_ROW
-from .colormaps import COLORMAP_STEPS, check_beat, check_colormap, lookup_table
+from .colormaps import COLORMAP_STEPS, MIDDLE_COLOR_ROW, check_beat, check_colormap, lookup_table
+from .frame_saving import SAVE_WORKERS
 from .note_layout import DEFAULT_NOTE_LAYOUT, check_note_layout, note_order
 
 ARCS = 84  # the arcs of the notes
@@ -176,7 +176,7 @@ def polar_bars(smoothed, beat=None, count: int = DEFAULT_POLAR_NOTES, note_layou
     """The bars of every frame of a file (see :class:`PolarBars`), worked out before any drawing.
 
     ``smoothed`` is ``(frames, 84 or more)``, the smoothed note values in note order (the columns after the 84th are never drawn but, like the
-    tile colors, they count for the largest value that sets the scale); ``beat`` is ``None`` or one position from 0 to 1 for each frame; ``count``
+    colors of the other pictures, they count for the largest value that sets the scale); ``beat`` is ``None`` or one position from 0 to 1 for each frame; ``count``
     is the number of notes shown, 5 to 8; ``note_layout`` (``"rows"`` or ``"spiral"``) says in which arc each note is, as it says in which cell of the
     grid it is for the other pictures. The bars follow their notes one arc a frame (:func:`follow_arcs`); where the bars of two volumes are in the same
     arc only the louder is shown. The input is not changed.
@@ -312,6 +312,6 @@ def write_polar_frames(bars: PolarBars, colormap: str, directory: Path, width: i
         picture = _frame(bars, index, table, background, geometry, int(width), int(height))
         Image.fromarray(picture, "RGB").save(directory / f"frame_{index:06d}.png", compress_level=1)
 
-    with ThreadPoolExecutor(max_workers=_SAVE_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=SAVE_WORKERS) as pool:
         for future in [pool.submit(write, i) for i in range(bars.frame_count)]:
             future.result()  # raises the first error of a worker, if there was one

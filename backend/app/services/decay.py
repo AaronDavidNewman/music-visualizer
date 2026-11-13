@@ -1,11 +1,11 @@
-"""The ``decay`` kind of picture: 84 circles on the 12 x 7 grid of ``concentric``, each a disc that keeps points from frame to frame.
+"""The ``decay`` kind of picture: 84 circles on the 12 x 7 grid of ``note_grid``, each a disc that keeps points from frame to frame.
 
 Every circle has **points** from 0 to 64, 0 before the first frame. The points decide the disc:
 
-* its **size**: one twelfth of the full radius at 0 points (the smallest circle of ``concentric``), the full radius at 24 points or
+* its **size**: one twelfth of the full radius at 0 points (the smallest circle), the full radius at 24 points or
   more, linear in between;
 * its **color**: the colormap's first color at 0 points, its last color at 32 points, linear in between; the disc is flat;
-* its **rings**, from 32 to 64 points: the disc is made of the twelve concentric rings of ``concentric`` (ring ``k`` from the center
+* its **rings**, from 32 to 64 points: the disc is made of twelve concentric rings (ring ``k`` from the center
   out between ``(k - 1) / 12`` and ``k / 12`` of the full radius) and the rings run from the last color of the colormap at the center
   to a color further and further back, so that at 64 points ring 1 is the last color and ring 12 the first: ring ``k`` is at
   ``b - s * (k - 1) / 11`` of the way along the colormap, with ``b = min(points, 32) / 32`` and ``s = (min(points, 64) - 32) / 32``
@@ -49,10 +49,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .circles import _SAVE_WORKERS, MIDDLE_COLOR_ROW
-from .colormaps import COLORMAP_STEPS, check_beat, check_colormap, lookup_table
-from .concentric import GRID_COLUMNS, GRID_ROWS, NOTES, RINGS, _check_values, full_radius
-from .image_types import tile_edges
+from .colormaps import COLORMAP_STEPS, MIDDLE_COLOR_ROW, check_beat, check_colormap, lookup_table
+from .frame_saving import SAVE_WORKERS
+from .note_grid import GRID_COLUMNS, GRID_ROWS, NOTES, RINGS, _check_values, full_radius, tile_edges
 from .note_layout import DEFAULT_NOTE_LAYOUT, arrange_notes, check_note_layout
 
 MIN_DECAY_RATE = 0.25  # frames between decay steps (below 1: several steps in a frame, which is smoother)
@@ -351,6 +350,6 @@ def write_decay_frames(points, colormap: str, directory: Path, width: int, heigh
         picture = _frame(points[index], colormap, background, geometry, int(width), int(height))
         Image.fromarray(picture, "RGB").save(directory / f"frame_{index:06d}.png", compress_level=1)
 
-    with ThreadPoolExecutor(max_workers=_SAVE_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=SAVE_WORKERS) as pool:
         for future in [pool.submit(write, i) for i in range(points.shape[0])]:
             future.result()  # raises the first error of a worker, if there was one

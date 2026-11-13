@@ -65,9 +65,6 @@ def test_the_settings_that_do_not_apply_do_not_change_the_frames(tmp_path):
         resolution=3,
         interpolate=2,
         gaussian=2.0,
-        blend_width=20.0,
-        circle_unit=9,
-        circle_notes=12,
         decay_amounts=(3.0, 3.0, 0.5, 0.5),
         wave_count=7,
     )
@@ -84,7 +81,7 @@ def test_a_bad_decay_rate_or_amount_is_refused_before_anything_is_written(tmp_pa
 
 def test_the_decay_rate_and_amounts_have_no_effect_on_the_other_types(tmp_path):
     values = stream(6)
-    for image_type in ("tiles", "concentric"):
+    for image_type in ("contour", "polar-chords"):
         write_frames(values, tmp_path / f"{image_type}-a", colormap="viridis", image_type=image_type)
         write_frames(values, tmp_path / f"{image_type}-b", colormap="viridis", image_type=image_type, decay_rate=4, decay_amounts=(3.0, 3.0, 3.0, 3.0))
         assert all_frames(tmp_path / f"{image_type}-a") == all_frames(tmp_path / f"{image_type}-b")
@@ -108,7 +105,7 @@ def test_a_silent_stream_makes_frames_of_84_smallest_dots_in_the_first_color(tmp
 
     from app.services.colormaps import lookup_table
     from app.services.decay import circle_radii
-    from app.services.image_types import tile_edges
+    from app.services.note_grid import tile_edges
 
     write_frames(np.zeros((3, 88)), tmp_path, colormap="viridis", image_type="decay-exp")
     image = np.array(Image.open(tmp_path / "frame_000001.png").convert("RGB"))

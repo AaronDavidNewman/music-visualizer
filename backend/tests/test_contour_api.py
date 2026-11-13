@@ -52,9 +52,9 @@ def tiny():
 # --- choosing it ------------------------------------------------------------------------------------------------------
 
 
-def test_contour_is_one_of_the_offered_types_and_tiles_stays_the_default():
+def test_contour_is_the_first_of_the_offered_types_and_the_default():
     assert "contour" in IMAGE_TYPES
-    assert IMAGE_TYPES[0] == "tiles"
+    assert IMAGE_TYPES[0] == "contour"
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
@@ -69,30 +69,30 @@ def test_the_response_has_the_usual_keys_and_nothing_extra_for_contour(client):
     job = post(client, tiny()).json()
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
-        "smoothing", "smoothing_window", "threshold", "image_type", "blend_width", "colormap", "resolution", "note_count", "interpolate",
-        "circle_unit", "circle_memory", "circle_notes", "circle_radius", "circle_resize", "gaussian", "beat_coloring", "peak_distance", "peak_prominence", "note_layout", "decay_rate", "wave_count", "polar_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing",
+        "smoothing", "smoothing_window", "threshold", "image_type", "colormap", "resolution", "note_count", "interpolate",
+        "gaussian", "beat_coloring", "peak_distance", "peak_prominence", "note_layout", "decay_rate", "wave_count", "polar_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing",
         "step_samples", "window_count", "spacing_raised", "frame_url_template",
     }  # fmt: skip
     for key in REMOVED:
         assert key not in job
 
 
-def test_the_frames_are_pngs_of_the_image_size_and_their_count_and_timing_equal_those_of_tiles(client):
+def test_the_frames_are_pngs_of_the_image_size_and_their_count_and_timing_equal_those_of_another_type(client):
     data = chord_wav(2)
     cont = post(client, data).json()
-    tiles = post(client, data, image_type="tiles").json()
-    assert cont["frame_count"] == tiles["frame_count"] > 0
+    other = post(client, data, image_type="decay").json()
+    assert cont["frame_count"] == other["frame_count"] > 0
     for key in ("frame_rate", "window_size", "duration_seconds", "step_samples", "window_count"):
-        assert cont[key] == tiles[key]
+        assert cont[key] == other[key]
     for i in (0, cont["frame_count"] // 2, cont["frame_count"] - 1):
         image = Image.open(io.BytesIO(frame_bytes(client, cont, i)))
         assert image.format == "PNG" and image.size == (WIDTH, HEIGHT)
 
 
 @pytest.mark.parametrize(
-    "text", ["", " ", "Contour", "CONTOUR", " contour", "contour ", "contours", "contour,tiles", "gradient", "1"]
+    "text", ["", " ", "Contour", "CONTOUR", " contour", "contour ", "contours", "contour,decay", "gradient", "1"]
 )
-def test_any_other_image_type_is_refused_with_the_three_names(client, text):
+def test_any_other_image_type_is_refused_with_the_choices(client, text):
     before = leftovers()
     r = client.post(
         "/api/jobs",
@@ -101,7 +101,7 @@ def test_any_other_image_type_is_refused_with_the_three_names(client, text):
     )
     assert r.status_code == 400, r.text
     assert r.json()["detail"] == TYPE_MESSAGE
-    assert "tiles" in TYPE_MESSAGE and "blended" in TYPE_MESSAGE and "contour" in TYPE_MESSAGE
+    assert "contour" in TYPE_MESSAGE and "tiles" not in TYPE_MESSAGE
     assert leftovers() == before  # no job was created
 
 
@@ -115,46 +115,24 @@ def test_the_type_is_checked_before_the_file_is_read(client):
     assert r.json()["detail"] == TYPE_MESSAGE
 
 
-# --- the blend width --------------------------------------------------------------------------------------------------
-
-
-def test_a_blend_width_sent_with_contour_is_accepted_and_has_no_effect(client):
-    data = chord_wav(2)
-    a = post(client, data, blend_width="10")
-    b = post(client, data, blend_width="25")
-    assert a.status_code == b.status_code == 200
-    a, b = a.json(), b.json()
-    assert a["blend_width"] == 10 and b["blend_width"] == 25  # reported as sent, as for tiles
-    for i in range(0, a["frame_count"], 3):
-        assert frame_bytes(client, a, i) == frame_bytes(client, b, i)
-
-
-@pytest.mark.parametrize("width", ["9", "26", "", "abc", "nan"])
-def test_an_invalid_blend_width_is_still_refused_with_contour(client, width):
-    r = post(client, tiny(), blend_width=width)
-    assert r.status_code == 400
-    assert r.json()["detail"] == "The blend width must be a number from 10 to 25."
-
-
 # --- the other types are not changed --------------------------------------------------------------------------------------
 
 
-def test_tiles_and_blended_do_not_depend_on_contour_having_been_made_before(client):
+def test_decay_does_not_depend_on_contour_having_been_made_before(client):
     data = chord_wav(2)
-    before = {t: post(client, data, image_type=t).json() for t in ("tiles", "blended")}
+    before = post(client, data, image_type="decay").json()
     contour = post(client, data).json()
-    after = {t: post(client, data, image_type=t).json() for t in ("tiles", "blended")}
+    after = post(client, data, image_type="decay").json()
     assert contour["image_type"] == "contour"
-    for t in ("tiles", "blended"):
-        for i in range(0, before[t]["frame_count"], 4):
-            assert frame_bytes(client, before[t], i) == frame_bytes(client, after[t], i)
+    for i in range(0, before["frame_count"], 4):
+        assert frame_bytes(client, before, i) == frame_bytes(client, after, i)
 
 
-def test_missing_image_type_is_still_tiles(client):
+def test_missing_image_type_is_the_contour(client):
     job = client.post(
         "/api/jobs", files={"file": ("song.wav", tiny(), "audio/wav")}, data={"window_size": "4096", "frame_rate": "10"}
     ).json()
-    assert job["image_type"] == "tiles"
+    assert job["image_type"] == "contour"
 
 
 # --- with the other settings --------------------------------------------------------------------------------------------

@@ -14,7 +14,6 @@ from PIL import Image
 from app.services.colormaps import COLORMAPS, lookup_table
 
 from .frame_size import HEIGHT, WIDTH
-from .colormap_names import WITHOUT_BLACK
 from .test_jobs_api import (  # noqa: F401
     SR,
     chord_wav,
@@ -26,7 +25,7 @@ from .test_jobs_api import (  # noqa: F401
 )
 
 MESSAGE = "The oversampling must be a whole number from 1 to 5."
-TYPES = ["tiles", "blended", "contour"]
+TYPES = ["contour"]
 REMOVED = ("energy", "brightness", "hue_step", "saturation_step", "brightness_step")
 
 
@@ -109,8 +108,8 @@ def test_the_response_has_the_usual_keys_and_the_resolution(client):
     job = post(client, tiny(), resolution="2").json()
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
-        "smoothing", "smoothing_window", "threshold", "image_type", "blend_width", "colormap", "resolution", "note_count",
-        "interpolate", "circle_unit", "circle_memory", "circle_notes", "circle_radius", "circle_resize", "gaussian", "beat_coloring", "peak_distance", "peak_prominence", "note_layout", "decay_rate", "wave_count", "polar_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing", "step_samples", "window_count", "spacing_raised", "frame_url_template",
+        "smoothing", "smoothing_window", "threshold", "image_type", "colormap", "resolution", "note_count",
+        "interpolate", "gaussian", "beat_coloring", "peak_distance", "peak_prominence", "note_layout", "decay_rate", "wave_count", "polar_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing", "step_samples", "window_count", "spacing_raised", "frame_url_template",
     }  # fmt: skip
     for key in REMOVED:
         assert key not in job
@@ -142,21 +141,6 @@ def test_the_frames_have_the_same_size_and_count_at_every_resolution(client, ima
         assert image.format == "PNG" and image.size == (WIDTH, HEIGHT)
 
 
-@pytest.mark.parametrize("r", [1, 2, 3, 5])
-def test_a_tiles_frame_is_a_grid_of_12r_by_7r_flat_tiles(client, r):
-    job = post(client, chord_wav(2), resolution=str(r)).json()
-    image = picture(client, job, job["frame_count"] // 2)
-    xe = np.rint(np.linspace(0, WIDTH, 12 * r + 1)).astype(int)
-    ye = np.rint(np.linspace(0, HEIGHT, 7 * r + 1)).astype(int)
-    for ty in range(7 * r):
-        for tx in range(12 * r):
-            tile = image[ye[ty] : ye[ty + 1], xe[tx] : xe[tx + 1]]
-            assert (tile == tile[0, 0]).all(), (r, ty, tx)  # one flat color per tile
-    # and the tiles are really there: neighbouring tiles of a chord differ somewhere
-    grid = tile_grid(image, r)
-    assert (grid[:, 1:] != grid[:, :-1]).any()
-
-
 def test_a_finer_picture_is_not_the_coarse_one_blown_up(client):
     data = chord_wav(2)
     one = post(client, data).json()
@@ -175,23 +159,6 @@ def test_the_same_request_twice_gives_identical_frames(client, image_type):
     a, b = post(client, data, **options).json(), post(client, data, **options).json()
     for i in range(0, a["frame_count"], 3):
         assert frame_bytes(client, a, i) == frame_bytes(client, b, i)
-
-
-def test_a_note_hidden_by_the_threshold_leaves_black_tiles_with_a_finer_edge_at_a_higher_resolution(client):
-    if not WITHOUT_BLACK:
-        pytest.skip("every offered colormap has pure black")
-    name = WITHOUT_BLACK[0]
-    loud, faint = note_tone(36, 3.0), note_tone(37, 3.0) * 0.3
-    data = wav_bytes(loud + faint, loud + faint)
-    middle = None
-    counts = {}
-    for r in (1, 5):
-        job = post(client, data, colormap=name, threshold="10", resolution=str(r)).json()
-        middle = job["frame_count"] // 2
-        black = ~tile_grid(picture(client, job, middle), r).reshape(-1, 3).any(axis=1)
-        counts[r] = black.mean()
-        assert black.any() and not black.all()
-    assert counts[1] != counts[5]  # the hidden share of the picture differs: the edge of the hidden region has moved
 
 
 @pytest.mark.parametrize("image_type", TYPES)

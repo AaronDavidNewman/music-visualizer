@@ -8,12 +8,7 @@ const TYPES = IMAGE_TYPES.map((t) => t.value);
 const COMMON_TOP = ["window-size", "frame-rate", "window-spacing", "colormap", "image-type"];
 const BEAT = ["beat-coloring", "peak-distance", "peak-prominence"];
 const EXPECTED: Record<string, string[]> = {
-  tiles: [...COMMON_TOP, "threshold", "notes", "note-layout", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
   contour: [...COMMON_TOP, "threshold", "notes", "wave-count", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
-  blended: [...COMMON_TOP, "threshold", "notes", "blend-width", "note-layout", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
-  circles: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes", "smoothing-window", "smoothing"],
-  circles_paint: [...COMMON_TOP, "circle-unit", "circle-radius", "circle-resize", "circle-notes", "smoothing-window", "smoothing"],
-  concentric: [...COMMON_TOP, "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   decay: [...COMMON_TOP, "decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   "decay-exp": [...COMMON_TOP, "decay-rate", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
   "polar-chords": [...COMMON_TOP, "polar-notes", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
@@ -24,16 +19,12 @@ const EXPECTED: Record<string, string[]> = {
 };
 
 describe("the groups", () => {
-  it("are the eighteen groups of the data model, with their titles and controls in order", () => {
+  it("are the fourteen groups of the data model, with their titles and controls in order", () => {
     expect(GROUPS.map((g) => [g.id, g.title, [...g.controls]])).toEqual([
       ["analysis", "Analysis", ["window-size", "frame-rate", "window-spacing"]],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
-      ["tiles", "Tiles", ["threshold", "notes"]],
       ["contour", "Contour", ["threshold", "notes", "wave-count"]],
-      ["blended", "Blended Tiles", ["threshold", "notes", "blend-width"]],
-      ["circles", "Circles", ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"]],
-      ["circles_paint", "Circles paint", ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]],
       ["decay", "Decay", ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]],
       ["decay-exp", "Decay", ["decay-rate"]],
       ["polar-chords", "Polar chords", ["polar-notes"]],
@@ -59,12 +50,12 @@ describe("the groups", () => {
 describe("the groups shown for each image type", () => {
   it.each(TYPES)("are, for %s, in this order: the top group, Colormap, Image type, the type's group, Data smoothing, Image smoothing", (type) => {
     const want = ["analysis", "colormap", "image-type"];
-    if (type !== "concentric" && type !== "energy-graphs" && type !== "rhythm-circles") want.push(type); // Concentric, Energy graphs and Rhythm Circles have no group of their own; Chromatic Decay has
-    if (type === "tiles" || type === "blended" || type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("note-layout");
-    if (type === "tiles" || type === "blended" || type === "contour") want.push("local-peaks");
-    if (type === "concentric" || type === "decay" || type === "decay-exp" || type === "polar-chords" || type === "chromatic-decay" || type === "chromatic-wireframe" || type === "rhythm-circles") want.push("concentric-peaks");
+    if (type !== "energy-graphs" && type !== "rhythm-circles") want.push(type); // Energy graphs and Rhythm Circles have no group of their own
+    if (type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("note-layout");
+    if (type === "contour") want.push("local-peaks");
+    if (type === "decay" || type === "decay-exp" || type === "polar-chords" || type === "chromatic-decay" || type === "chromatic-wireframe" || type === "rhythm-circles") want.push("concentric-peaks");
     if (type !== "energy-graphs" && type !== "rhythm-circles") want.push("data-smoothing"); // Energy graphs and Rhythm Circles do not smooth the data
-    if (type !== "circles" && type !== "circles_paint" && type !== "concentric" && type !== "decay" && type !== "decay-exp" && type !== "polar-chords" && type !== "energy-graphs" && type !== "chromatic-decay" && type !== "chromatic-wireframe" && type !== "rhythm-circles") want.push("image-smoothing");
+    if (type === "contour") want.push("image-smoothing");
     expect(groupsFor(type)).toEqual(want);
   });
 
@@ -75,45 +66,26 @@ describe("the groups shown for each image type", () => {
     for (const control of all) expect(groupsFor(type)).toContain(groupOf(control, type));
   });
 
-  it("show no control of another type: Threshold, Notes and Blend width are not in Circles; the circle controls are not in the grid types", () => {
-    const circles = groupsFor("circles").flatMap((id) => [...controlsIn(id)]);
-    for (const c of ["threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian"]) expect(circles).not.toContain(c);
-    for (const type of ["tiles", "contour", "blended"]) {
-      const grid = groupsFor(type).flatMap((id) => [...controlsIn(id)]);
-      for (const c of ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"]) expect(grid).not.toContain(c);
-    }
-    expect(groupsFor("tiles").flatMap((id) => [...controlsIn(id)])).not.toContain("blend-width");
-    expect(groupsFor("contour").flatMap((id) => [...controlsIn(id)])).not.toContain("blend-width");
-  });
 
-  it("give Circles paint the circle controls of Circles without Memory, which only Circles has", () => {
-    expect([...controlsIn("circles_paint")]).toEqual(["circle-unit", "circle-radius", "circle-resize", "circle-notes"]);
-    expect(groupTitle("circles_paint")).toBe("Circles paint");
-    expect(groupOf("circle-memory", "circles")).toBe("circles");
-    expect(groupOf("circle-memory", "circles_paint")).toBeUndefined();
-    for (const control of ["circle-unit", "circle-radius", "circle-resize", "circle-notes"]) expect(groupOf(control, "circles_paint")).toBe("circles_paint");
-    for (const control of ["threshold", "notes", "blend-width", "resolution", "interpolate"]) expect(groupOf(control, "circles_paint")).toBeUndefined();
-    expect(groupsFor("circles_paint")).not.toContain("image-smoothing");
-  });
 
   it("keep Threshold and Blend width in the type groups and not in Data smoothing (the clarification)", () => {
     expect([...controlsIn("data-smoothing")]).toEqual(["smoothing-window", "smoothing"]);
   });
 
-  it("put the Gaussian smoothing in Image smoothing, last, for the grid types only", () => {
+  it("put the Gaussian smoothing in Image smoothing, last, for the contour only", () => {
     expect([...controlsIn("image-smoothing")]).toEqual(["resolution", "interpolate", "gaussian"]);
-    for (const type of ["tiles", "contour", "blended"]) expect(groupOf("gaussian", type), type).toBe("image-smoothing");
-    for (const type of ["circles", "circles_paint", "concentric"]) expect(groupOf("gaussian", type), type).toBeUndefined();
+    expect(groupOf("gaussian", "contour")).toBe("image-smoothing");
+    for (const type of TYPES.filter((t) => t !== "contour")) expect(groupOf("gaussian", type), type).toBeUndefined();
   });
 
   it("find the group of a control for a type, and none for a control that is not shown", () => {
-    expect(groupOf("threshold", "tiles")).toBe("tiles");
     expect(groupOf("threshold", "contour")).toBe("contour");
-    expect(groupOf("threshold", "blended")).toBe("blended");
-    expect(groupOf("threshold", "circles")).toBeUndefined();
-    expect(groupOf("circle-memory", "circles")).toBe("circles");
-    expect(groupOf("resolution", "circles")).toBeUndefined();
-    expect(groupOf("resolution", "blended")).toBe("image-smoothing");
+    expect(groupOf("threshold", "decay")).toBeUndefined();
+    expect(groupOf("resolution", "decay")).toBeUndefined();
+    expect(groupOf("resolution", "contour")).toBe("image-smoothing");
+    expect(groupOf("decay-rate", "decay")).toBe("decay");
+    expect(groupOf("blend-width", "contour")).toBeUndefined();
+    expect(groupOf("circle-memory", "decay")).toBeUndefined();
   });
 
   it("show no type group for a type that is not one of the four", () => {
@@ -150,12 +122,10 @@ describe("rowsOf", () => {
     }
   });
 
-  it("puts Window size and Frame rate on one row and Window spacing alone, and Notes alone last in Circles", () => {
+  it("puts Window size and Frame rate on one row and Window spacing alone", () => {
     expect(rowsOf(controlsIn("analysis").length)).toEqual([2, 1]);
-    expect(rowsOf(controlsIn("circles").length)).toEqual([2, 2, 1]);
-    expect(rowsOf(controlsIn("circles_paint").length)).toEqual([2, 2]);
     expect(rowsOf(controlsIn("image-smoothing").length)).toEqual([2, 1]); // Gaussian smoothing alone on the second row
-    expect(rowsOf(controlsIn("blended").length)).toEqual([2, 1]);
+    expect(rowsOf(controlsIn("contour").length)).toEqual([2, 1]);
     expect(rowsOf(controlsIn("colormap").length)).toEqual([1]);
   });
 });
@@ -197,25 +167,19 @@ describe("the Local peaks group (feature 024)", () => {
     expect(groupTitle("local-peaks")).toBe("Local peaks");
   });
 
-  it("follows the group of Tiles, of Blended Tiles and of Contour (and the Note layout group), before Data smoothing, and is shown for no other type", () => {
-    for (const type of ["tiles", "blended"]) {
-      const ids = groupsFor(type);
-      expect(ids.indexOf("local-peaks"), type).toBe(ids.indexOf(type) + 2); // the Note layout group is between them
-      expect(ids.indexOf("local-peaks"), type).toBeLessThan(ids.indexOf("data-smoothing"));
-    }
+  it("follows the group of Contour, before Data smoothing, and is shown for no other type", () => {
     const contour = groupsFor("contour");
     expect(contour.indexOf("local-peaks")).toBe(contour.indexOf("contour") + 1); // Contour has no Note layout group
     expect(contour.indexOf("local-peaks")).toBeLessThan(contour.indexOf("data-smoothing"));
-    for (const type of ["circles", "circles_paint", "nonsense"]) expect(groupsFor(type), type).not.toContain("local-peaks");
+    for (const type of [...TYPES.filter((t) => t !== "contour"), "nonsense"]) expect(groupsFor(type), type).not.toContain("local-peaks");
   });
 
-  it("puts each control in the group, for Tiles, Blended tiles and Contour only", () => {
+  it("puts each control in the group, for Contour only", () => {
     for (const control of ["beat-coloring", "peak-distance", "peak-prominence"]) {
-      expect(groupOf(control, "tiles"), control).toBe("local-peaks");
-      expect(groupOf(control, "blended"), control).toBe("local-peaks");
       expect(groupOf(control, "contour"), control).toBe("local-peaks");
-      for (const type of ["circles", "circles_paint"]) expect(groupOf(control, type), control + type).toBeUndefined();
+      expect(groupOf(control, "decay"), control).not.toBe("local-peaks");
     }
+    expect(groupOf("beat-coloring", "decay")).toBeUndefined();
   });
 
   it("is laid out as one row of two and a single control last", () => {
@@ -223,27 +187,26 @@ describe("the Local peaks group (feature 024)", () => {
   });
 });
 
-describe("the Local peaks group of Concentric (feature 025)", () => {
-  it("has the two settings of the measurement and no checkbox, under the same title as the group of Tiles", () => {
+describe("the Local peaks group without the checkbox (feature 025)", () => {
+  it("has the two settings of the measurement and no checkbox, under the same title as the group of Contour", () => {
     expect([...controlsIn("concentric-peaks")]).toEqual(["peak-distance", "peak-prominence"]);
     expect(groupTitle("concentric-peaks")).toBe("Local peaks");
     expect(rowsOf(controlsIn("concentric-peaks").length)).toEqual([2]);
   });
 
-  it("is shown for Concentric only, after Image type and before Data smoothing, with no group of its own", () => {
-    expect(groupsFor("concentric")).toEqual(["analysis", "colormap", "image-type", "note-layout", "concentric-peaks", "data-smoothing"]);
-    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "nonsense"]) expect(groupsFor(type), type).not.toContain("concentric-peaks");
-    expect(groupsFor("concentric")).not.toContain("concentric");
-    expect(groupsFor("concentric")).not.toContain("local-peaks");
+  it("is shown for Decay, Decay Exp and Polar Chords after the Note layout group and before Data smoothing, with no group of its own", () => {
+    expect(groupsFor("decay-exp")).toEqual(["analysis", "colormap", "image-type", "decay-exp", "note-layout", "concentric-peaks", "data-smoothing"]);
+    for (const type of ["contour", "nonsense"]) expect(groupsFor(type), type).not.toContain("concentric-peaks");
+    expect(groupsFor("decay")).not.toContain("local-peaks");
   });
 
-  it("puts Minimum distance and Prominence in it for Concentric, and none of the grid or checkbox controls in any group", () => {
-    expect(groupOf("peak-distance", "concentric")).toBe("concentric-peaks");
-    expect(groupOf("peak-prominence", "concentric")).toBe("concentric-peaks");
-    for (const control of ["beat-coloring", "threshold", "notes", "resolution", "interpolate", "gaussian", "circle-unit", "blend-width"]) {
-      expect(groupOf(control, "concentric"), control).toBeUndefined();
+  it("puts Minimum distance and Prominence in it for Decay, and none of the grid or checkbox controls in any group", () => {
+    expect(groupOf("peak-distance", "decay")).toBe("concentric-peaks");
+    expect(groupOf("peak-prominence", "decay")).toBe("concentric-peaks");
+    for (const control of ["beat-coloring", "threshold", "notes", "resolution", "interpolate", "gaussian"]) {
+      expect(groupOf(control, "decay"), control).toBeUndefined();
     }
-    expect(groupOf("peak-distance", "tiles")).toBe("local-peaks");
+    expect(groupOf("peak-distance", "contour")).toBe("local-peaks");
   });
 });
 
@@ -254,21 +217,18 @@ describe("the Note layout group (feature 026)", () => {
     expect(rowsOf(controlsIn("note-layout").length)).toEqual([1]);
   });
 
-  it("is shown for Tiles, Blended tiles and Concentric, after the group of the type and before Local peaks, and for no other type", () => {
-    for (const type of ["tiles", "blended"]) {
+  it("is shown for Decay, Decay Exp and Polar Chords, after the group of the type and before Local peaks, and for no other type", () => {
+    for (const type of ["decay", "decay-exp", "polar-chords"]) {
       const ids = groupsFor(type);
       expect(ids.indexOf("note-layout"), type).toBe(ids.indexOf(type) + 1);
-      expect(ids.indexOf("local-peaks"), type).toBe(ids.indexOf("note-layout") + 1);
+      expect(ids.indexOf("concentric-peaks"), type).toBe(ids.indexOf("note-layout") + 1);
     }
-    const concentric = groupsFor("concentric");
-    expect(concentric.indexOf("note-layout")).toBe(concentric.indexOf("image-type") + 1);
-    expect(concentric.indexOf("concentric-peaks")).toBe(concentric.indexOf("note-layout") + 1);
-    for (const type of ["contour", "circles", "circles_paint", "nonsense"]) expect(groupsFor(type), type).not.toContain("note-layout");
+    for (const type of ["contour", "chromatic-decay", "chromatic-wireframe", "energy-graphs", "rhythm-circles", "nonsense"]) expect(groupsFor(type), type).not.toContain("note-layout");
   });
 
   it("puts the control in the group for those three types only", () => {
-    for (const type of ["tiles", "blended", "concentric"]) expect(groupOf("note-layout", type), type).toBe("note-layout");
-    for (const type of ["contour", "circles", "circles_paint"]) expect(groupOf("note-layout", type), type).toBeUndefined();
+    for (const type of ["decay", "decay-exp", "polar-chords"]) expect(groupOf("note-layout", type), type).toBe("note-layout");
+    for (const type of TYPES.filter((t) => !["decay", "decay-exp", "polar-chords"].includes(t))) expect(groupOf("note-layout", type), type).toBeUndefined();
   });
 });
 
@@ -288,7 +248,7 @@ describe("the Decay group (feature 027)", () => {
 
   it("is shown for Decay only, between Image type and Note layout, with Local peaks without the checkbox", () => {
     expect(groupsFor("decay")).toEqual(["analysis", "colormap", "image-type", "decay", "note-layout", "concentric-peaks", "data-smoothing"]);
-    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay-exp", "nonsense"]) expect(groupsFor(type), type).not.toContain("decay");
+    for (const type of ["contour", "decay-exp", "nonsense"]) expect(groupsFor(type), type).not.toContain("decay");
   });
 
   it("puts the controls in their groups for Decay and none of the grid controls anywhere", () => {
@@ -371,7 +331,6 @@ describe("the Polar chords group (feature 032)", () => {
 
   it("leaves the groups of the other eight types as they were", () => {
     expect(groupsFor("decay-exp")).toEqual(["analysis", "colormap", "image-type", "decay-exp", "note-layout", "concentric-peaks", "data-smoothing"]);
-    expect(groupsFor("concentric")).toEqual(["analysis", "colormap", "image-type", "note-layout", "concentric-peaks", "data-smoothing"]);
   });
 });
 
@@ -403,12 +362,10 @@ describe("the groups of Chromatic Decay (feature 035)", () => {
     expect(rowsOf(controlsIn("chromatic-decay").length)).toEqual([2]);
   });
 
-  it("has the Threshold control in its group, and the other types keep theirs (Tiles, Contour and Blended tiles only)", () => {
+  it("has the Threshold control in its group, and the other types keep theirs (Contour only)", () => {
     expect(groupOf("threshold", "chromatic-decay")).toBe("chromatic-decay");
-    expect(groupOf("threshold", "tiles")).toBe("tiles");
     expect(groupOf("threshold", "contour")).toBe("contour");
-    expect(groupOf("threshold", "blended")).toBe("blended");
-    for (const type of TYPES.filter((t) => !["tiles", "contour", "blended", "chromatic-decay", "chromatic-wireframe"].includes(t))) expect(groupOf("threshold", type), type).toBeUndefined();
+    for (const type of TYPES.filter((t) => !["contour", "chromatic-decay", "chromatic-wireframe"].includes(t))) expect(groupOf("threshold", type), type).toBeUndefined();
   });
 
   it("shows neither the Note layout nor Image smoothing nor the old decay controls for it", () => {

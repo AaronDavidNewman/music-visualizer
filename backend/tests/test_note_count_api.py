@@ -26,7 +26,7 @@ from .test_jobs_api import (  # noqa: F401
 from .test_resolution_api import frame_bytes, picture, tiny
 
 MESSAGE = "The number of notes must be a whole number from 12 to 84."
-TYPES = ["tiles", "blended", "contour"]
+TYPES = ["contour"]
 REMOVED = ("energy", "brightness", "hue_step", "saturation_step", "brightness_step")
 
 
@@ -94,8 +94,8 @@ def test_the_response_has_the_usual_keys_and_the_number_of_notes(client):
     job = post(client, tiny(), note_count="24").json()
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
-        "smoothing", "smoothing_window", "threshold", "image_type", "blend_width", "colormap", "resolution", "note_count",
-        "interpolate", "circle_unit", "circle_memory", "circle_notes", "circle_radius", "circle_resize", "gaussian", "beat_coloring", "peak_distance", "peak_prominence", "note_layout", "decay_rate", "wave_count", "polar_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing", "step_samples", "window_count", "spacing_raised", "frame_url_template",
+        "smoothing", "smoothing_window", "threshold", "image_type", "colormap", "resolution", "note_count",
+        "interpolate", "gaussian", "beat_coloring", "peak_distance", "peak_prominence", "note_layout", "decay_rate", "wave_count", "polar_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing", "step_samples", "window_count", "spacing_raised", "frame_url_template",
     }  # fmt: skip
     for key in REMOVED:
         assert key not in job
@@ -134,14 +134,6 @@ def test_twelve_notes_make_a_different_picture_from_all_84(client, image_type):
     few = post(client, data, image_type=image_type, note_count="12").json()
     middle = full["frame_count"] // 2
     assert frame_bytes(client, full, middle) != frame_bytes(client, few, middle)
-
-
-def test_the_same_notes_are_used_in_every_frame_of_a_steady_file(client):
-    data = two_notes(3.0)
-    job = post(client, data, note_count="12").json()
-    inside = [picture(client, job, i) for i in range(6, job["frame_count"] - 6)]
-    assert len(inside) > 2
-    assert all((p == inside[0]).all() for p in inside)  # steady notes, the same chosen notes: a steady picture
 
 
 @pytest.mark.parametrize("image_type", TYPES)

@@ -270,9 +270,6 @@ def test_the_settings_that_do_not_apply_do_not_change_the_frames(tmp_path):
         resolution=3,
         interpolate=2,
         gaussian=2.0,
-        blend_width=20.0,
-        circle_unit=9,
-        circle_notes=12,
         decay_rate=4,
         decay_amounts=(3.0, 3.0, 0.5, 0.5),
         wave_count=7,
@@ -280,7 +277,7 @@ def test_the_settings_that_do_not_apply_do_not_change_the_frames(tmp_path):
     assert all_frames(tmp_path / "a") == all_frames(tmp_path / "b")
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords"])
+@pytest.mark.parametrize("image_type", ["contour", "decay", "decay-exp", "polar-chords"])
 @pytest.mark.parametrize("bad", [4, 9, 6.5, True, "6", None])
 def test_a_bad_number_of_notes_shown_is_refused_before_anything_is_written_for_every_type(tmp_path, image_type, bad):
     with pytest.raises(ValueError, match="The number of notes shown must be a whole number from 5 to 8."):
@@ -288,7 +285,7 @@ def test_a_bad_number_of_notes_shown_is_refused_before_anything_is_written_for_e
     assert not (tmp_path / "out").exists()
 
 
-@pytest.mark.parametrize("image_type", ["tiles", "concentric", "decay"])
+@pytest.mark.parametrize("image_type", ["decay"])
 def test_the_number_of_notes_shown_has_no_effect_on_the_other_types(tmp_path, image_type):
     values = stream(4)
     write_frames(values, tmp_path / "a", colormap="viridis", image_type=image_type)
@@ -296,11 +293,11 @@ def test_the_number_of_notes_shown_has_no_effect_on_the_other_types(tmp_path, im
     assert all_frames(tmp_path / "a") == all_frames(tmp_path / "b")
 
 
-def test_two_runs_give_identical_files_and_polar_chords_differs_from_the_other_pictures(tmp_path):
+def test_two_runs_give_identical_files_and_polar_chords_differs_from_the_decay_picture(tmp_path):
     values = stream(4)
     write_frames(values, tmp_path / "a", colormap="viridis", image_type="polar-chords")
     write_frames(values, tmp_path / "b", colormap="viridis", image_type="polar-chords")
-    write_frames(values, tmp_path / "c", colormap="viridis", image_type="concentric")
+    write_frames(values, tmp_path / "c", colormap="viridis", image_type="decay")
     assert all_frames(tmp_path / "a") == all_frames(tmp_path / "b") != all_frames(tmp_path / "c")
 
 

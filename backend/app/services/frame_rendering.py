@@ -3,49 +3,22 @@
 Frame ``f`` covers ``[f / frame_rate, (f + 1) / frame_rate)`` seconds. It is the mean of
 the windows that start inside that period, or, if none does, the most recent window that
 started before the period (which is the window covering its start when windows are consecutive).
-Each frame becomes a 12 x 7 grid of coloured tiles (one row per octave, one column per note name,
-600 x 400 pixels, 3:2); a higher resolution (1 to 5) first interpolates the grid to 12 r x 7 r values, so the
-same picture size has more and smaller tiles (see ``resolution``). A number of notes below 84 builds the picture from
-only the notes with the most energy in the file, spread over the whole grid (see ``note_selection``).
-The image type ``circles`` draws wandering circles instead of a grid (see ``circles``).
-An interpolate value above 1 draws only every n-th frame and makes the frames in between from their neighbors with Pillow
-(see ``frame_interpolation``).
-
-A tile's color is the color of a matplotlib colormap (``summer``, ``autumn``, ``hot`` or ``cool``) at a position that
-depends only on how strong the tile's own note is: its smoothed value as a share of the largest smoothed value in the
-file, on a square-root scale (see ``colormaps``). Smoothing mixes each frame with a few earlier ones (see
-``smooth_frames``) before the color is worked out. A threshold can hide faint notes: a note below it has a black tile (see
-``hidden_notes``). The finished tile colors are written as the flat ``tiles`` picture or as ``blended`` tiles whose colors
-fade into each other (see ``image_types``). The third kind, ``contour``, does not use tile colors: the smoothed values
-themselves are drawn as a filled contour map (see ``contour``).
+The note values of a frame (one row of 88) are smoothed over the earlier frames (see ``smooth_frames``) and drawn as the chosen image type (see ``image_types``).
+``contour`` draws the 12 x 7 grid of the 84 notes (one row for each octave, one column for each note name) as a filled contour map (see ``contour``); a higher resolution
+(1 to 5) first interpolates the grid to 12 r x 7 r values (see ``resolution``), and a number of notes below 84 builds the picture from only the notes with the most
+energy in the file, spread over the whole grid (see ``note_selection``). An interpolate value above 1 draws only every n-th frame and makes the frames in between from
+their neighbors with Pillow (see ``frame_interpolation``). A threshold can hide faint notes: a note below it is 0 (see ``hidden_below``). The other image types draw
+circles, bars, a histogram, rings or lines from the note values or from the measurements of the whole file (``decay``, ``decay_exp``, ``polar_chords``,
+``energy_graphs``, ``chromatic_decay``, ``rhythm_circles``, ``chromatic_wireframe``).
 """
 
 import math
 import numbers
-import os
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
 
-from .circles import (
-    DEFAULT_CIRCLE_MEMORY,
-    DEFAULT_CIRCLE_NOTES,
-    DEFAULT_CIRCLE_RESIZE,
-    DEFAULT_CIRCLE_RADIUS,
-    DEFAULT_CIRCLE_UNIT,
-    MIDDLE_COLOR_ROW,
-    check_circle_memory,
-    check_circle_notes,
-    check_circle_resize,
-    check_circle_radius,
-    check_circle_unit,
-    write_circle_frames,
-)
-from .circles_paint import write_paint_frames
-from .colormaps import DEFAULT_COLORMAP, check_beat, check_colormap, colorize, lookup_table
-from .concentric import write_concentric_frames
+from .colormaps import DEFAULT_COLORMAP, check_beat, check_colormap
 from .beat_wave import DEFAULT_WAVE_COUNT, check_wave_count
 from .decay import DEFAULT_DECAY_AMOUNTS, DEFAULT_DECAY_RATE, check_decay_amounts, check_decay_rate, circle_points, write_decay_frames
 from .chromatic_decay import CHROMATIC_TYPES, check_chromatic_rate, circle_points as chromatic_points, write_chromatic_frames
@@ -57,30 +30,17 @@ from .polar_chords import DEFAULT_POLAR_NOTES, check_polar_notes, polar_bars, wr
 from .contour import write_contour_frames
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
 from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
-from .image_types import (
-    DEFAULT_BLEND_WIDTH,
-    DEFAULT_IMAGE_TYPE,
-    check_blend_width,
-    check_image_type,
-    make_grid_blender,
-    tile_edges,
-)
+from .image_types import DEFAULT_IMAGE_TYPE, check_image_type
 from .note_analysis import NOTE_COUNT, AnalysisResult
-from .note_layout import DEFAULT_NOTE_LAYOUT, arrange_notes, check_note_layout
+from .note_grid import GRID_COLUMNS, GRID_ROWS
+from .note_layout import DEFAULT_NOTE_LAYOUT, check_note_layout
 from .note_selection import DEFAULT_NOTE_COUNT, check_note_count, spread_notes
 from .resolution import DEFAULT_RESOLUTION, check_resolution, interpolate_grid
 
-# 12 columns (the notes of an octave) by 7 rows (octaves) of tiles spread over a 600 x 400 frame (feature 021; it was 252 x 168):
-# the columns are 50 pixels wide and the rows 57 or 58 pixels high, since 400 does not divide into 7 whole rows (see ``tile_edges``).
-GRID_COLUMNS = 12
-GRID_ROWS = 7
+# 12 columns (the notes of an octave) by 7 rows (octaves) of notes spread over a 600 x 400 frame (see ``note_grid``).
 SHOWN_NOTES = GRID_COLUMNS * GRID_ROWS  # notes 0..83 are drawn; the four highest (84..87) are not
 IMAGE_WIDTH = 600
 IMAGE_HEIGHT = 400
-# The frame that the settings of the circles are measured against (Movement and Radius): the frame size before feature 021.
-REFERENCE_WIDTH = 252
-REFERENCE_HEIGHT = 168
-FRAME_SCALE = IMAGE_WIDTH / REFERENCE_WIDTH  # = IMAGE_HEIGHT / REFERENCE_HEIGHT
 
 # Smoothing mixes each frame with the earlier frames of a window (0 = none). The smoothing is the weight of each earlier
 # frame against a weight of 1 for the current one; the window is how many earlier frames are looked at. Fixed ranges;
@@ -93,14 +53,13 @@ MAX_SMOOTHING_WINDOW = 20
 DEFAULT_SMOOTHING_WINDOW = 1
 
 # The threshold hides faint notes: a drawn note whose smoothed value in a frame is below this percentage of the largest
-# note value in the whole file gets a black tile. 0 is off (the default); the page's slider ends at 10.
+# note value in the whole file is 0. 0 is off (the default); the page's slider ends at 10.
 MIN_THRESHOLD = 0
 MAX_THRESHOLD = 10
 DEFAULT_THRESHOLD = 0
 
 assert SHOWN_NOTES <= NOTE_COUNT
 assert IMAGE_WIDTH * 2 == IMAGE_HEIGHT * 3  # exactly 3:2
-assert IMAGE_WIDTH * REFERENCE_HEIGHT == IMAGE_HEIGHT * REFERENCE_WIDTH  # the same shape as the reference frame
 
 # Guards ceil() against floating-point noise such as 5.000000000000001.
 _EPSILON = 1e-9
@@ -209,55 +168,6 @@ def hidden_below(values: np.ndarray, peak: float, threshold: float = DEFAULT_THR
     return np.asarray(values, dtype=np.float64) < threshold / 100.0 * float(peak)
 
 
-def hidden_notes(smoothed: np.ndarray, threshold: float = DEFAULT_THRESHOLD) -> np.ndarray:
-    """Which drawn notes are too faint to show: a boolean array of shape ``(frames, 84)``.
-
-    ``smoothed`` has one row per frame and one column per note (88), after smoothing. The reference is the largest
-    value anywhere in it, the same value ``to_gray_levels`` scales against (so the four undrawn notes count too). A
-    note is hidden when its value is *strictly* below ``threshold`` percent of that reference; one exactly at the
-    threshold is shown. With threshold 0 nothing is hidden (values are never negative), the note with the largest value
-    is never hidden, and when no note has any value nothing is hidden. The comparison uses the unrounded value, before
-    any root, so no other setting changes which notes are hidden.
-    """
-    threshold = _check_threshold(threshold)
-    smoothed = np.asarray(smoothed, dtype=np.float64)
-    if smoothed.ndim != 2 or smoothed.shape[1] < SHOWN_NOTES:
-        raise ValueError(f"At least {SHOWN_NOTES} note values per frame are needed (got shape {smoothed.shape}).")
-    peak = float(smoothed.max()) if smoothed.size else 0.0
-    return hidden_below(smoothed[:, :SHOWN_NOTES], peak, threshold)
-
-# The number of the tile each pixel belongs to, for a grid of ``columns`` x ``rows`` tiles in the whole picture: the tile
-# edges are the nearest whole pixels to an even split, so the 12 columns are 50 pixels wide, the 7 rows 57 or 58 pixels high, and
-# a finer grid has smaller tiles; the tiles of an axis differ by at most one pixel.
-def _tile_index(columns: int, rows: int) -> np.ndarray:
-    column_of = np.repeat(np.arange(columns), np.diff(tile_edges(columns, IMAGE_WIDTH)))
-    row_of = np.repeat(np.arange(rows), np.diff(tile_edges(rows, IMAGE_HEIGHT)))
-    return row_of[:, None] * columns + column_of[None, :]
-
-
-# A frame of the original grid has at most 84 flat colours, so it is saved as an indexed-colour PNG: this index image never
-# changes and only the 84-entry palette differs per frame. A finer grid can have more colours than a palette holds (256).
-_PALETTE_TILES = 256
-_TILE_INDEX_BYTES = _tile_index(GRID_COLUMNS, GRID_ROWS).astype(np.uint8).tobytes()
-
-def _palette_frame(colours: np.ndarray) -> Image.Image:
-    """The frame as an indexed-colour image whose palette is the 84 tile colours (decodes to exactly ``render_frame``)."""
-    image = Image.frombytes("P", (IMAGE_WIDTH, IMAGE_HEIGHT), _TILE_INDEX_BYTES)
-    image.putpalette(np.ascontiguousarray(colours, dtype=np.uint8).tobytes())
-    return image
-
-
-# Blended frames are blended and encoded on a few threads: each frame is independent, numpy and the PNG encoder release
-# the interpreter lock for their heavy work, and the files are the same whatever the number of threads.
-_BLEND_WORKERS = max(1, min(4, os.cpu_count() or 1))
-
-
-def _save_blended(blend, colours: np.ndarray, path: Path) -> None:
-    # a blended frame has many colours, so it is a true-color PNG; level 1 costs far less time than level 6
-    # for a file only a little larger
-    Image.fromarray(blend(colours), "RGB").save(path, compress_level=1)
-
-
 def write_frames(
     frames: np.ndarray,
     directory: Path,
@@ -266,15 +176,9 @@ def write_frames(
     smoothing_window: int = DEFAULT_SMOOTHING_WINDOW,
     threshold: float = DEFAULT_THRESHOLD,
     image_type: str = DEFAULT_IMAGE_TYPE,
-    blend_width: float = DEFAULT_BLEND_WIDTH,
     resolution: int = DEFAULT_RESOLUTION,
     note_count: int = DEFAULT_NOTE_COUNT,
     interpolate: int = DEFAULT_INTERPOLATE,
-    circle_unit: int = DEFAULT_CIRCLE_UNIT,
-    circle_memory: int = DEFAULT_CIRCLE_MEMORY,
-    circle_notes: int = DEFAULT_CIRCLE_NOTES,
-    circle_radius: int = DEFAULT_CIRCLE_RADIUS,
-    circle_resize: bool = DEFAULT_CIRCLE_RESIZE,
     gaussian: float = DEFAULT_GAUSSIAN,
     beat: np.ndarray | None = None,
     note_layout: str = DEFAULT_NOTE_LAYOUT,
@@ -291,30 +195,22 @@ def write_frames(
     the note values over the frames: a frame is the weighted average of itself and the ``smoothing_window`` frames
     before it, each of those with the weight ``smoothing`` (see ``smooth_frames``). Smoothing 0 changes nothing.
 
-    Every drawn tile then gets the color of the ``colormap`` (``summer``, ``autumn``, ``hot`` or ``cool``) at the position
-    of its own note's strength: the smoothed value as a share of the largest smoothed value in the whole file, square-rooted
-    (see ``colormaps.colorize``). It depends on no other note and on nothing about the frame as a whole.
-
     ``threshold`` (0 to 10, default 0 = off) is a percentage of the largest note value in the file (after smoothing): a
-    note below it gets a black tile in that frame (``hidden_notes``), whatever the colormap is.
+    note below it is 0 in that frame (``hidden_below``), whatever the colormap is.
 
-    ``image_type`` is ``tiles`` (the default: flat tiles, written as palette PNGs), ``contour`` (see below) or ``blended`` (the same finished tile
-    colors, but the colors of neighbouring tiles fade into each other across every shared edge; true-color PNGs).
-    ``blend_width`` (10 to 25, default 25) is how far that fade reaches on each side of an edge, as a percentage of the
-    tile width (the mean width of a tile at the chosen resolution); it has no effect for ``tiles``. See ``image_types``.
+    ``image_type`` is ``contour`` (the default, see below), ``decay``, ``decay-exp``, ``polar-chords``, ``energy-graphs``, ``chromatic-decay``, ``rhythm-circles``
+    or ``chromatic-wireframe`` (see ``image_types``).
+
+    ``image_type="contour"`` draws the grid of values (the 84 drawn notes, or the finer interpolated grid; the values the
+    threshold hides are 0) as a filled contour map in the ``colormap``, with matplotlib (see ``contour``): the contour levels are
+    chosen by matplotlib, and the color scale is *linear* from 0 to the largest smoothed value in the whole file.
 
     ``resolution`` (a whole number from 1 to 5, default 1) makes the grid that every frame is drawn from finer: the 7 x 12
     grid of the smoothed values of the drawn notes is interpolated to 7r x 12r values (``interpolate_grid``: ``np.linspace``
     positions and ``np.interp``, corners kept, no value outside the original range) *after* the smoothing, and the
-    threshold and the colors are worked out on those values. The picture keeps its size, so tiles get smaller; the scale of
+    threshold and the colors are worked out on those values. The picture keeps its size; the scale of
     the colors and the threshold's reference are the largest value of the whole file before the interpolation. Frames of
     the original grid (1) are written exactly as without the setting.
-
-    ``image_type="contour"`` draws the grid of values (the 84 drawn notes, or the finer interpolated grid; the values the
-    threshold hides are 0) as a
-    filled contour map in the ``colormap`` instead of tiles, with matplotlib (see ``contour``): the contour levels are
-    chosen by matplotlib, and the color scale is *linear* from 0 to the largest smoothed value in the whole file (the
-    tiles use the square root of the strength). ``blend_width`` has no effect for it either.
 
     ``note_count`` (a whole number from 12 to 84, default 84 = all drawn notes) builds the picture from only the
     ``note_count`` notes with the most energy, the energy of a note being the sum of its smoothed values over the whole
@@ -329,37 +225,18 @@ def write_frames(
     made from their two nearest drawn frames with the Pillow library (see ``frame_interpolation``): ``Image.blend`` mixes
     them with the weight of the frame's position in its gap. The smoothing, the notes, the resolution, the threshold and
     the colors are worked out for all frames as before; only the drawing is skipped. The number of frames, their names and the size do not change, and at 1 nothing
-    changes.
-
-    ``image_type="circles"`` draws circles that wander as the music plays instead of a grid (see ``circles``): in every
-    frame the ``circle_notes`` (5 to 12, default 8) strongest notes of that frame each put down a circle, placed relative
-    to the circle that its rank had in the previous frame (moved by an angle from the note's name and a distance from its
-    octave, in units of ``circle_unit`` pixels, 1 to 10, default 4), colored by the colormap at the note's strength on the
-    tiles' scale, and remembered in a circular buffer of the last ``circle_memory`` (100 to 500, default 300) circles that
-    every frame draws in full, on a background of the colormap's middle color, each circle with the radius ``circle_radius`` (whole
-    pixels, 4 to 8, default 4) and with an opacity that falls with its age (the oldest barely visible); with
-    ``circle_resize`` (a bool, default off) the radius of each circle is also scaled by its note's strength, from 1 to
-    3 times (never smaller than ``circle_radius``). Smoothing and the colormap apply; ``interpolate``, ``resolution``, ``note_count``,
-    ``threshold`` and ``blend_width`` describe a grid of tiles or skipped frames and are accepted and ignored. The three
-    circle settings are checked for every image type and have no effect for the others.
-
-    ``image_type="concentric"`` draws 84 circles on the 12 x 7 grid, each of up to twelve flat rings (see ``concentric``): the step of a
-    note (1 to 12, from its volume against the loudest note of the frame) is the number of rings and the color of ring ``k`` runs from the
-    colormap's first color to the one at ``0.5 + 0.5 * beat`` of the way along it, on a background of the colormap's middle color.
-    Smoothing and the colormap apply, and ``beat`` (``None`` is 0 for every frame); every other setting is checked and ignored.
+    changes. ``resolution``, ``note_count``, ``interpolate`` and ``gaussian`` describe the grid of ``contour`` and are accepted and ignored by the other image types.
 
     ``beat`` (feature 024; ``None`` or one number from 0 to 1 for each frame, the frame's place in the local energy peak,
-    see ``local_peaks``) changes the colors of ``tiles`` and ``blended`` only (and is the colors of ``concentric``): a tile's place on the colormap becomes half
-    its note strength (as before) plus half the frame's beat, so the strongest tile has the colormap's middle color at a beat
-    of 0 and the last color at a beat of 1. Every tile of a frame uses the frame's beat; hidden tiles are drawn as before.
-    With ``None`` the colors are 100 % harmonic, exactly as before. The other image types ignore it.
+    see ``local_peaks``) is used by ``contour`` (its beat wave, see ``wave_count``), ``decay``, ``decay-exp``, ``polar-chords``, ``chromatic-decay`` and
+    ``chromatic-wireframe``. The other image types ignore it.
 
     ``note_layout`` (``"rows"``, the default, or ``"spiral"``, see ``note_layout``) says which note is drawn in which cell of the 12 x 7 grid
-    for ``tiles``, ``blended`` and ``concentric``; the other image types check it and ignore it. With ``rows`` the pictures are what
+    for ``decay``, ``decay-exp`` and ``polar-chords``; the other image types check it and ignore it. With ``rows`` the pictures are what
     they always were. Only the place of a note changes: its value, strength, hiding and color are those of the note.
 
-    ``image_type="decay"`` draws the same 84 circles as ``concentric`` (the same places and ``note_layout``) but each as one flat disc that
-    keeps points from 0 to 64 from frame to frame (see ``decay``): the five loudest notes of a frame gain 24, 20, 16, 12 and 8 points
+    ``image_type="decay"`` draws 84 circles on the 12 x 7 grid, each as one flat disc
+    that keeps points from 0 to 64 from frame to frame (see ``decay``): the five loudest notes of a frame gain 24, 20, 16, 12 and 8 points
     plus up to 8 from ``beat``, every ``decay_rate`` frames (a number from 0.25 to 4 in steps of 0.25, default 1; below 1 several steps a frame) each circle gives points to
     each neighbour at the rate of its saturation level (``decay_amounts``: four numbers from 0.5 to 3, the points given to each neighbour per
     frame by a low, medium, high and saturated circle; default 0.5, 1, 2, 3); the points set the size (full from 24) and the color (the last from 32). Smoothing, the colormap,
@@ -383,7 +260,7 @@ def write_frames(
 
     ``image_type="chromatic-wireframe"`` draws the points of ``chromatic-decay`` (the same simulation, with the same decay rate, whole number 1 to 10, and threshold) as
     a ridge plot in three dimensions (see ``chromatic_wireframe``): one line across the 12 letters for each frame, the newest in front and the earlier frames behind it
-    as far as there is room, the height of a letter the radius of its circle times a sine of its points, every line in the colormap color of its frame's place in the
+    as far as there is room, every line in the colormap color of its frame's place in the
     ``beat`` (the last color at the top of a peak; the first for every line without a beat). Smoothing, the colormap, the threshold and ``beat`` apply; ``note_layout``,
     ``decay_amounts`` and every other setting are checked and ignored.
 
@@ -408,15 +285,9 @@ def write_frames(
     _check_threshold(threshold)
     _check_smoothing_window(smoothing_window)
     image_type = check_image_type(image_type)
-    blend_width = check_blend_width(blend_width)
     resolution = check_resolution(resolution)
     note_count = check_note_count(note_count)
     interpolate = check_interpolate(interpolate)
-    circle_unit = check_circle_unit(circle_unit)
-    circle_memory = check_circle_memory(circle_memory)
-    circle_notes = check_circle_notes(circle_notes)
-    circle_radius = check_circle_radius(circle_radius)
-    circle_resize = check_circle_resize(circle_resize)
     gaussian = check_gaussian(gaussian)
     note_layout = check_note_layout(note_layout)
     decay_rate = check_chromatic_rate(decay_rate) if image_type in CHROMATIC_TYPES else check_decay_rate(decay_rate)  # a whole number from 1 to 10 for Chromatic Decay and Chromatic Wireframe
@@ -424,41 +295,9 @@ def write_frames(
     wave_count = check_wave_count(wave_count)
     polar_notes = check_polar_notes(polar_notes)
     if beat is not None:
-        beat = check_beat(beat, len(frames))  # checked for every image type, used by tiles, blended, contour, concentric, decay, decay-exp and polar-chords
+        beat = check_beat(beat, len(frames))  # checked for every image type, used by contour, decay, decay-exp, polar-chords, chromatic-decay and chromatic-wireframe
     smoothed = smooth_frames(frames, smoothing, smoothing_window)
     peak = float(smoothed.max()) if smoothed.size else 0.0
-    if image_type == "circles":
-        write_circle_frames(
-            smoothed[:, :SHOWN_NOTES],
-            peak,
-            colormap,
-            directory,
-            circle_notes,
-            circle_unit,
-            circle_memory,
-            circle_radius,
-            IMAGE_WIDTH,
-            IMAGE_HEIGHT,
-            resize=circle_resize,
-        )
-        return
-    if image_type == "circles_paint":  # the same circles with no memory (``circle_memory`` is checked above and not used)
-        write_paint_frames(
-            smoothed[:, :SHOWN_NOTES],
-            peak,
-            colormap,
-            directory,
-            circle_notes,
-            circle_unit,
-            circle_radius,
-            IMAGE_WIDTH,
-            IMAGE_HEIGHT,
-            circle_resize,
-        )
-        return
-    if image_type == "concentric":  # 84 circles of rings; the grid settings above are checked and not used, the beat is optional here
-        write_concentric_frames(arrange_notes(smoothed, note_layout), colormap, directory, beat, IMAGE_WIDTH, IMAGE_HEIGHT)
-        return
     if image_type == "decay":  # 84 discs that keep points from frame to frame; the grid settings above are checked and not used
         points = circle_points(smoothed, beat, note_layout, decay_rate, decay_amounts)
         write_decay_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
@@ -492,63 +331,24 @@ def write_frames(
     if image_type == "polar-chords":  # a polar bar graph: the loudest notes clockwise, the chord counterclockwise; the grid settings above are checked and not used
         write_polar_frames(polar_bars(smoothed, beat, polar_notes, note_layout), colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
-    columns, rows = GRID_COLUMNS * resolution, GRID_ROWS * resolution
-    shown = spread_notes(smoothed[:, :SHOWN_NOTES], note_count)
-    if image_type in ("tiles", "blended"):  # the 84 values in the cells of the layout (the contour always has the rows layout)
-        shown = arrange_notes(shown, note_layout)
+    columns, rows = GRID_COLUMNS * resolution, GRID_ROWS * resolution  # the contour: the last image type
+    shown = spread_notes(smoothed[:, :SHOWN_NOTES], note_count)  # (the contour always has the rows layout)
     values = interpolate_grid(shown, GRID_COLUMNS, GRID_ROWS, resolution)
     hidden = hidden_below(values, peak, threshold)
     frames_to_draw = key_frames(values.shape[0], interpolate)
-    if image_type == "contour":
-        values[hidden] = 0
-        write_contour_frames(
-            values,
-            peak,
-            colormap,
-            directory,
-            columns,
-            rows,
-            IMAGE_WIDTH,
-            IMAGE_HEIGHT,
-            indices=frames_to_draw,
-            beat=beat,
-            waves=wave_count,
-        )
-    else:
-        colours = colorize(values, colormap, columns * rows, peak, beat=beat)  # beat None: the colors are 100 % harmonic
-        # A tile that the threshold hides: black for the flat tiles (the testing mode). A blended picture draws no tile there: it stays the
-        # background, the middle color of the colormap, and the tiles that are drawn fade into it.
-        colours[hidden] = lookup_table(colormap)[MIDDLE_COLOR_ROW] if image_type == "blended" else 0
-        _write_tile_frames(colours, directory, image_type, blend_width, columns, rows, frames_to_draw)
+    values[hidden] = 0
+    write_contour_frames(
+        values,
+        peak,
+        colormap,
+        directory,
+        columns,
+        rows,
+        IMAGE_WIDTH,
+        IMAGE_HEIGHT,
+        indices=frames_to_draw,
+        beat=beat,
+        waves=wave_count,
+    )
     blur_frames(directory, frames_to_draw, gaussian)  # the drawn frames only: an in-between frame is a blend of blurred frames
     write_interpolated_frames(directory, values.shape[0], interpolate)
-
-
-def _write_tile_frames(
-    colours: np.ndarray, directory: Path, image_type: str, blend_width: float, columns: int, rows: int, frames_to_draw
-) -> None:
-    """Draw the frames ``frames_to_draw`` of ``tiles`` or ``blended`` from the finished tile colors (all frames' colors)."""
-    directory.mkdir(parents=True, exist_ok=True)
-    blend = pool = None
-    futures = []
-    index = _tile_index(columns, rows)
-    if image_type == "blended":
-        blend = make_grid_blender(blend_width, columns, rows, IMAGE_WIDTH, IMAGE_HEIGHT)
-        pool = ThreadPoolExecutor(max_workers=_BLEND_WORKERS)
-    try:
-        for i in frames_to_draw:
-            path = directory / f"frame_{i:06d}.png"
-            if blend is None and columns * rows <= _PALETTE_TILES:
-                # Level 6 makes these files about a third of the size of level 1 for roughly 0.2 s more per 10,000 frames.
-                _palette_frame(colours[i]).save(path, compress_level=6)
-            elif blend is None:
-                # a finer grid has more colors than a palette holds: a true-color picture (level 6: about 45% smaller
-                # than level 1 for under 0.15 ms more per frame)
-                Image.fromarray(colours[i][index], "RGB").save(path, compress_level=6)
-            else:
-                futures.append(pool.submit(_save_blended, blend, colours[i], path))
-        for future in futures:
-            future.result()  # raises the first error of a worker, if there was one
-    finally:
-        if pool is not None:
-            pool.shutdown(wait=True)

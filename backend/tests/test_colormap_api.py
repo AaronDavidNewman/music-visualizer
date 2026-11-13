@@ -7,11 +7,10 @@ No colormap is named here: the list can be changed by hand (see ``colormap_names
 import numpy as np
 import pytest
 
-from app.services.colormaps import COLORMAPS, DEFAULT_COLORMAP, lookup_table
+from app.services.colormaps import COLORMAPS, DEFAULT_COLORMAP
 
-from .blended_expected import same_middles
 from .frame_size import HEIGHT, WIDTH
-from .colormap_names import DECODABLE, FIRST, INVALID, MESSAGE, SECOND, WITHOUT_BLACK
+from .colormap_names import FIRST, INVALID, MESSAGE, SECOND
 
 from .test_jobs_api import (  # noqa: F401
     SR,
@@ -103,43 +102,10 @@ def test_the_response_has_the_colormap_and_none_of_the_removed_settings(client):
         assert key not in job
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
-        "smoothing", "smoothing_window", "threshold", "image_type", "blend_width", "colormap", "resolution", "note_count", "interpolate",
-        "circle_unit", "circle_memory", "circle_notes", "circle_radius", "circle_resize", "gaussian", "beat_coloring", "peak_distance", "peak_prominence", "note_layout", "decay_rate", "wave_count", "polar_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing",
+        "smoothing", "smoothing_window", "threshold", "image_type", "colormap", "resolution", "note_count", "interpolate",
+        "gaussian", "beat_coloring", "peak_distance", "peak_prominence", "note_layout", "decay_rate", "wave_count", "polar_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing",
         "step_samples", "window_count", "spacing_raised", "frame_url_template",
     }  # fmt: skip
-
-
-@pytest.mark.parametrize("name", COLORMAPS)
-def test_every_tile_of_every_served_frame_is_the_table_colour_of_its_own_strength(client, name):
-    data = chord_wav(2)
-    job = post_colormap(client, data, colormap=name).json()
-    table = lookup_table(name)
-    expected = table[expected_pixels(job, 0)]  # worked out independently from the analysis values
-    for i in range(job["frame_count"]):
-        assert (frame_rgb(client, job, i) == expected[i]).all(), (name, i)
-
-
-@pytest.mark.parametrize("name", COLORMAPS)
-def test_the_strongest_tile_of_the_file_has_the_last_colour(client, name):
-    job = post_colormap(client, chord_wav(2), colormap=name).json()
-    last = lookup_table(name)[255]
-    assert any((frame_rgb(client, job, i) == last).all(axis=1).any() for i in range(job["frame_count"]))
-
-
-def test_changing_the_colormap_changes_the_colours_and_not_which_tiles_are_strong(client):
-    # a colour can be turned back into its table row only for tables whose 256 rows are all different colours
-    if len(DECODABLE) < 2:
-        pytest.skip("fewer than two offered colormaps have 256 different colours")
-    first, second = DECODABLE[0], DECODABLE[1]
-    data = chord_wav(2)
-    a_job = post_colormap(client, data, colormap=first).json()
-    b_job = post_colormap(client, data, colormap=second).json()
-    assert frame_bytes(client, a_job, 5) != frame_bytes(client, b_job, 5)
-    a, b = lookup_table(first), lookup_table(second)
-    for i in range(a_job["frame_count"]):
-        rows_a = [int(np.flatnonzero((a == c).all(axis=1))[0]) for c in frame_rgb(client, a_job, i)]
-        rows_b = [int(np.flatnonzero((b == c).all(axis=1))[0]) for c in frame_rgb(client, b_job, i)]
-        assert rows_a == rows_b  # the same positions on the scale, whatever the scale
 
 
 def test_two_colormaps_give_different_pictures_of_the_same_sound(client):
@@ -149,26 +115,6 @@ def test_two_colormaps_give_different_pictures_of_the_same_sound(client):
     a_job = post_colormap(client, data, colormap=FIRST).json()
     b_job = post_colormap(client, data, colormap=SECOND).json()
     assert any(frame_bytes(client, a_job, i) != frame_bytes(client, b_job, i) for i in range(a_job["frame_count"]))
-
-
-def test_a_steady_tone_has_one_colour_in_every_frame_while_it_sounds(client):
-    audio = note_tone(36, 3.0)
-    job = post_colormap(client, wav_bytes(audio, audio), colormap=SECOND).json()
-    inside = [frame_rgb(client, job, i)[36] for i in range(4, job["frame_count"] - 4)]
-    assert all((c == inside[0]).all() for c in inside)  # steady: it does not blink
-
-
-def test_a_note_keeps_its_colour_when_a_quieter_note_is_added(client):
-    one = note_tone(36, 3.0) * 0.5
-    both = (note_tone(36, 3.0) + 0.2 * note_tone(48, 3.0)) * 0.5  # the same loud note and a quieter one
-    a = post_colormap(client, wav_bytes(one, one), colormap=DEFAULT_COLORMAP).json()
-    b = post_colormap(client, wav_bytes(both, both), colormap=DEFAULT_COLORMAP).json()
-    last = lookup_table(DEFAULT_COLORMAP)[255]
-    for i in (8, 12, 16):  # frames well inside the tones
-        assert (frame_rgb(client, a, i)[36] == last).all()  # the loudest note of the file: the last colour
-        assert (frame_rgb(client, b, i)[36] == last).all()  # still the loudest note, unchanged by the added one
-        assert not (frame_rgb(client, b, i)[48] == last).all()  # the quieter note is further down the scale
-        assert not (frame_rgb(client, b, i)[48] == frame_rgb(client, a, i)[48]).all()  # and it is only in file b
 
 
 def test_the_same_request_twice_gives_identical_frames(client):
@@ -182,41 +128,6 @@ def test_the_same_request_twice_gives_identical_frames(client):
 # --- with the other settings (User Story 3) -----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", COLORMAPS)
-def test_blended_and_tiles_pictures_have_the_same_tile_middles_for_every_colormap(client, name):
-    data = chord_wav(2)
-    other = dict(colormap=name, smoothing="0.5", smoothing_window="3", threshold="5")
-    tiles = post_colormap(client, data, image_type="tiles", **other).json()
-    blended = post_colormap(client, data, image_type="blended", blend_width="15", **other).json()
-    assert tiles["frame_count"] == blended["frame_count"]
-    for i in range(0, tiles["frame_count"], 2):
-        assert same_middles(frame_rgb(client, tiles, i), frame_rgb(client, blended, i), name).all(), (name, i)  # hidden: black flat, background blended
-
-
-@pytest.mark.parametrize("name", COLORMAPS)
-def test_with_a_threshold_every_served_tile_is_black_or_a_colour_of_the_table(client, name):
-    job = post_colormap(client, chord_wav(2), colormap=name, threshold="5").json()
-    table = {tuple(row) for row in lookup_table(name).tolist()}
-    black = 0
-    for i in range(job["frame_count"]):
-        for colour in frame_rgb(client, job, i):
-            colour = tuple(int(v) for v in colour)
-            assert colour == (0, 0, 0) or colour in table, (name, i, colour)
-            black += colour == (0, 0, 0) and colour not in table
-    if name in WITHOUT_BLACK:  # in a table that has black itself, a hidden tile cannot be told from a black entry
-        assert black > 0  # some notes really were hidden
-
-
-@pytest.mark.parametrize("name", COLORMAPS)
-def test_a_silent_file_has_the_first_colour_of_the_colormap_in_every_tile(client, name):
-    data = wav_bytes(np.zeros(SR), np.zeros(SR))
-    first = lookup_table(name)[0]
-    for fields in ({}, {"threshold": "1"}):  # nothing is below a share of the (zero) largest value, so nothing is hidden
-        job = post_colormap(client, data, colormap=name, **fields).json()
-        for i in (0, job["frame_count"] // 2, job["frame_count"] - 1):
-            assert (frame_rgb(client, job, i) == first).all(), (name, fields, i)
-
-
 def test_the_pictures_have_the_same_size_count_and_format_for_all_the_colormaps(client):
     import io
 
@@ -228,4 +139,4 @@ def test_the_pictures_have_the_same_size_count_and_format_for_all_the_colormaps(
     assert len(counts) == 1
     for name, job in jobs.items():
         img = Image.open(io.BytesIO(frame_bytes(client, job, 3)))
-        assert img.size == (WIDTH, HEIGHT) and img.mode == "P", name
+        assert img.size == (WIDTH, HEIGHT) and img.mode in ("RGB", "RGBA"), name  # the contour is drawn by matplotlib

@@ -25,21 +25,6 @@ from ..services.frame_rendering import (
     frame_count,
     write_frames,
 )
-from ..services.circles import (
-    DEFAULT_CIRCLE_MEMORY,
-    DEFAULT_CIRCLE_NOTES,
-    DEFAULT_CIRCLE_RESIZE,
-    DEFAULT_CIRCLE_RADIUS,
-    DEFAULT_CIRCLE_UNIT,
-    MAX_CIRCLE_MEMORY,
-    MAX_CIRCLE_NOTES,
-    MAX_CIRCLE_RADIUS,
-    MAX_CIRCLE_UNIT,
-    MIN_CIRCLE_MEMORY,
-    MIN_CIRCLE_NOTES,
-    MIN_CIRCLE_RADIUS,
-    MIN_CIRCLE_UNIT,
-)
 from ..services.frame_interpolation import DEFAULT_INTERPOLATE, MAX_INTERPOLATE, MIN_INTERPOLATE
 from ..services.gaussian import DEFAULT_GAUSSIAN, MAX_GAUSSIAN, MIN_GAUSSIAN
 from ..services.beat_wave import DEFAULT_WAVE_COUNT, MAX_WAVE_COUNT, MIN_WAVE_COUNT
@@ -64,13 +49,7 @@ from ..services.local_peaks import (
 )
 from ..services.energy_graphs import frame_energy
 from ..services.rhythm_circles import rhythm_angles
-from ..services.image_types import (
-    DEFAULT_BLEND_WIDTH,
-    DEFAULT_IMAGE_TYPE,
-    IMAGE_TYPES,
-    MAX_BLEND_WIDTH,
-    MIN_BLEND_WIDTH,
-)
+from ..services.image_types import DEFAULT_IMAGE_TYPE, IMAGE_TYPES
 from ..services.noise_floor import floor_analysis
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
 from ..services.note_selection import DEFAULT_NOTE_COUNT, MAX_NOTE_COUNT, MIN_NOTE_COUNT
@@ -171,7 +150,7 @@ def _parse_gaussian(text: str | None, sent: bool) -> float:
 
 
 def _parse_beat_coloring(text: str | None, sent: bool) -> bool:
-    """Whether the tiles are colored half by the beat (for Contour: whether the beat wave is on). Not sent means off; anything sent must be true, false, 1 or 0 (any case)."""
+    """Whether the contour's beat wave is on. Not sent means off; anything sent must be true, false, 1 or 0 (any case)."""
     if text is None and not sent:
         return False
     word = (text or "").strip().lower()
@@ -222,51 +201,6 @@ def _parse_image_type(text: str | None, sent: bool) -> str:
     if text not in IMAGE_TYPES:
         raise HTTPException(status_code=400, detail=f"The image type must be one of {', '.join(IMAGE_TYPES)}.")
     return text
-
-
-def _parse_blend_width(text: str | None, sent: bool) -> int | float:
-    """The requested blend width. Not sent means the default; anything sent must be a number 10..25 (percent)."""
-    if text is None and not sent:
-        return DEFAULT_BLEND_WIDTH
-    text = text or ""
-    message = f"The blend width must be a number from {MIN_BLEND_WIDTH} to {MAX_BLEND_WIDTH}."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or not MIN_BLEND_WIDTH <= value <= MAX_BLEND_WIDTH:
-        raise HTTPException(status_code=400, detail=message)
-    return int(value) if value.is_integer() else value
-
-
-def _parse_circle_unit(text: str | None, sent: bool) -> int:
-    """The requested circle unit in pixels. Not sent means the default; anything sent must be a whole number 1..10."""
-    if text is None and not sent:
-        return DEFAULT_CIRCLE_UNIT
-    text = text or ""
-    message = f"The circle movement must be a whole number from {MIN_CIRCLE_UNIT} to {MAX_CIRCLE_UNIT}."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or not value.is_integer() or not MIN_CIRCLE_UNIT <= value <= MAX_CIRCLE_UNIT:
-        raise HTTPException(status_code=400, detail=message)
-    return int(value)
-
-
-def _parse_circle_memory(text: str | None, sent: bool) -> int:
-    """The requested circle memory. Not sent means the default; anything sent must be a whole number 100..500."""
-    if text is None and not sent:
-        return DEFAULT_CIRCLE_MEMORY
-    text = text or ""
-    message = f"The circle memory must be a whole number from {MIN_CIRCLE_MEMORY} to {MAX_CIRCLE_MEMORY}."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or not value.is_integer() or not MIN_CIRCLE_MEMORY <= value <= MAX_CIRCLE_MEMORY:
-        raise HTTPException(status_code=400, detail=message)
-    return int(value)
 
 
 def _parse_decay_rate(text: str | None, sent: bool, image_type: str = DEFAULT_IMAGE_TYPE) -> float | int:
@@ -320,48 +254,6 @@ def _parse_wave_count(text: str | None, sent: bool) -> int:
     if not math.isfinite(value) or not value.is_integer() or not MIN_WAVE_COUNT <= value <= MAX_WAVE_COUNT:
         raise HTTPException(status_code=400, detail=message)
     return int(value)
-
-
-def _parse_circle_notes(text: str | None, sent: bool) -> int:
-    """The requested number of circles per frame. Not sent means the default; anything sent must be a whole number 5..12."""
-    if text is None and not sent:
-        return DEFAULT_CIRCLE_NOTES
-    text = text or ""
-    message = f"The number of circle notes must be a whole number from {MIN_CIRCLE_NOTES} to {MAX_CIRCLE_NOTES}."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or not value.is_integer() or not MIN_CIRCLE_NOTES <= value <= MAX_CIRCLE_NOTES:
-        raise HTTPException(status_code=400, detail=message)
-    return int(value)
-
-
-def _parse_circle_radius(text: str | None, sent: bool) -> int:
-    """The requested circle radius in pixels. Not sent means the default; anything sent must be a whole number 4..8."""
-    if text is None and not sent:
-        return DEFAULT_CIRCLE_RADIUS
-    text = text or ""
-    message = f"The circle radius must be a whole number from {MIN_CIRCLE_RADIUS} to {MAX_CIRCLE_RADIUS}."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or not value.is_integer() or not MIN_CIRCLE_RADIUS <= value <= MAX_CIRCLE_RADIUS:
-        raise HTTPException(status_code=400, detail=message)
-    return int(value)
-
-
-def _parse_circle_resize(text: str | None, sent: bool) -> bool:
-    """Whether the circles are resized by volume. Not sent means off; anything sent must be true, false, 1 or 0 (any case)."""
-    if text is None and not sent:
-        return DEFAULT_CIRCLE_RESIZE
-    word = (text or "").strip().lower()
-    if word in ("true", "1"):
-        return True
-    if word in ("false", "0"):
-        return False
-    raise HTTPException(status_code=400, detail="The circle resize must be true or false.")
 
 
 def _parse_interpolate(text: str | None, sent: bool) -> int:
@@ -476,16 +368,10 @@ def create_job(
     threshold: str | None = Form(None),
     smoothing_window: str | None = Form(None),
     image_type: str | None = Form(None),
-    blend_width: str | None = Form(None),
     colormap: str | None = Form(None),
     resolution: str | None = Form(None),
     note_count: str | None = Form(None),
     interpolate: str | None = Form(None),
-    circle_unit: str | None = Form(None),
-    circle_memory: str | None = Form(None),
-    circle_notes: str | None = Form(None),
-    circle_radius: str | None = Form(None),
-    circle_resize: str | None = Form(None),
     gaussian: str | None = Form(None),
     beat_coloring: str | None = Form(None),
     peak_distance: str | None = Form(None),
@@ -507,16 +393,10 @@ def create_job(
     threshold_value = _parse_threshold(threshold, "threshold" in sent)
     window_value = _parse_smoothing_window(smoothing_window, "smoothing_window" in sent)
     image_type_value = _parse_image_type(image_type, "image_type" in sent)
-    blend_width_value = _parse_blend_width(blend_width, "blend_width" in sent)
     colormap_value = _parse_colormap(colormap, "colormap" in sent)
     resolution_value = _parse_resolution(resolution, "resolution" in sent)
     note_count_value = _parse_note_count(note_count, "note_count" in sent)
     interpolate_value = _parse_interpolate(interpolate, "interpolate" in sent)
-    circle_unit_value = _parse_circle_unit(circle_unit, "circle_unit" in sent)
-    circle_memory_value = _parse_circle_memory(circle_memory, "circle_memory" in sent)
-    circle_notes_value = _parse_circle_notes(circle_notes, "circle_notes" in sent)
-    circle_radius_value = _parse_circle_radius(circle_radius, "circle_radius" in sent)
-    circle_resize_value = _parse_circle_resize(circle_resize, "circle_resize" in sent)
     gaussian_value = _parse_gaussian(gaussian, "gaussian" in sent)
     beat_coloring_value = _parse_beat_coloring(beat_coloring, "beat_coloring" in sent)
     peak_distance_value = _parse_peak_setting(peak_distance, "peak_distance" in sent, DEFAULT_MIN_DISTANCE, check_min_distance)
@@ -572,10 +452,10 @@ def create_job(
         # that no picture or measurement counts it as a note. It is fixed (no setting) and made once, here, before the frames are averaged and smoothed
         result = floor_analysis(analyze_channels(left, right, file_rate, window, step=step))
         # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local peaks
-        # measurement. Concentric, Decay, Decay Exp and Polar Chords are always colored by it; tiles, blended tiles and contour (its beat wave) only with the beat coloring box on; the
+        # measurement. Decay, Decay Exp, Polar Chords, Chromatic Decay and Chromatic Wireframe are always colored by it; contour (its beat wave) only with the beat coloring box on; the
         # other pictures and the box off never measure it
         beat = None
-        if image_type_value in ("concentric", "decay", "decay-exp", "polar-chords", *CHROMATIC_TYPES) or (beat_coloring_value and image_type_value in ("tiles", "blended", "contour")):
+        if image_type_value in ("decay", "decay-exp", "polar-chords", *CHROMATIC_TYPES) or (beat_coloring_value and image_type_value == "contour"):
             beat = measure_local_peaks(
                 left, right, file_rate, peak_distance_value, peak_prominence_value
             ).frame_positions(fps, frames)
@@ -583,12 +463,10 @@ def create_job(
         rhythm = None
         if image_type_value == "rhythm-circles":
             rhythm = rhythm_angles(measure_local_peaks(left, right, file_rate, peak_distance_value, peak_prominence_value), fps, frames)
-        # write_frames smooths the note values (each frame is mixed with the earlier frames of the window), colors every
-        # tile from the colormap at its own note's strength, blacks the tiles of notes below the threshold, and writes
-        # the finished tile colors as the chosen image type; a resolution above 1 first interpolates the grid of smoothed
-        # note values to a finer one, and a number of notes below 84 first builds the picture from the notes with the most
-        # energy in the file only; an interpolate value above 1 draws only every n-th frame and makes the others from their
-        # neighbors with Pillow; the image type circles draws wandering circles instead (its three settings)
+        # write_frames smooths the note values (each frame is mixed with the earlier frames of the window) and draws them as the
+        # chosen image type; for the contour, a resolution above 1 first interpolates the grid of smoothed note values to a finer
+        # one, a number of notes below 84 first builds the picture from the notes with the most energy in the file only, and an
+        # interpolate value above 1 draws only every n-th frame and makes the others from their neighbors with Pillow
         write_frames(
             average_frames(result, fps, frames),
             frames_dir,
@@ -597,15 +475,9 @@ def create_job(
             smoothing_window=window_value,
             threshold=threshold_value,
             image_type=image_type_value,
-            blend_width=blend_width_value,
             resolution=resolution_value,
             note_count=note_count_value,
             interpolate=interpolate_value,
-            circle_unit=circle_unit_value,
-            circle_memory=circle_memory_value,
-            circle_notes=circle_notes_value,
-            circle_radius=circle_radius_value,
-            circle_resize=circle_resize_value,
             gaussian=gaussian_value,
             beat=beat,
             note_layout=note_layout_value,
@@ -641,16 +513,10 @@ def create_job(
         "threshold": threshold_value,
         "smoothing_window": window_value,
         "image_type": image_type_value,
-        "blend_width": blend_width_value,
         "colormap": colormap_value,
         "resolution": resolution_value,
         "note_count": note_count_value,
         "interpolate": interpolate_value,
-        "circle_unit": circle_unit_value,
-        "circle_memory": circle_memory_value,
-        "circle_notes": circle_notes_value,
-        "circle_radius": circle_radius_value,
-        "circle_resize": circle_resize_value,
         "gaussian": gaussian_value,
         "beat_coloring": beat_coloring_value,
         "peak_distance": peak_distance_value,

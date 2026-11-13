@@ -21,7 +21,7 @@ This module knows nothing about the note analysis or the audio: the smoothed not
 
 import numpy as np
 
-from .concentric import GRID_COLUMNS, GRID_ROWS, NOTES
+from .note_grid import GRID_COLUMNS, GRID_ROWS, NOTES
 from .decay import DEFAULT_DECAY_RATE, MAX_POINTS, NEIGHBOURS, _spread, check_decay_rate, gains, steps_in_frame
 from .note_layout import DEFAULT_NOTE_LAYOUT, arrange_notes, check_note_layout
 

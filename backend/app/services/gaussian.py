@@ -5,10 +5,9 @@ drawn frame is blurred with Pillow's ``ImageFilter.GaussianBlur``, whose radius 
 pixels. The frame is 3:2, so the radius is 3:2 as well: a setting of ``v`` blurs by ``1.5 * v`` pixels across and ``v`` pixels
 down (a setting of 4 is a radius of 6 in x and 4 in y), so the smoothing looks the same in both directions.
 
-It applies to the kinds of picture that are made from a grid (tiles, blended tiles and contour); the circles do not use it. The
+It applies to the one kind of picture that is made from a grid, the contour; the other pictures do not use it. The
 blur is applied to the frames that are drawn, before the in-between frames of ``interpolate`` are made from them, so an
-in-between frame is a blend of blurred frames. A flat-colored tile frame is saved with a palette; once blurred it has more colors
-than a palette holds and is saved as a true-color picture.
+in-between frame is a blend of blurred frames.
 """
 
 import math
@@ -57,7 +56,7 @@ def blur_frames(directory: Path, indices, value: float) -> None:
     def blur(index: int) -> None:
         path = directory / f"frame_{int(index):06d}.png"
         with Image.open(path) as opened:
-            image = opened.convert("RGB") if opened.mode == "P" else opened.copy()
+            image = opened.copy()
         image.filter(ImageFilter.GaussianBlur(radius)).save(path, compress_level=1)
 
     with ThreadPoolExecutor(max_workers=_WORKERS) as pool:

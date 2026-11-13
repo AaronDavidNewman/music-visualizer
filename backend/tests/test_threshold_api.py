@@ -2,14 +2,11 @@
 value), its refusals, the response, and the frames.
 """
 
-import math
 
 import numpy as np
 import pytest
 
-from app.services.frame_rendering import average_frames
-from app.services.note_analysis import NoteBinAnalyzer, analyze_channels
-from app.services.window_spacing import default_spacing, resolve_step
+from app.services.note_analysis import NoteBinAnalyzer
 
 from .colormap_names import WITHOUT_BLACK
 from .test_jobs_api import SR, client, frame_rgb, leftovers, wav_bytes  # noqa: F401
@@ -38,21 +35,8 @@ def post_threshold(client, data, **fields):
     return client.post("/api/jobs", files={"file": ("song.wav", data, "audio/wav")}, data=form)
 
 
-def faint_share(audio):
-    """The faint note's value in the middle of the file as a percentage of the file's largest note value."""
-    spacing = default_spacing(SR, FPS, WINDOW)
-    _, step, _ = resolve_step(spacing, WINDOW)
-    result = analyze_channels(audio, audio, SR, WINDOW, step=step)
-    frames = average_frames(result, FPS, math.ceil(len(audio) / SR * FPS))
-    return 100.0 * frames[MID_FRAME, FAINT_NOTE] / frames.max()
-
-
 def tiles(client, job, index=MID_FRAME):
     return frame_rgb(client, job, index)
-
-
-def is_black(rgb):
-    return not np.asarray(rgb).any()
 
 
 @pytest.mark.parametrize("text, echoed", [("0", 0), ("1", 1), ("5", 5), ("10", 10), ("2.5", 2.5), ("5.0", 5), (" 4 ", 4)])
@@ -91,26 +75,6 @@ def test_a_bad_threshold_is_refused_before_the_file_is_read(client):
     )
     assert r.status_code == 400
     assert r.json()["detail"] == "The threshold must be a number from 0 to 10."
-
-
-def test_a_faint_tone_turns_black_above_its_share_and_the_loud_one_is_unchanged(client):
-    audio = two_tones()
-    data = wav_bytes(audio)
-    share = faint_share(audio)
-    assert 2 < share < 8, share  # the setup really has a faint note well below the loud one
-
-    off = tiles(client, post_threshold(client, data, threshold="0").json())
-    assert not is_black(off[LOUD_NOTE]) and not is_black(off[FAINT_NOTE])
-
-    hiding = post_threshold(client, data, threshold=str(math.ceil(share) + 3)).json()
-    got = tiles(client, hiding)
-    assert is_black(got[FAINT_NOTE])
-    assert got[LOUD_NOTE].tolist() == off[LOUD_NOTE].tolist()
-
-    keeping = post_threshold(client, data, threshold=str(max(1, math.floor(share) - 3))).json()
-    got = tiles(client, keeping)
-    assert got[FAINT_NOTE].tolist() == off[FAINT_NOTE].tolist()
-    assert got[LOUD_NOTE].tolist() == off[LOUD_NOTE].tolist()
 
 
 @pytest.mark.parametrize("threshold", [1, 3, 6, 10])

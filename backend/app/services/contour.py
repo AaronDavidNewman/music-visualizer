@@ -101,7 +101,7 @@ def write_contour_frames(
 
     ``values`` is ``(frames, rows * columns)``: the smoothed value of every drawn note in every frame, with the notes the
     threshold hides already set to 0; note ``n`` is at row ``n // columns`` and column ``n % columns`` of the grid, and
-    the first row is drawn at the *top* of the picture, like the tiles. ``peak`` is the largest smoothed value of the
+    the first row is drawn at the *top* of the picture, like the grid of notes. ``peak`` is the largest smoothed value of the
     whole file (0 for a silent file).
     """
     colormap = check_colormap(colormap)

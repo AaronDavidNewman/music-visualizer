@@ -14,7 +14,7 @@ from app.services.noise_floor import NOISE_FLOOR
 
 from .frame_size import HEIGHT, WIDTH  # noqa: F401
 from .test_jobs_api import SR, client, frame_rgb, leftovers, note_tone, wav_bytes  # noqa: F401
-from .test_peak_tile_colors_api import ROWS, post
+from .test_peak_tile_colors_api import post
 from .test_polar_chords_api import ARC, CHORD_ARC, MIDDLE, RADIUS, row_at
 from .test_resolution_api import picture
 
@@ -72,15 +72,15 @@ def test_a_note_70_db_below_the_loudest_is_0_in_every_frame_for_every_image_type
 
 
 def test_the_same_note_only_50_db_below_is_not_cut(client, given):
-    job_of(client, audio(-50.0), image_type="tiles")
+    job_of(client, audio(-50.0), image_type="contour")
     frames = given[0]
     middle = frames[frames.shape[0] // 2]
     assert middle[FAINT] > 0 and middle[FAINT] == pytest.approx(db(-50.0) * middle[LOUD], rel=0.02)
 
 
 def test_the_note_just_above_the_floor_is_kept_and_just_under_it_is_cut(client, given):
-    job_of(client, audio(-59.0), image_type="tiles")  # 1.12 thousandths
-    job_of(client, audio(-61.0), image_type="tiles")  # 0.89 thousandths
+    job_of(client, audio(-59.0), image_type="contour")  # 1.12 thousandths
+    job_of(client, audio(-61.0), image_type="contour")  # 0.89 thousandths
     kept, cut = given
     assert (kept[kept.shape[0] // 2][FAINT] > 0) and (cut[cut.shape[0] // 2][FAINT] == 0.0)
 
@@ -98,20 +98,11 @@ def test_a_stretch_in_which_only_a_faint_note_sounds_is_silence(client, given):
 
 
 def test_a_silent_file_gives_values_of_0(client, given):
-    job_of(client, wav_bytes(np.zeros(int(SECONDS * SR))), image_type="tiles")
+    job_of(client, wav_bytes(np.zeros(int(SECONDS * SR))), image_type="contour")
     assert (given[0] == 0.0).all()
 
 
 # ---- the pictures themselves -------------------------------------------------------------------------------------------------------------------
-
-
-def test_the_tile_of_the_faint_note_is_the_colour_of_silence_and_the_loud_tile_is_not(client):
-    job = job_of(client, audio(-70.0), image_type="tiles")
-    middle = job["frame_count"] // 2
-    levels = [ROWS.get(tuple(int(v) for v in frame_rgb(client, job, middle)[n]), -1) for n in (LOUD, FAINT, 10)]
-    assert levels[1] == levels[2] == 0 and levels[0] > 100  # the faint note looks like a note that does not sound at all
-    uncut = job_of(client, audio(-50.0), image_type="tiles")
-    assert ROWS.get(tuple(int(v) for v in frame_rgb(client, uncut, middle)[FAINT]), -1) > 0  # 50 dB down still shows
 
 
 def test_polar_chords_shows_only_the_loud_note_not_the_faint_one(client):
@@ -152,20 +143,9 @@ def test_the_values_the_pictures_are_given_do_not_depend_on_the_threshold_and_th
     np.testing.assert_array_equal(zero, ten)
 
 
-def test_the_stricter_of_the_threshold_and_the_floor_decides_and_a_note_between_them_is_hidden_by_the_threshold_only(client):
-    # a note 34 dB down is 2 percent of the loudest: the floor (0.1 percent) keeps it, a Threshold of 5 percent hides it
-    shown = job_of(client, audio(-34.0), image_type="tiles", threshold="0")
-    hidden = job_of(client, audio(-34.0), image_type="tiles", threshold="5")
-    middle = shown["frame_count"] // 2
-    colour = lambda job, note: tuple(int(v) for v in frame_rgb(client, job, middle)[note])  # noqa: E731
-    assert ROWS.get(colour(shown, FAINT), -1) > 0  # shown, as before the feature
-    assert ROWS.get(colour(hidden, FAINT), -1) == -1  # black: hidden by the Threshold, as before the feature
-    assert ROWS.get(colour(hidden, LOUD), -1) > 100  # the loud note is still drawn
-
-
 def test_the_floor_adds_no_field_to_the_request_or_the_response(client):
-    plain = job_of(client, audio(-70.0), image_type="tiles")
-    with_extra = job_of(client, audio(-70.0), image_type="tiles", noise_floor="0", noise_floor_db="-20")  # not a field of the request: ignored like any unknown field
+    plain = job_of(client, audio(-70.0), image_type="contour")
+    with_extra = job_of(client, audio(-70.0), image_type="contour", noise_floor="0", noise_floor_db="-20")  # not a field of the request: ignored like any unknown field
     assert set(plain) == set(with_extra)
     assert not [key for key in plain if "noise" in key or "floor" in key]
 

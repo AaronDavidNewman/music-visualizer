@@ -11,10 +11,8 @@ export interface JobResult {
   threshold: number;
   /** How many earlier frames are mixed into each frame (1 to 20). */
   smoothing_window: number;
-  /** "tiles", "blended" or "contour". */
+  /** One of the names in IMAGE_TYPES (utilities/validation.ts), such as "contour". */
   image_type: string;
-  /** The fade width used for blended tiles, as a percentage of the tile width (10 to 25). */
-  blend_width: number;
   /** The colormap used: one of the names in COLORMAPS (utilities/validation.ts). */
   colormap: string;
   /** How many times finer than the original 12 \u00d7 7 grid the picture is drawn (1 to 5). */
@@ -23,16 +21,12 @@ export interface JobResult {
   note_count: number;
   /** Only every n-th frame is drawn (1 to 5); the frames between are made from their neighbors. */
   interpolate: number;
-  /** The Circles image type: the unit in pixels, the memory in circles and the notes per frame. */
-  circle_unit: number;
-  circle_radius: number;
-  circle_resize: boolean;
   gaussian: number;
-  /** Tiles and Blended tiles: half the color from the frame's place in the local energy peak (feature 024). */
+  /** Contour: the beat wave is on (feature 028). */
   beat_coloring: boolean;
   peak_distance: number;
   peak_prominence: number;
-  /** Tiles, Blended tiles and Concentric: which note is in which cell of the grid, rows or spiral (feature 026). */
+  /** Decay, Decay Exp and Polar Chords: which note is in which cell of the grid, rows or spiral (feature 026). */
   note_layout: string;
   /** Decay: the number of frames between two decay steps (feature 027). */
   decay_rate: number;
@@ -45,8 +39,6 @@ export interface JobResult {
   decay_medium: number;
   decay_high: number;
   decay_saturated: number;
-  circle_memory: number;
-  circle_notes: number;
   window_spacing: number;
   step_samples: number;
   window_count: number;
@@ -64,10 +56,8 @@ export interface JobSettings {
   threshold: number;
   /** 1 to 20. */
   smoothingWindow: number;
-  /** "tiles", "blended" or "contour". */
+  /** One of the names in IMAGE_TYPES (utilities/validation.ts), such as "contour". */
   imageType: string;
-  /** 10 to 25. Only used by blended tiles (not by tiles or contour). */
-  blendWidth: number;
   /** One of the names in COLORMAPS (utilities/validation.ts). */
   colormap: string;
   /** 1 to 5: a whole number. */
@@ -76,10 +66,6 @@ export interface JobSettings {
   noteCount: number;
   /** 1 to 5: a whole number. */
   interpolate: number;
-  /** Only used by Circles: 1 to 10 pixels, 100 to 500 circles, 5 to 12 notes per frame. */
-  circleUnit: number;
-  circleRadius: number;
-  circleResize: boolean;
   gaussian: number;
   /** Beat coloring on or off; the minimum distance in milliseconds (100 to 2000) and the prominence in percent (0 to 100). */
   beatColoring: boolean;
@@ -94,8 +80,6 @@ export interface JobSettings {
   decayMedium: number;
   decayHigh: number;
   decaySaturated: number;
-  circleMemory: number;
-  circleNotes: number;
 }
 
 /** Uploads the file and waits for the frames to be created. Rejects with a message fit to show the user. */
@@ -109,14 +93,10 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("threshold", String(settings.threshold));
   body.append("smoothing_window", String(settings.smoothingWindow));
   body.append("image_type", settings.imageType);
-  body.append("blend_width", String(settings.blendWidth));
   body.append("colormap", settings.colormap);
   body.append("resolution", String(settings.resolution));
   body.append("note_count", String(settings.noteCount));
   body.append("interpolate", String(settings.interpolate));
-  body.append("circle_unit", String(settings.circleUnit));
-  body.append("circle_radius", String(settings.circleRadius));
-  body.append("circle_resize", String(settings.circleResize));
   body.append("gaussian", String(settings.gaussian));
   body.append("beat_coloring", String(settings.beatColoring));
   body.append("peak_distance", String(settings.peakDistance));
@@ -129,8 +109,6 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("decay_medium", String(settings.decayMedium));
   body.append("decay_high", String(settings.decayHigh));
   body.append("decay_saturated", String(settings.decaySaturated));
-  body.append("circle_memory", String(settings.circleMemory));
-  body.append("circle_notes", String(settings.circleNotes));
 
   const res = await send("/api/jobs", { method: "POST", body });
   return (await res.json()) as JobResult;

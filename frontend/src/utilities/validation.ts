@@ -85,19 +85,13 @@ export function validateSmoothingWindow(value: string | number): string | null {
 }
 
 /**
- * The kinds of picture: Tiles (flat tiles with hard edges, the default), Blended tiles (colors fade across the tile
- * edges) and Contour (the notes drawn as a filled contour map), then Circles, Circles paint and Concentric (a circle of up to
- * twelve rings for each of the 84 notes), Decay (the same circles, each a disc that keeps points and fades into its neighbours) and Decay Exp (Decay
- * with the points gained and lost along an exponential curve) and Polar Chords (the loudest notes clockwise and the chord of the frame
- * counterclockwise as bars of a polar bar graph).
+ * The kinds of picture: Contour (the notes drawn as a filled contour map, the default), Decay (a circle for each of the 84 notes, each a disc that keeps points and fades into its
+ * neighbours), Decay Exp (Decay with the points gained and lost along an exponential curve), Polar Chords (the loudest notes clockwise and the chord of the frame
+ * counterclockwise as bars of a polar bar graph), Energy graphs, Chromatic Decay, Rhythm Circles and Chromatic Wireframe. (Tiles, Blended tiles, Circles, Circles paint
+ * and Concentric were removed in feature 040.)
  */
 export const IMAGE_TYPES = [
-  { value: "tiles", label: "Tiles" },
-  { value: "blended", label: "Blended tiles" },
   { value: "contour", label: "Contour" },
-  { value: "circles", label: "Circles" },
-  { value: "circles_paint", label: "Circles paint" },
-  { value: "concentric", label: "Concentric" },
   { value: "decay", label: "Decay" },
   { value: "decay-exp", label: "Decay Exp" },
   { value: "polar-chords", label: "Polar Chords" },
@@ -106,11 +100,11 @@ export const IMAGE_TYPES = [
   { value: "rhythm-circles", label: "Rhythm Circles" },
   { value: "chromatic-wireframe", label: "Chromatic Wireframe" },
 ] as const;
-export const DEFAULT_IMAGE_TYPE = "tiles";
+export const DEFAULT_IMAGE_TYPE = "contour";
 
 const imageTypeMessage = `The image type must be one of ${IMAGE_TYPES.map((t) => t.value).join(", ")}.`;
 
-/** The name shown for an image type value such as "blended". */
+/** The name shown for an image type value such as "decay-exp". */
 export function imageTypeLabel(value: string): string {
   return IMAGE_TYPES.find((t) => t.value === value)?.label ?? value;
 }
@@ -120,35 +114,7 @@ export function validateImageType(value: string): string | null {
   return IMAGE_TYPES.some((t) => t.value === value) ? null : imageTypeMessage;
 }
 
-/** Whether the blend width does anything for this image type: only Blended tiles fade across the tile edges. */
-export function blendWidthApplies(imageType: string): boolean {
-  return imageType === "blended";
-}
-
-/** The blend width: how far the fade between tiles reaches on each side of an edge, as a percentage of the tile width. */
-export const BLEND_WIDTH_RANGE = { min: 10, max: 25, step: 1 } as const;
-export const DEFAULT_BLEND_WIDTH = BLEND_WIDTH_RANGE.max;
-
-const blendWidthMessage = `The blend width must be a number from ${BLEND_WIDTH_RANGE.min} to ${BLEND_WIDTH_RANGE.max}.`;
-
-/** Returns an error message, or null when the blend width is a finite number from 10 to 25. */
-export function validateBlendWidth(value: string | number): string | null {
-  const n = parseNumber(value);
-  const ok = Number.isFinite(n) && n >= BLEND_WIDTH_RANGE.min && n <= BLEND_WIDTH_RANGE.max;
-  return ok ? null : blendWidthMessage;
-}
-
-/** The readout beside the slider, such as "25% of a tile". */
-export function formatBlendWidth(value: number): string {
-  return `${Number(value.toFixed(2))}% of a tile`;
-}
-
-/** The result summary item, such as "25%". */
-export function formatBlendWidthSummary(value: number): string {
-  return `${Number(value.toFixed(2))}%`;
-}
-// "coolwarm", "YlOrRd", "inferno", "Blues", "YlGn", "Greys", "hsv"
-/** The colormaps that can be chosen: four of matplotlib's named scales. A tile's color is the color of the chosen scale at its note's strength. */
+/** The colormaps that can be chosen: four of matplotlib's named scales. A picture's colors come from the chosen scale. */
 export const COLORMAPS = [
   { value: "coolwarm", label: "Cool Warm" },
   { value: "YlOrRd", label: "Autumn" },
@@ -256,77 +222,19 @@ export function formatGaussian(value: number): string {
   return value === 0 ? "Off" : String(value);
 }
 
-/** The settings of the Circles image type: the unit in pixels, the size (circumference) in pixels, the memory in circles, the strongest notes per frame. */
-export const CIRCLE_UNIT_RANGE = { min: 1, max: 10, step: 1 } as const;
-export const DEFAULT_CIRCLE_UNIT = 4;
-export const CIRCLE_RADIUS_RANGE = { min: 4, max: 8, step: 1 } as const;
-export const DEFAULT_CIRCLE_RADIUS = 4;
-export const DEFAULT_CIRCLE_RESIZE = false;
-export const CIRCLE_MEMORY_RANGE = { min: 100, max: 500, step: 10 } as const;
-export const DEFAULT_CIRCLE_MEMORY = 300;
-export const CIRCLE_NOTES_RANGE = { min: 5, max: 12, step: 1 } as const;
-export const DEFAULT_CIRCLE_NOTES = 8;
-
-const circleUnitMessage = `The circle movement must be a whole number from ${CIRCLE_UNIT_RANGE.min} to ${CIRCLE_UNIT_RANGE.max}.`;
-const circleRadiusMessage = `The circle radius must be a whole number from ${CIRCLE_RADIUS_RANGE.min} to ${CIRCLE_RADIUS_RANGE.max}.`;
-const circleMemoryMessage = `The circle memory must be a whole number from ${CIRCLE_MEMORY_RANGE.min} to ${CIRCLE_MEMORY_RANGE.max}.`;
-const circleNotesMessage = `The number of circle notes must be a whole number from ${CIRCLE_NOTES_RANGE.min} to ${CIRCLE_NOTES_RANGE.max}.`;
-
 function validateWhole(value: string | number, min: number, max: number, message: string): string | null {
   const n = parseNumber(value);
   return Number.isInteger(n) && n >= min && n <= max ? null : message;
 }
 
-/** Returns an error message, or null when the unit is a whole number of pixels from 1 to 10. */
-export function validateCircleUnit(value: string | number): string | null {
-  return validateWhole(value, CIRCLE_UNIT_RANGE.min, CIRCLE_UNIT_RANGE.max, circleUnitMessage);
-}
-
-/** Returns an error message, or null when the size (the circumference) is a whole number of pixels from 25 to 50. */
-export function validateCircleRadius(value: string | number): string | null {
-  return validateWhole(value, CIRCLE_RADIUS_RANGE.min, CIRCLE_RADIUS_RANGE.max, circleRadiusMessage);
-}
-
-/** Returns an error message, or null when the memory is a whole number of circles from 100 to 500. */
-export function validateCircleMemory(value: string | number): string | null {
-  return validateWhole(value, CIRCLE_MEMORY_RANGE.min, CIRCLE_MEMORY_RANGE.max, circleMemoryMessage);
-}
-
-/** Returns an error message, or null when the notes of the Circles group are a whole number from 5 to 12. */
-export function validateCircleNotes(value: string | number): string | null {
-  return validateWhole(value, CIRCLE_NOTES_RANGE.min, CIRCLE_NOTES_RANGE.max, circleNotesMessage);
-}
-
-/** The readouts beside the sliders, and the result summary items: "4 px", "25 px around", "300 circles", "8 notes". */
-export function formatCircleUnit(value: number): string {
-  return `${value} px`;
-}
-export function formatCircleRadius(value: number): string {
-  return `${value} px`;
-}
-export function formatCircleResize(value: boolean): string {
-  return value ? "On" : "Off";
-}
-export function formatCircleMemory(value: number): string {
-  return `${value} circles`;
-}
-export function formatCircleNotes(value: number): string {
-  return `${value} notes`;
-}
-
-/** Whether the image type is one of the two kinds of circles (Circles, which has a memory, and Circles paint, which has none). */
-export function isCirclesType(imageType: string): boolean {
-  return imageType === "circles" || imageType === "circles_paint";
-}
-
-/** Whether the settings that describe a grid of tiles (Threshold, Notes, Oversampling, Interpolate, Gaussian) mean anything: not for circles, Concentric and Decay. */
+/** Whether the settings that describe the grid of notes (Notes, Oversampling, Interpolate, Gaussian) mean anything: only for Contour, the one picture that is drawn from the grid. */
 export function gridSettingsApply(imageType: string): boolean {
-  return !isCirclesType(imageType) && !isRingsType(imageType) && !isPolarType(imageType) && !isEnergyType(imageType) && !isChromaticType(imageType) && !isRhythmType(imageType);
+  return imageType === "contour";
 }
 
-/** Whether the picture is one with a circle for each of the 84 notes that the beat always colors or charges: Concentric, Decay (feature 027) and Decay Exp (feature 030). */
+/** Whether the picture is one with a circle for each of the 84 notes that the beat always charges: Decay (feature 027) and Decay Exp (feature 030). */
 export function isRingsType(imageType: string): boolean {
-  return imageType === "concentric" || imageType === "decay" || imageType === "decay-exp";
+  return imageType === "decay" || imageType === "decay-exp";
 }
 
 /** Whether the picture is Polar Chords (feature 032): bars of the loudest notes and of the chord, whose length the beat always sets. */
@@ -352,7 +260,7 @@ export function isRhythmType(imageType: string): boolean {
   return imageType === "rhythm-circles";
 }
 
-/** Whether Minimum distance and Prominence are used: always by Concentric, Decay, Decay Exp, Polar Chords, Chromatic Decay (the beat colors, charges or lengthens them) and Rhythm Circles (the peaks turn its rings), by Tiles, Blended tiles and Contour with the Beat coloring box on, never by the others. */
+/** Whether Minimum distance and Prominence are used: always by Decay, Decay Exp, Polar Chords, Chromatic Decay (the beat colors, charges or lengthens them) and Rhythm Circles (the peaks turn its rings), by Contour with the Beat coloring box on, never by the others. */
 export function peakSettingsShown(imageType: string, beatColoring: boolean): boolean {
   return isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || isRhythmType(imageType) || (beatColoringApplies(imageType) && beatColoring);
 }
@@ -445,7 +353,7 @@ export function decayRateApplies(imageType: string): boolean {
   return imageType === "decay" || imageType === "decay-exp";
 }
 
-/** Beat coloring (feature 024): half the color of a tile comes from the frame's place in the local energy peak. */
+/** Beat coloring (feature 028): the beat wave of the contour, rings that cut into the picture as the music rises in its beat. */
 export const DEFAULT_BEAT_COLORING = false;
 export const PEAK_DISTANCE_RANGE = { min: 100, max: 2000, step: 50 } as const;
 export const DEFAULT_PEAK_DISTANCE = 100;
@@ -478,9 +386,9 @@ export function formatPeakProminence(value: number): string {
   return `${value}%`;
 }
 
-/** Whether the beat coloring means anything: for Tiles and Blended tiles (it colors them) and for Contour (it switches the beat wave on, feature 028). */
+/** Whether the beat coloring means anything: only for Contour (it switches the beat wave on, feature 028). */
 export function beatColoringApplies(imageType: string): boolean {
-  return imageType === "tiles" || imageType === "blended" || imageType === "contour";
+  return imageType === "contour";
 }
 
 /** The wave count (feature 028): the waves of the beat wave of the Contour picture across the largest dimension of its grid. */
@@ -523,7 +431,7 @@ export function noteLayoutLabel(value: string): string {
   return NOTE_LAYOUTS.find((l) => l.value === value)?.label ?? value;
 }
 
-/** Whether the note layout does anything: for the pictures with one shape for each note, Tiles, Blended tiles, Concentric, Decay and Decay Exp, and for Polar Chords (it says in which arc each note is). */
+/** Whether the note layout does anything: for the pictures with one shape for each note, Decay and Decay Exp, and for Polar Chords (it says in which arc each note is). */
 export function noteLayoutApplies(imageType: string): boolean {
-  return imageType === "tiles" || imageType === "blended" || isRingsType(imageType) || isPolarType(imageType);
+  return isRingsType(imageType) || isPolarType(imageType);
 }

@@ -16,17 +16,8 @@ export const GROUPS: readonly GroupDefinition[] = [
   { id: "analysis", title: "Analysis", controls: ["window-size", "frame-rate", "window-spacing"] },
   { id: "colormap", title: "Colormap", controls: ["colormap"] },
   { id: "image-type", title: "Image type", controls: ["image-type"] },
-  { id: "tiles", title: "Tiles", controls: ["threshold", "notes"] },
   // the wave count of the beat wave (feature 028) comes after Threshold and Notes
   { id: "contour", title: "Contour", controls: ["threshold", "notes", "wave-count"] },
-  { id: "blended", title: "Blended Tiles", controls: ["threshold", "notes", "blend-width"] },
-  {
-    id: "circles",
-    title: "Circles",
-    controls: ["circle-unit", "circle-radius", "circle-resize", "circle-memory", "circle-notes"],
-  },
-  // the same circles with no memory (feature 022): so no Memory control
-  { id: "circles_paint", title: "Circles paint", controls: ["circle-unit", "circle-radius", "circle-resize", "circle-notes"] },
   // the decay rate of the Decay picture (feature 027): the frames between two decay steps, and the four decay amounts, one for each saturation level
   { id: "decay", title: "Decay", controls: ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"] },
   // Decay Exp (feature 030): the same decay rate, and no decay amounts, because its loss is given by a formula
@@ -34,22 +25,22 @@ export const GROUPS: readonly GroupDefinition[] = [
   // Notes shown by Polar Chords (feature 032): how many of the loudest notes get a bar
   { id: "polar-chords", title: "Polar chords", controls: ["polar-notes"] },
   // the decay rate of Chromatic Decay (feature 035): a whole number of frames from 1 to 10, its own control (the decay rate of Decay and Decay Exp is 0.25 to 4), and its
-  // Threshold (feature 037), the same control and value as the one of Tiles, Contour and Blended tiles
+  // Threshold (feature 037), the same control and value as the one of Contour
   { id: "chromatic-decay", title: "Chromatic Decay", controls: ["threshold", "chromatic-decay-rate"] },
   // Chromatic Wireframe (feature 039) draws the points of Chromatic Decay, so it has the same two controls (and the same values) in a group of its own
   { id: "chromatic-wireframe", title: "Chromatic Wireframe", controls: ["threshold", "chromatic-decay-rate"] },
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
-  // the beat coloring of Tiles and Blended tiles (feature 024) and the beat wave of Contour (feature 028): its own group, after the group of the type
+  // the beat coloring of Contour, its beat wave (feature 028): its own group, after the group of the type
   { id: "local-peaks", title: "Local peaks", controls: ["beat-coloring", "peak-distance", "peak-prominence"] },
-  // the same two settings for Concentric (feature 025) and Decay (feature 027): the beat always colors or charges them, so no checkbox
+  // the same two settings for Decay (feature 027) and the pictures after it: the beat always charges them, so no checkbox (the id is from Concentric, feature 025, the first picture that had it)
   { id: "concentric-peaks", title: "Local peaks", controls: ["peak-distance", "peak-prominence"] },
   { id: "data-smoothing", title: "Data smoothing", controls: ["smoothing-window", "smoothing"] },
   { id: "image-smoothing", title: "Image smoothing", controls: ["resolution", "interpolate", "gaussian"] },
 ];
 
 /** The ids of the groups that belong to one image type: exactly one of them follows the Image type group. */
-const TYPE_GROUPS = ["tiles", "contour", "blended", "circles", "circles_paint", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"];
+const TYPE_GROUPS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"];
 
 const byId = new Map(GROUPS.map((g) => [g.id, g]));
 
@@ -63,9 +54,9 @@ export function controlsIn(id: string): readonly string[] {
 
 /**
  * The ids of the groups shown for an image type, top to bottom: the top group, Colormap, Image type, the group of the type
- * (none for Concentric, which has no controls of its own, nor for a type that is not one of the eight), Note layout for Tiles, Blended
- * tiles, Concentric, Decay and Decay Exp, Local peaks for Tiles, Blended tiles and Contour (with the checkbox) and for Concentric, Decay and Decay Exp
- * (without it), Data smoothing (not for Energy graphs and Rhythm Circles, which do not smooth the data), and Image smoothing when the type draws a grid. Energy graphs has
+ * (none for Energy graphs and Rhythm Circles, which have no controls of their own, nor for a type that is not one of the eight), Note layout for Decay, Decay Exp and Polar Chords,
+ * Local peaks for Contour (with the checkbox) and for Decay, Decay Exp, Polar Chords, Chromatic Decay and Chromatic Wireframe (without it), Data smoothing (not for Energy graphs and Rhythm
+ * Circles, which do not smooth the data), and Image smoothing when the type draws a grid (Contour). Energy graphs has
  * no group of its own: only the top group, Colormap and Image type. Rhythm Circles has none either, and adds only Local peaks (without the checkbox) to those three.
  */
 export function groupsFor(imageType: string): string[] {
