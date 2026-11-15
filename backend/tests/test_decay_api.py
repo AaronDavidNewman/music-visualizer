@@ -12,13 +12,12 @@ from app.services.note_grid import tile_edges
 
 from .frame_size import HEIGHT, WIDTH
 from .test_jobs_api import SR, client, leftovers, note_tone, wav_bytes  # noqa: F401
-from .test_peak_tile_colors_api import COLORMAP, ROWS, TONE_NOTE, all_frames, post, pulse_wav
+from .test_peak_tile_colors_api import COLORMAP, ROWS, TONE_NOTE, all_frames, no_beat, post, pulse_wav  # noqa: F401
 from .test_resolution_api import picture, tiny
 
 TYPE_MESSAGE = f"The image type must be one of {', '.join(IMAGE_TYPES)}."
 RATE_MESSAGE = "The decay rate must be a number from 0.25 to 4 in steps of 0.25."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
-PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent."
 MIDDLE_COLOR_ROW = 128
 COLUMN_EDGES = tile_edges(12, WIDTH)
 ROW_EDGES = tile_edges(7, HEIGHT)
@@ -60,7 +59,7 @@ def test_decay_is_accepted_and_echoed_with_every_colormap_and_the_defaults(clien
     assert r.status_code == 200, r.text
     job = r.json()
     assert job["image_type"] == "decay" and job["colormap"] == name
-    assert (job["decay_rate"], job["note_layout"], job["peak_distance"], job["peak_prominence"]) == (1, "rows", 100, 50)
+    assert (job["decay_rate"], job["note_layout"], job["peak_distance"]) == (1, "rows", 350)
 
 
 def test_the_response_has_the_same_keys_as_for_the_other_types_and_decay_rate_is_in_all_of_them(client):
@@ -136,7 +135,7 @@ def measured(monkeypatch):
 
 @pytest.mark.parametrize("box", [None, "false", "true"])
 def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
-    fields = {"peak_distance": "300", "peak_prominence": "20"}
+    fields = {"peak_distance": "300"}
     if box is not None:
         fields["beat_coloring"] = box
     assert decay(client, tiny(), **fields).status_code == 200
@@ -151,7 +150,7 @@ def test_the_checkbox_has_no_effect_on_the_frames_of_decay(client):
 
 @pytest.mark.parametrize(
     "fields, message",
-    [({"peak_distance": "50"}, DISTANCE_MESSAGE), ({"peak_distance": "abc"}, DISTANCE_MESSAGE), ({"peak_prominence": "101"}, PROMINENCE_MESSAGE), ({"peak_prominence": ""}, PROMINENCE_MESSAGE)],
+    [({"peak_distance": "50"}, DISTANCE_MESSAGE), ({"peak_distance": "abc"}, DISTANCE_MESSAGE)],
 )
 def test_the_peak_settings_are_checked_before_the_file_is_read_with_nothing_created(client, measured, fields, message):
     r = client.post("/api/jobs", data={"window_size": "4096", "frame_rate": "10", "image_type": "decay", **fields})
@@ -160,19 +159,18 @@ def test_the_peak_settings_are_checked_before_the_file_is_read_with_nothing_crea
     assert leftovers() == [] and measured == []
 
 
-def test_the_minimum_distance_and_the_prominence_change_the_beat_that_charges_the_circles(client):
+def test_the_minimum_distance_changes_the_beat_that_charges_the_circles(client):
     audio = pulse_wav()
     default = all_frames(client, decay(client, audio).json())
     far = all_frames(client, decay(client, audio, peak_distance="2000").json())
-    high = all_frames(client, decay(client, audio, peak_prominence="95").json())
-    assert far != default and high != default
+    assert far != default
 
 
 # --- the picture --------------------------------------------------------------------------------------------------------------
 
 
 def test_a_steady_tone_charges_its_circle_to_the_last_color_and_the_silent_notes_stay_small_dots(client):
-    job = decay(client, wav_bytes(0.5 * note_tone(TONE_NOTE, 4.0)), decay_rate="1", peak_prominence="100").json()
+    job = decay(client, wav_bytes(0.5 * note_tone(TONE_NOTE, 4.0)), decay_rate="1").json()
     last = job["frame_count"] - 1
     assert row_at(client, job, last) == 255  # the circle settles above 32 points (24 a frame in, 16 to 24 out)
     assert row_at(client, job, last, cell=0) < 40 and row_at(client, job, last, cell=83) < 40  # leakage of the tone gives them a point or so
@@ -180,7 +178,7 @@ def test_a_steady_tone_charges_its_circle_to_the_last_color_and_the_silent_notes
 
 def test_the_circle_of_a_note_that_stops_loses_its_points_and_its_color_over_the_following_intervals(client):
     audio = np.concatenate([0.5 * note_tone(TONE_NOTE, 2.0), np.zeros(SR * 6)])
-    job = decay(client, wav_bytes(audio), decay_rate="1", peak_prominence="100").json()
+    job = decay(client, wav_bytes(audio), decay_rate="1").json()
     rows = [row_at(client, job, i) for i in range(job["frame_count"])]
     assert max(rows) == 255 and rows[-1] == 0
     assert row_at(client, job, job["frame_count"] - 1, cell=TONE_NOTE + 1) <= 4  # a neighbour's last few points are still leaking away at half a point a frame
@@ -239,9 +237,9 @@ def test_a_silent_file_makes_frames_of_the_smallest_dots_in_the_first_color_with
     assert len(set(all_frames(client, job))) == 1
 
 
-def test_a_file_in_which_no_beat_is_found_works_with_no_bonus(client):
+def test_a_file_in_which_no_beat_is_found_works_with_no_bonus(client, no_beat):
     audio = wav_bytes(0.5 * note_tone(TONE_NOTE, 4.0))
-    job = decay(client, audio, peak_prominence="100").json()  # a prominence of 100 % finds no peak in a steady tone
+    job = decay(client, audio).json()  # no peak is found (the no_beat fixture)
     assert job["frame_count"] > 0 and row_at(client, job, 0) == int(np.rint(8 / 32 * 255))  # 24 gained, and a step of the default rate (1 frame) gives 16 away
 
 

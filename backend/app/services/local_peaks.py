@@ -22,7 +22,7 @@ interpolate with, so the energy falls in a straight line from the last peak's en
 for whatever is left of the file, and a file always ends on a down part of the beat.
 
 This module knows nothing about the note analysis, the frames or the router: it takes the two channels and the file's sample
-rate. Nothing uses it yet; how it is used in the pictures is a later feature.
+rate. The pictures use it through the job (``jobs.py``: the minimum distance is a setting, the prominence is fixed at 20 percent) and ``tempo_finder`` makes a current tempo of the peak times.
 """
 
 import math
@@ -41,12 +41,12 @@ PEAKS_WINDOW = 4096
 # the minimum distance between two peaks, in milliseconds
 MIN_MIN_DISTANCE = 100.0
 MAX_MIN_DISTANCE = 2000.0
-DEFAULT_MIN_DISTANCE = 100.0
+DEFAULT_MIN_DISTANCE = 350.0
 
-# the prominence, in percent of the largest energy of the peaks window
+# the prominence, in percent of the largest energy of the peaks window; the job always uses the default (since feature 040 it is not a setting)
 MIN_PROMINENCE = 0.0
 MAX_PROMINENCE = 100.0
-DEFAULT_PROMINENCE = 50.0
+DEFAULT_PROMINENCE = 15.0
 
 # peaks per minute before the first peak, and for the first peak: one per second
 DEFAULT_RATE = 60.0

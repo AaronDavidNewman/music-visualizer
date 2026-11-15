@@ -44,7 +44,6 @@ from ..services.local_peaks import (
     DEFAULT_MIN_DISTANCE,
     DEFAULT_PROMINENCE,
     check_min_distance,
-    check_prominence,
     measure_local_peaks,
 )
 from ..services.energy_graphs import frame_energy
@@ -375,7 +374,6 @@ def create_job(
     gaussian: str | None = Form(None),
     beat_coloring: str | None = Form(None),
     peak_distance: str | None = Form(None),
-    peak_prominence: str | None = Form(None),
     note_layout: str | None = Form(None),
     decay_rate: str | None = Form(None),
     wave_count: str | None = Form(None),
@@ -400,7 +398,6 @@ def create_job(
     gaussian_value = _parse_gaussian(gaussian, "gaussian" in sent)
     beat_coloring_value = _parse_beat_coloring(beat_coloring, "beat_coloring" in sent)
     peak_distance_value = _parse_peak_setting(peak_distance, "peak_distance" in sent, DEFAULT_MIN_DISTANCE, check_min_distance)
-    peak_prominence_value = _parse_peak_setting(peak_prominence, "peak_prominence" in sent, DEFAULT_PROMINENCE, check_prominence)
     note_layout_value = _parse_note_layout(note_layout, "note_layout" in sent)
     decay_rate_value = _parse_decay_rate(decay_rate, "decay_rate" in sent, image_type_value)
     wave_count_value = _parse_wave_count(wave_count, "wave_count" in sent)
@@ -456,13 +453,12 @@ def create_job(
         # other pictures and the box off never measure it
         beat = None
         if image_type_value in ("decay", "decay-exp", "polar-chords", *CHROMATIC_TYPES) or (beat_coloring_value and image_type_value == "contour"):
-            beat = measure_local_peaks(
-                left, right, file_rate, peak_distance_value, peak_prominence_value
-            ).frame_positions(fps, frames)
-        # Rhythm Circles (feature 038) turns its rings with the local peaks themselves, not with the beat: one measurement, with the same two settings
+            beat = measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE).frame_positions(fps, frames)
+        # Rhythm Circles (features 038 and 040) turns its rings with the local peaks themselves (and the current tempo found from them), not with the beat: one
+        # measurement, with the minimum distance of the request. The prominence is not a setting (feature 040): every measurement uses 20 percent
         rhythm = None
         if image_type_value == "rhythm-circles":
-            rhythm = rhythm_angles(measure_local_peaks(left, right, file_rate, peak_distance_value, peak_prominence_value), fps, frames)
+            rhythm = rhythm_angles(measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE), fps, frames)
         # write_frames smooths the note values (each frame is mixed with the earlier frames of the window) and draws them as the
         # chosen image type; for the contour, a resolution above 1 first interpolates the grid of smoothed note values to a finer
         # one, a number of notes below 84 first builds the picture from the notes with the most energy in the file only, and an
@@ -520,7 +516,6 @@ def create_job(
         "gaussian": gaussian_value,
         "beat_coloring": beat_coloring_value,
         "peak_distance": peak_distance_value,
-        "peak_prominence": peak_prominence_value,
         "note_layout": note_layout_value,
         "decay_rate": decay_rate_value,
         "wave_count": wave_count_value,

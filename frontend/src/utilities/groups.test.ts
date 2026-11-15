@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { GROUPS, controlsIn, groupOf, groupTitle, groupsFor, isOpen, rowsOf, setOpen, toggle } from "./groups";
 import { IMAGE_TYPES } from "./validation";
 
@@ -6,16 +6,16 @@ const TYPES = IMAGE_TYPES.map((t) => t.value);
 
 // What each image type must show, written out here independently of the module under test (spec FR-003 to FR-009).
 const COMMON_TOP = ["window-size", "frame-rate", "window-spacing", "colormap", "image-type"];
-const BEAT = ["beat-coloring", "peak-distance", "peak-prominence"];
+const BEAT = ["beat-coloring", "peak-distance"];
 const EXPECTED: Record<string, string[]> = {
   contour: [...COMMON_TOP, "threshold", "notes", "wave-count", ...BEAT, "smoothing-window", "smoothing", "resolution", "interpolate", "gaussian"],
-  decay: [...COMMON_TOP, "decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
-  "decay-exp": [...COMMON_TOP, "decay-rate", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
-  "polar-chords": [...COMMON_TOP, "polar-notes", "note-layout", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
+  decay: [...COMMON_TOP, "decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated", "note-layout", "peak-distance", "smoothing-window", "smoothing"],
+  "decay-exp": [...COMMON_TOP, "decay-rate", "note-layout", "peak-distance", "smoothing-window", "smoothing"],
+  "polar-chords": [...COMMON_TOP, "polar-notes", "note-layout", "peak-distance", "smoothing-window", "smoothing"],
   "energy-graphs": [...COMMON_TOP], // no setting of its own, and the data is not smoothed
-  "chromatic-decay": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"],
-  "rhythm-circles": [...COMMON_TOP, "peak-distance", "peak-prominence"], // the two Local peaks settings and nothing else: the data is not smoothed
-  "chromatic-wireframe": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "peak-distance", "peak-prominence", "smoothing-window", "smoothing"], // the controls of Chromatic Decay (feature 039)
+  "chromatic-decay": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "peak-distance", "smoothing-window", "smoothing"],
+  "rhythm-circles": [...COMMON_TOP, "peak-distance"], // the two Local peaks settings and nothing else: the data is not smoothed
+  "chromatic-wireframe": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "peak-distance", "smoothing-window", "smoothing"], // the controls of Chromatic Decay (feature 039)
 };
 
 describe("the groups", () => {
@@ -31,8 +31,8 @@ describe("the groups", () => {
       ["chromatic-decay", "Chromatic Decay", ["threshold", "chromatic-decay-rate"]],
       ["chromatic-wireframe", "Chromatic Wireframe", ["threshold", "chromatic-decay-rate"]],
       ["note-layout", "Note layout", ["note-layout"]],
-      ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance", "peak-prominence"]],
-      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
       ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
     ]);
@@ -163,7 +163,7 @@ describe("the open state of a group", () => {
 
 describe("the Local peaks group (feature 024)", () => {
   it("has the checkbox and the two settings of the measurement, in this order, and a title", () => {
-    expect([...controlsIn("local-peaks")]).toEqual(["beat-coloring", "peak-distance", "peak-prominence"]);
+    expect([...controlsIn("local-peaks")]).toEqual(["beat-coloring", "peak-distance"]);
     expect(groupTitle("local-peaks")).toBe("Local peaks");
   });
 
@@ -175,23 +175,23 @@ describe("the Local peaks group (feature 024)", () => {
   });
 
   it("puts each control in the group, for Contour only", () => {
-    for (const control of ["beat-coloring", "peak-distance", "peak-prominence"]) {
+    for (const control of ["beat-coloring", "peak-distance"]) {
       expect(groupOf(control, "contour"), control).toBe("local-peaks");
       expect(groupOf(control, "decay"), control).not.toBe("local-peaks");
     }
     expect(groupOf("beat-coloring", "decay")).toBeUndefined();
   });
 
-  it("is laid out as one row of two and a single control last", () => {
-    expect(rowsOf(controlsIn("local-peaks").length)).toEqual([2, 1]);
+  it("is laid out as one row of two (the checkbox and Minimum distance; the Prominence of feature 024 was removed in feature 040)", () => {
+    expect(rowsOf(controlsIn("local-peaks").length)).toEqual([2]);
   });
 });
 
 describe("the Local peaks group without the checkbox (feature 025)", () => {
-  it("has the two settings of the measurement and no checkbox, under the same title as the group of Contour", () => {
-    expect([...controlsIn("concentric-peaks")]).toEqual(["peak-distance", "peak-prominence"]);
+  it("has the Minimum distance of the measurement and no checkbox, under the same title as the group of Contour", () => {
+    expect([...controlsIn("concentric-peaks")]).toEqual(["peak-distance"]);
     expect(groupTitle("concentric-peaks")).toBe("Local peaks");
-    expect(rowsOf(controlsIn("concentric-peaks").length)).toEqual([2]);
+    expect(rowsOf(controlsIn("concentric-peaks").length)).toEqual([1]);
   });
 
   it("is shown for Decay, Decay Exp and Polar Chords after the Note layout group and before Data smoothing, with no group of its own", () => {
@@ -200,9 +200,8 @@ describe("the Local peaks group without the checkbox (feature 025)", () => {
     expect(groupsFor("decay")).not.toContain("local-peaks");
   });
 
-  it("puts Minimum distance and Prominence in it for Decay, and none of the grid or checkbox controls in any group", () => {
+  it("puts Minimum distance in it for Decay, and none of the grid or checkbox controls in any group", () => {
     expect(groupOf("peak-distance", "decay")).toBe("concentric-peaks");
-    expect(groupOf("peak-prominence", "decay")).toBe("concentric-peaks");
     for (const control of ["beat-coloring", "threshold", "notes", "resolution", "interpolate", "gaussian"]) {
       expect(groupOf(control, "decay"), control).toBeUndefined();
     }
@@ -255,7 +254,6 @@ describe("the Decay group (feature 027)", () => {
     expect(groupOf("decay-rate", "decay")).toBe("decay");
     expect(groupOf("note-layout", "decay")).toBe("note-layout");
     expect(groupOf("peak-distance", "decay")).toBe("concentric-peaks");
-    expect(groupOf("peak-prominence", "decay")).toBe("concentric-peaks");
     for (const control of ["threshold", "notes", "blend-width", "beat-coloring", "resolution", "interpolate", "gaussian", "circle-unit"]) {
       expect(groupOf(control, "decay"), control).toBeUndefined();
     }
@@ -323,7 +321,6 @@ describe("the Polar chords group (feature 032)", () => {
   it("puts the note layout and the Local peaks settings in their groups (without the checkbox) and shows none of the controls that do not apply", () => {
     expect(groupOf("note-layout", "polar-chords")).toBe("note-layout");
     expect(groupOf("peak-distance", "polar-chords")).toBe("concentric-peaks");
-    expect(groupOf("peak-prominence", "polar-chords")).toBe("concentric-peaks");
     for (const control of ["beat-coloring", "threshold", "notes", "blend-width", "resolution", "interpolate", "gaussian", "circle-unit", "decay-rate", "decay-low", "wave-count"]) {
       expect(groupOf(control, "polar-chords"), control).toBeUndefined();
     }
@@ -392,7 +389,6 @@ describe("the groups of Rhythm Circles (feature 038)", () => {
 
   it("shows the two Local peaks controls and none of the settings of the other types", () => {
     expect(groupOf("peak-distance", "rhythm-circles")).toBe("concentric-peaks");
-    expect(groupOf("peak-prominence", "rhythm-circles")).toBe("concentric-peaks");
     for (const control of ["smoothing", "smoothing-window", "threshold", "notes", "resolution", "interpolate", "gaussian", "note-layout", "decay-rate", "chromatic-decay-rate", "polar-notes", "beat-coloring"]) {
       expect(groupOf(control, "rhythm-circles"), control).toBeUndefined();
     }
@@ -421,7 +417,6 @@ describe("the groups of Chromatic Wireframe (feature 039)", () => {
     expect(groupOf("threshold", "chromatic-wireframe")).toBe("chromatic-wireframe");
     expect(groupOf("chromatic-decay-rate", "chromatic-wireframe")).toBe("chromatic-wireframe");
     expect(groupOf("peak-distance", "chromatic-wireframe")).toBe("concentric-peaks");
-    expect(groupOf("peak-prominence", "chromatic-wireframe")).toBe("concentric-peaks");
     expect(groupOf("smoothing", "chromatic-wireframe")).toBe("data-smoothing");
     for (const control of ["note-layout", "decay-rate", "decay-low", "polar-notes", "notes", "resolution", "interpolate", "gaussian", "beat-coloring", "wave-count", "blend-width"]) {
       expect(groupOf(control, "chromatic-wireframe"), control).toBeUndefined();

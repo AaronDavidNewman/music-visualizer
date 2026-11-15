@@ -10,13 +10,12 @@ from app.services.image_types import IMAGE_TYPES
 from .frame_size import HEIGHT, WIDTH
 from .test_decay_api import centre, row_at
 from .test_jobs_api import SR, client, leftovers, note_tone, wav_bytes  # noqa: F401
-from .test_peak_tile_colors_api import COLORMAP, TONE_NOTE, all_frames, post, pulse_wav
+from .test_peak_tile_colors_api import COLORMAP, TONE_NOTE, all_frames, no_beat, post, pulse_wav  # noqa: F401
 from .test_resolution_api import picture, tiny
 
 TYPE_MESSAGE = f"The image type must be one of {', '.join(IMAGE_TYPES)}."
 RATE_MESSAGE = "The decay rate must be a number from 0.25 to 4 in steps of 0.25."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
-PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent."
 MIDDLE_COLOR_ROW = 128
 
 
@@ -49,7 +48,7 @@ def test_decay_exp_is_accepted_and_echoed_with_every_colormap_and_the_defaults(c
     assert r.status_code == 200, r.text
     job = r.json()
     assert job["image_type"] == "decay-exp" and job["colormap"] == name
-    assert (job["decay_rate"], job["note_layout"], job["peak_distance"], job["peak_prominence"]) == (1, "rows", 100, 50)
+    assert (job["decay_rate"], job["note_layout"], job["peak_distance"]) == (1, "rows", 350)
 
 
 def test_the_response_has_the_same_keys_as_for_the_other_types(client):
@@ -141,7 +140,7 @@ def measured(monkeypatch):
 
 @pytest.mark.parametrize("box", [None, "false", "true"])
 def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
-    fields = {"peak_distance": "300", "peak_prominence": "20"}
+    fields = {"peak_distance": "300"}
     if box is not None:
         fields["beat_coloring"] = box
     assert exp(client, tiny(), **fields).status_code == 200
@@ -156,7 +155,7 @@ def test_the_checkbox_has_no_effect_on_the_frames(client):
 
 @pytest.mark.parametrize(
     "fields, message",
-    [({"peak_distance": "50"}, DISTANCE_MESSAGE), ({"peak_distance": "abc"}, DISTANCE_MESSAGE), ({"peak_prominence": "101"}, PROMINENCE_MESSAGE), ({"peak_prominence": ""}, PROMINENCE_MESSAGE)],
+    [({"peak_distance": "50"}, DISTANCE_MESSAGE), ({"peak_distance": "abc"}, DISTANCE_MESSAGE)],
 )
 def test_the_peak_settings_are_checked_before_the_file_is_read_with_nothing_created(client, measured, fields, message):
     r = client.post("/api/jobs", data={"window_size": "4096", "frame_rate": "10", "image_type": "decay-exp", **fields})
@@ -165,21 +164,20 @@ def test_the_peak_settings_are_checked_before_the_file_is_read_with_nothing_crea
     assert leftovers() == [] and measured == []
 
 
-def test_the_minimum_distance_and_the_prominence_change_the_beat_that_charges_the_circles(client):
+def test_the_minimum_distance_changes_the_beat_that_charges_the_circles(client):
     audio = pulse_wav()
     default = all_frames(client, exp(client, audio).json())
     far = all_frames(client, exp(client, audio, peak_distance="2000").json())
-    high = all_frames(client, exp(client, audio, peak_prominence="95").json())
-    assert far != default and high != default
+    assert far != default
 
 
 # --- the picture --------------------------------------------------------------------------------------------------------------
 
 
-def test_the_picture_is_not_the_picture_of_decay_and_the_first_frame_is_less_charged(client):
+def test_the_picture_is_not_the_picture_of_decay_and_the_first_frame_is_less_charged(client, no_beat):
     audio = wav_bytes(0.5 * note_tone(TONE_NOTE, 3.0))
-    exp_job = exp(client, audio, peak_prominence="100").json()  # a prominence of 100 % finds no peak in a steady tone: no bonus
-    decay_job = decay(client, audio, peak_prominence="100").json()
+    exp_job = exp(client, audio).json()  # no peak is found (the no_beat fixture): no bonus
+    decay_job = decay(client, audio).json()
     assert all_frames(client, exp_job) != all_frames(client, decay_job)
     # decay: 24 points, 16 given away: row 64; decay-exp: 1.19 points, of which hardly any is given away: row 9
     assert row_at(client, decay_job, 0) == int(np.rint(8 / 32 * 255))

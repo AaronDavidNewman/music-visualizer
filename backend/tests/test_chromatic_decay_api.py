@@ -181,10 +181,10 @@ def test_the_beat_is_measured_for_this_type_with_the_local_peaks_settings_and_no
         return real(left, right, rate, distance, prominence)
 
     monkeypatch.setattr(jobs, "measure_local_peaks", spy)
-    assert chromatic(client, tiny(), peak_distance="700", peak_prominence="30").status_code == 200
-    assert calls == [(700, 30)]
+    assert chromatic(client, tiny(), peak_distance="700").status_code == 200
+    assert calls == [(700, 20)]  # the prominence is fixed at 20 percent (feature 040)
     assert post(client, tiny(), image_type="contour").status_code == 200
-    assert calls == [(700, 30)]  # Tiles without the beat coloring never measures it
+    assert calls == [(700, 20)]  # Tiles without the beat coloring never measures it
 
 
 # --- real tones ---------------------------------------------------------------------------------------------------------------------
@@ -264,7 +264,7 @@ def test_the_local_peaks_settings_are_validated_as_always(client):
     r = chromatic(client, tiny(), peak_distance="50")
     assert r.status_code == 400 and r.json()["detail"] == DISTANCE_MESSAGE
     assert leftovers() == []
-    assert chromatic(client, tiny(), peak_distance="500", peak_prominence="20").status_code == 200
+    assert chromatic(client, tiny(), peak_distance="500").status_code == 200
 
 
 def test_a_setting_of_another_type_that_is_not_allowed_is_refused_as_for_every_type(client):
@@ -358,11 +358,11 @@ def test_a_steady_tone_and_a_silent_file_show_the_distance_of_their_own_beat_and
 
 def test_the_local_peaks_settings_change_the_rings(client):
     data = pulse_wav()
-    job_a = chromatic(client, data, peak_distance="100", peak_prominence="50").json()
-    job_b = chromatic(client, data, peak_distance="2000", peak_prominence="100").json()
-    beat_a = measured_beat(data, job_a["frame_count"], 100.0, 50.0)
-    beat_b = measured_beat(data, job_b["frame_count"], 2000.0, 100.0)
-    assert not np.array_equal(beat_a, beat_b)  # the two settings do measure different beats on this file
+    job_a = chromatic(client, data, peak_distance="100").json()
+    job_b = chromatic(client, data, peak_distance="2000").json()
+    beat_a = measured_beat(data, job_a["frame_count"], 100.0)
+    beat_b = measured_beat(data, job_b["frame_count"], 2000.0)
+    assert not np.array_equal(beat_a, beat_b)  # the two distances do measure different beats on this file
     centers_a = [color_at_ring(image, 1) for image in frames(client, job_a)]
     centers_b = [color_at_ring(image, 1) for image in frames(client, job_b)]
     assert centers_a != centers_b

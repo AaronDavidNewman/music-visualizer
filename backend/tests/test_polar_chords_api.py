@@ -12,13 +12,12 @@ from app.services.note_layout import note_order
 
 from .frame_size import HEIGHT, WIDTH
 from .test_jobs_api import SR, client, leftovers, note_tone, wav_bytes  # noqa: F401
-from .test_peak_tile_colors_api import COLORMAP, ROWS, TONE_NOTE, all_frames, post, pulse_wav
+from .test_peak_tile_colors_api import COLORMAP, ROWS, TONE_NOTE, all_frames, no_beat, post, pulse_wav  # noqa: F401
 from .test_resolution_api import picture, tiny
 
 TYPE_MESSAGE = f"The image type must be one of {', '.join(IMAGE_TYPES)}."
 NOTES_MESSAGE = "The number of notes shown must be a whole number from 5 to 8."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
-PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent."
 CENTER = (WIDTH / 2, HEIGHT / 2)
 RADIUS = 190.0
 ARC = 360.0 / 84
@@ -70,7 +69,7 @@ def test_polar_chords_is_accepted_and_echoed_with_every_colormap_and_the_default
     assert r.status_code == 200, r.text
     job = r.json()
     assert job["image_type"] == "polar-chords" and job["colormap"] == name
-    assert (job["polar_notes"], job["peak_distance"], job["peak_prominence"]) == (5, 100, 50)
+    assert (job["polar_notes"], job["peak_distance"]) == (5, 350)
 
 
 def test_the_response_has_the_same_keys_as_for_the_other_types_and_polar_notes_is_in_all_of_them(client):
@@ -150,7 +149,7 @@ def measured(monkeypatch):
 
 @pytest.mark.parametrize("box", [None, "false", "true"])
 def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
-    fields = {"peak_distance": "300", "peak_prominence": "20"}
+    fields = {"peak_distance": "300"}
     if box is not None:
         fields["beat_coloring"] = box
     assert polar(client, tiny(), **fields).status_code == 200
@@ -165,7 +164,7 @@ def test_the_checkbox_has_no_effect_on_the_frames(client):
 
 @pytest.mark.parametrize(
     "fields, message",
-    [({"peak_distance": "50"}, DISTANCE_MESSAGE), ({"peak_distance": "abc"}, DISTANCE_MESSAGE), ({"peak_prominence": "101"}, PROMINENCE_MESSAGE), ({"peak_prominence": ""}, PROMINENCE_MESSAGE)],
+    [({"peak_distance": "50"}, DISTANCE_MESSAGE), ({"peak_distance": "abc"}, DISTANCE_MESSAGE)],
 )
 def test_the_peak_settings_are_checked_before_the_file_is_read_with_nothing_created(client, measured, fields, message):
     r = client.post("/api/jobs", data={"window_size": "4096", "frame_rate": "10", "image_type": "polar-chords", **fields})
@@ -174,19 +173,18 @@ def test_the_peak_settings_are_checked_before_the_file_is_read_with_nothing_crea
     assert leftovers() == [] and measured == []
 
 
-def test_the_minimum_distance_and_the_prominence_change_the_length_of_the_bars(client):
+def test_the_minimum_distance_changes_the_length_of_the_bars(client):
     audio = pulse_wav()
     default = all_frames(client, polar(client, audio).json())
     far = all_frames(client, polar(client, audio, peak_distance="2000").json())
-    high = all_frames(client, polar(client, audio, peak_prominence="95").json())
-    assert far != default and high != default
+    assert far != default
 
 
 # --- the picture --------------------------------------------------------------------------------------------------------------
 
 
-def test_a_steady_tone_is_a_bar_at_the_angle_of_its_note_from_the_first_half_of_the_colormap_half_the_radius_long_without_a_beat(client):
-    job = polar(client, wav_bytes(0.5 * note_tone(TONE_NOTE, 3.0)), peak_prominence="100").json()  # a prominence of 100 % finds no peak in a steady tone
+def test_a_steady_tone_is_a_bar_at_the_angle_of_its_note_from_the_first_half_of_the_colormap_half_the_radius_long_without_a_beat(client, no_beat):
+    job = polar(client, wav_bytes(0.5 * note_tone(TONE_NOTE, 3.0))).json()  # no peak is found (the no_beat fixture)
     image = picture(client, job, job["frame_count"] - 1)
     angle = (TONE_NOTE + 0.5) * ARC
     assert row_at(image, angle, 0.3 * RADIUS) == 0  # the loudest possible note has the first color
@@ -196,7 +194,7 @@ def test_a_steady_tone_is_a_bar_at_the_angle_of_its_note_from_the_first_half_of_
 
 
 def test_a_triad_makes_three_note_bars_and_the_chord_bar_for_a_major_triad_counterclockwise(client):
-    job = polar(client, chord(), peak_prominence="100").json()
+    job = polar(client, chord()).json()
     image = picture(client, job, job["frame_count"] // 2)
     for note in (C4, E4, G4):
         assert row_at(image, (note + 0.5) * ARC, 0.3 * RADIUS) <= 30  # the first half of the colormap
@@ -275,7 +273,7 @@ def test_the_spiral_layout_applies_and_is_echoed(client):
 def test_a_steady_tone_is_in_the_arc_of_its_note_in_the_layout_chosen(client):
     audio = wav_bytes(0.5 * note_tone(TONE_NOTE, 3.0))
     for layout in ("rows", "spiral"):
-        job = polar(client, audio, peak_prominence="100", note_layout=layout).json()
+        job = polar(client, audio, note_layout=layout).json()
         image = picture(client, job, job["frame_count"] - 1)
         order = note_order(layout)
         arc = int(np.flatnonzero(order == TONE_NOTE)[0])
@@ -297,7 +295,7 @@ def loud_arcs(image):
 
 def test_when_the_note_jumps_far_the_bar_slides_to_it_one_arc_a_frame_instead_of_jumping(client):
     audio = wav_bytes(np.concatenate([0.5 * note_tone(36, 1.5), 0.5 * note_tone(48, 3.0)]))  # note 36, then note 48: twelve arcs away
-    job = polar(client, audio, frame_rate="30", peak_prominence="100").json()
+    job = polar(client, audio, frame_rate="30").json()
     seen = []  # (frame, arc) wherever the loudest bar is easy to see: the last window of the file is only partly filled and the change of tone is noisy
     for index in range(job["frame_count"]):
         found = loud_arcs(picture(client, job, index))

@@ -266,7 +266,7 @@ function groupsOf(html: string): RenderedGroup[] {
 }
 
 const TOP = ["window-size", "frame-rate", "window-spacing"];
-const BEAT_CONTROLS = ["beat-coloring", "peak-distance", "peak-prominence"];
+const BEAT_CONTROLS = ["beat-coloring", "peak-distance"];
 const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
   contour: [
     ["analysis", "Analysis", TOP],
@@ -471,24 +471,22 @@ describe("the Local peaks group (feature 024)", () => {
     expect(html).toMatch(/<output[^>]*for="beat-coloring"[^>]*>Off<\/output>/);
   });
 
-  it("has the Minimum distance slider from 100 to 2000 in steps of 50, at 100 ms", async () => {
+  it("has the Minimum distance slider from 100 to 2000 in steps of 50, at 350 ms", async () => {
     const html = await renderType("contour");
     const slider = tag(html, "peak-distance");
     expect(slider).toContain('type="range"');
-    for (const part of ['min="100"', 'max="2000"', 'step="50"', 'value="100"']) expect(slider).toContain(part);
+    for (const part of ['min="100"', 'max="2000"', 'step="50"', 'value="350"']) expect(slider).toContain(part);
     expect(html).toMatch(/<label for="peak-distance"[^>]*>Minimum distance<\/label>/);
-    expect(html).toMatch(/<output[^>]*for="peak-distance"[^>]*>100 ms<\/output>/);
+    expect(html).toMatch(/<output[^>]*for="peak-distance"[^>]*>350 ms<\/output>/);
     expect(html).toContain('aria-label="About minimum distance"');
   });
 
-  it("has the Prominence slider from 0 to 100 in steps of 5, at 50%", async () => {
-    const html = await renderType("contour");
-    const slider = tag(html, "peak-prominence");
-    expect(slider).toContain('type="range"');
-    for (const part of ['min="0"', 'max="100"', 'step="5"', 'value="50"']) expect(slider).toContain(part);
-    expect(html).toMatch(/<label for="peak-prominence"[^>]*>Prominence<\/label>/);
-    expect(html).toMatch(/<output[^>]*for="peak-prominence"[^>]*>50%<\/output>/);
-    expect(html).toContain('aria-label="About prominence"');
+  it("has no Prominence control any more: the prominence of the peaks is fixed at 20 percent (feature 040)", async () => {
+    for (const type of ["contour", "decay", "chromatic-wireframe", "rhythm-circles"]) {
+      const html = await renderType(type);
+      expect(html, type).not.toContain("peak-prominence");
+      expect(html, type).not.toContain("Prominence");
+    }
   });
 
   it("is shown for Contour, after its group and before Data smoothing, and for no other type", async () => {
@@ -506,13 +504,12 @@ describe("the Local peaks group (feature 024)", () => {
   it("keeps the values in refs, sends them, checks them and lets an error mark the group and block Create frames", () => {
     expect(formSource).toMatch(/const beatColoring = ref<boolean>\(DEFAULT_BEAT_COLORING\)/);
     expect(formSource).toMatch(/const peakDistance = ref<number>\(DEFAULT_PEAK_DISTANCE\)/);
-    expect(formSource).toMatch(/const peakProminence = ref<number>\(DEFAULT_PEAK_PROMINENCE\)/);
-    for (const part of ["beatColoring: beatColoring.value", "peakDistance: peakDistance.value", "peakProminence: peakProminence.value"]) {
+    for (const part of ["beatColoring: beatColoring.value", "peakDistance: peakDistance.value"]) {
       expect(formSource).toContain(part);
     }
-    expect(formSource).toMatch(/const localPeaksProblem = computed\([^;]*peakDistanceError\.value[^;]*peakProminenceError\.value/);
+    expect(formSource).not.toMatch(/peakProminence/);
+    expect(formSource).toMatch(/const localPeaksProblem = computed\([^;]*peakDistanceError\.value/);
     expect(formSource).toMatch(/!peakDistanceError\.value/);
-    expect(formSource).toMatch(/!peakProminenceError\.value/);
     expect(formSource).toContain(':problem="localPeaksProblem"');
   });
 });
@@ -566,7 +563,7 @@ describe("the page for Decay (feature 027)", () => {
       ["image-type", "Image type", ["image-type"]],
       ["decay", "Decay", ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]],
       ["note-layout", "Note layout", ["note-layout"]],
-      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
@@ -614,7 +611,7 @@ describe("the page for Contour: the beat wave (feature 028)", () => {
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["contour", "Contour", ["threshold", "notes", "wave-count"]],
-      ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance", "peak-prominence"]],
+      ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
       ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
     ]);
@@ -709,7 +706,7 @@ describe("the page for Decay Exp (feature 030)", () => {
       ["image-type", "Image type", ["image-type"]],
       ["decay-exp", "Decay", ["decay-rate"]],
       ["note-layout", "Note layout", ["note-layout"]],
-      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
@@ -758,7 +755,7 @@ describe("the page for Polar Chords (feature 032)", () => {
       ["image-type", "Image type", ["image-type"]],
       ["polar-chords", "Polar chords", ["polar-notes"]],
       ["note-layout", "Note layout", ["note-layout"]],
-      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
@@ -837,7 +834,7 @@ describe("the page for Chromatic Decay (feature 035)", () => {
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["chromatic-decay", "Chromatic Decay", ["threshold", "chromatic-decay-rate"]],
-      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
@@ -919,7 +916,7 @@ describe("the page for Rhythm Circles (feature 038)", () => {
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
-      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance"]],
     ]);
   });
 
@@ -949,7 +946,7 @@ describe("the page for Chromatic Wireframe (feature 039)", () => {
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["chromatic-wireframe", "Chromatic Wireframe", ["threshold", "chromatic-decay-rate"]],
-      ["concentric-peaks", "Local peaks", ["peak-distance", "peak-prominence"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance"]],
       ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });

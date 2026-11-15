@@ -16,7 +16,6 @@ const SETTINGS: JobSettings = {
   gaussian: 2.5,
   beatColoring: true,
   peakDistance: 450,
-  peakProminence: 25,
   noteLayout: "spiral",
   decayRate: 3,
   polarNotes: 6,
@@ -59,7 +58,6 @@ describe("the request that submitJob sends", () => {
       gaussian: "2.5",
       beat_coloring: "true",
       peak_distance: "450",
-      peak_prominence: "25",
       note_layout: "spiral",
       decay_rate: "3",
       polar_notes: "6",
@@ -89,16 +87,17 @@ describe("the request that submitJob sends", () => {
 });
 
 describe("the beat coloring fields of the request (feature 024)", () => {
-  it("sends the checkbox as true or false and the two settings as numbers", async () => {
+  it("sends the checkbox as true or false and the minimum distance as a number, and no prominence (feature 040: it is fixed at 20 percent)", async () => {
     const on = await posted(SETTINGS);
-    expect([on.beat_coloring, on.peak_distance, on.peak_prominence]).toEqual(["true", "450", "25"]);
-    const off = await posted({ ...SETTINGS, beatColoring: false, peakDistance: 100, peakProminence: 50 });
-    expect([off.beat_coloring, off.peak_distance, off.peak_prominence]).toEqual(["false", "100", "50"]);
+    expect([on.beat_coloring, on.peak_distance]).toEqual(["true", "450"]);
+    const off = await posted({ ...SETTINGS, beatColoring: false, peakDistance: 100 });
+    expect([off.beat_coloring, off.peak_distance]).toEqual(["false", "100"]);
+    expect("peak_prominence" in on).toBe(false);
   });
 
   it("shows the server's message for a refused setting", async () => {
-    vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The prominence must be a number from 0 to 100 percent." }) }));
-    await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The prominence must be a number from 0 to 100 percent.");
+    vi.stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ detail: "The minimum distance must be a number from 100 to 2000 milliseconds." }) }));
+    await expect(submitJob(new File(["x"], "song.wav"), SETTINGS)).rejects.toThrow("The minimum distance must be a number from 100 to 2000 milliseconds.");
   });
 });
 
@@ -234,12 +233,11 @@ describe("the request for Chromatic Decay (feature 035)", () => {
 });
 
 describe("the request for Rhythm Circles (feature 038)", () => {
-  it("sends the image type with its hyphen and the same fields as for any other type, the two Local peaks settings among them", async () => {
-    const rhythm = await posted({ ...SETTINGS, imageType: "rhythm-circles", peakDistance: 700, peakProminence: 30 });
+  it("sends the image type with its hyphen and the same fields as for any other type, the minimum distance among them", async () => {
+    const rhythm = await posted({ ...SETTINGS, imageType: "rhythm-circles", peakDistance: 700 });
     const polar = await posted({ ...SETTINGS, imageType: "polar-chords" });
     expect(rhythm.image_type).toBe("rhythm-circles");
     expect(rhythm.peak_distance).toBe("700");
-    expect(rhythm.peak_prominence).toBe("30");
     expect(Object.keys(rhythm).sort()).toEqual(Object.keys(polar).sort());
   });
 });

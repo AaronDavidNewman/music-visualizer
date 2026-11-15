@@ -255,12 +255,12 @@ export function isChromaticType(imageType: string): boolean {
   return imageType === "chromatic-decay" || imageType === "chromatic-wireframe";
 }
 
-/** Whether the picture is Rhythm Circles (feature 038): eight notched rings turned by the tempo of the local peaks, its rates of change and its averages. Its only settings are Minimum distance and Prominence. */
+/** Whether the picture is Rhythm Circles (feature 038): four notched rings turned by the current tempo (60 to 156 beats per minute) found from the peaks and the local peak, each with its rate of change. Its only setting is Minimum distance. */
 export function isRhythmType(imageType: string): boolean {
   return imageType === "rhythm-circles";
 }
 
-/** Whether Minimum distance and Prominence are used: always by Decay, Decay Exp, Polar Chords, Chromatic Decay (the beat colors, charges or lengthens them) and Rhythm Circles (the peaks turn its rings), by Contour with the Beat coloring box on, never by the others. */
+/** Whether Minimum distance is used: always by Decay, Decay Exp, Polar Chords, Chromatic Decay (the beat colors, charges or lengthens them) and Rhythm Circles (the peaks turn its rings), by Contour with the Beat coloring box on, never by the others. */
 export function peakSettingsShown(imageType: string, beatColoring: boolean): boolean {
   return isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || isRhythmType(imageType) || (beatColoringApplies(imageType) && beatColoring);
 }
@@ -356,12 +356,9 @@ export function decayRateApplies(imageType: string): boolean {
 /** Beat coloring (feature 028): the beat wave of the contour, rings that cut into the picture as the music rises in its beat. */
 export const DEFAULT_BEAT_COLORING = false;
 export const PEAK_DISTANCE_RANGE = { min: 100, max: 2000, step: 50 } as const;
-export const DEFAULT_PEAK_DISTANCE = 100;
-export const PEAK_PROMINENCE_RANGE = { min: 0, max: 100, step: 5 } as const;
-export const DEFAULT_PEAK_PROMINENCE = 50;
+export const DEFAULT_PEAK_DISTANCE = 350; // feature 040: it was 100; the prominence is no longer a setting (the measurement always uses 20 percent)
 
 const peakDistanceMessage = `The minimum distance must be a number from ${PEAK_DISTANCE_RANGE.min} to ${PEAK_DISTANCE_RANGE.max} milliseconds.`;
-const peakProminenceMessage = `The prominence must be a number from ${PEAK_PROMINENCE_RANGE.min} to ${PEAK_PROMINENCE_RANGE.max} percent.`;
 
 /** Returns an error message, or null when the minimum distance is a finite number of milliseconds from 100 to 2000. */
 export function validatePeakDistance(value: string | number): string | null {
@@ -369,21 +366,12 @@ export function validatePeakDistance(value: string | number): string | null {
   return Number.isFinite(n) && n >= PEAK_DISTANCE_RANGE.min && n <= PEAK_DISTANCE_RANGE.max ? null : peakDistanceMessage;
 }
 
-/** Returns an error message, or null when the prominence is a finite percentage from 0 to 100. */
-export function validatePeakProminence(value: string | number): string | null {
-  const n = parseNumber(value);
-  return Number.isFinite(n) && n >= PEAK_PROMINENCE_RANGE.min && n <= PEAK_PROMINENCE_RANGE.max ? null : peakProminenceMessage;
-}
-
-/** The readouts and the result summary items: "Off" or "On", "100 ms", "50%". */
+/** The readouts and the result summary items: "Off" or "On", "350 ms". */
 export function formatBeatColoring(value: boolean): string {
   return value ? "On" : "Off";
 }
 export function formatPeakDistance(value: number): string {
   return `${value} ms`;
-}
-export function formatPeakProminence(value: number): string {
-  return `${value}%`;
 }
 
 /** Whether the beat coloring means anything: only for Contour (it switches the beat wave on, feature 028). */

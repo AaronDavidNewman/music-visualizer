@@ -128,7 +128,7 @@ def test_the_energy_of_integer_samples_does_not_depend_on_the_bit_depth():
 @pytest.mark.parametrize("period,per_minute", [(0.5, 120), (0.75, 80), (0.3, 200)])
 def test_every_click_is_found_once_with_the_rate_of_the_track(period, per_minute):
     left, right, clicks = click_track(30, period)
-    result = measure_local_peaks(left, right, RATE)
+    result = measure_local_peaks(left, right, RATE, min_distance=100, prominence=50)
     assert len(result.peaks) == len(clicks)
     assert near_clicks(result, clicks)
     got = samples_of(result)
@@ -215,14 +215,14 @@ def test_the_longest_distance_also_holds_across_a_border_at_the_default_window()
     # 2000 ms is 2756 impulse samples, longer than a step of 2048: bursts 2700 apart are in no common window
     first, second = 2047 * IMPULSE_SAMPLES, 4747 * IMPULSE_SAMPLES
     left, right = bursts([first, second], [0.3, 0.6], 8.0)
-    result = measure_local_peaks(left, right, RATE, min_distance=2000)
+    result = measure_local_peaks(left, right, RATE, min_distance=2000, prominence=50)
     assert [p.sample for p in result.peaks] == [second]
 
 
 def test_bursts_farther_apart_than_the_distance_across_the_same_border_are_both_reported():
     first, second = 127 * IMPULSE_SAMPLES, 127 * IMPULSE_SAMPLES + 140 * IMPULSE_SAMPLES
     left, right = bursts([first, second], [0.6, 0.3], 0.5)
-    result = measure_local_peaks(left, right, RATE, window=256)
+    result = measure_local_peaks(left, right, RATE, window=256, min_distance=100, prominence=50)
     assert [p.sample for p in result.peaks] == [first, second]
 
 
@@ -245,7 +245,7 @@ def test_no_two_peaks_are_ever_closer_than_the_distance(distance_ms):
 @pytest.mark.parametrize("window", [64, 256, 4096])
 def test_a_peak_in_two_overlapping_windows_is_reported_once(window):
     left, right, clicks = click_track(20, 0.5)
-    result = measure_local_peaks(left, right, RATE, window=window)
+    result = measure_local_peaks(left, right, RATE, window=window, min_distance=100, prominence=50)
     got = samples_of(result)
     assert len(got) == len(set(got.tolist())) == len(clicks)
     assert near_clicks(result, clicks)
@@ -296,7 +296,7 @@ def test_short_inputs_give_no_failure():
 def test_a_file_shorter_than_the_peaks_window_is_measured_as_one_window():
     left, right, clicks = click_track(1.5, 0.3)  # about 2,000 impulse samples, a window is 4,096
     assert len(left) // IMPULSE_SAMPLES < 4096
-    result = measure_local_peaks(left, right, RATE)
+    result = measure_local_peaks(left, right, RATE, min_distance=100, prominence=50)
     assert len(result.peaks) == len(clicks)
     assert near_clicks(result, clicks)
 
@@ -622,15 +622,16 @@ def spy(monkeypatch):
     return recorder
 
 
-def test_the_defaults_are_100_milliseconds_and_50_percent():
-    assert (lp.DEFAULT_MIN_DISTANCE, lp.DEFAULT_PROMINENCE) == (100.0, 50.0)
+def test_the_defaults_are_350_milliseconds_and_20_percent():
+    # feature 040: the minimum distance defaults to 350 ms and the prominence, which the job no longer lets the user set, is 20 percent
+    assert (lp.DEFAULT_MIN_DISTANCE, lp.DEFAULT_PROMINENCE) == (350.0, 20.0)
     signature = inspect.signature(measure_local_peaks).parameters
-    assert signature["min_distance"].default == 100.0 and signature["prominence"].default == 50.0
+    assert signature["min_distance"].default == 350.0 and signature["prominence"].default == 20.0
     assert signature["window"].default == lp.PEAKS_WINDOW == 4096
     assert (lp.MIN_MIN_DISTANCE, lp.MAX_MIN_DISTANCE, lp.MIN_PROMINENCE, lp.MAX_PROMINENCE) == (100.0, 2000.0, 0.0, 100.0)
     left, right, _ = click_track(5, 0.5)
     result = measure_local_peaks(left, right, RATE)
-    assert (result.min_distance, result.prominence) == (100.0, 50.0)
+    assert (result.min_distance, result.prominence) == (350.0, 20.0)
 
 
 @pytest.mark.parametrize("value", [100, 100.0, 100.5, 1000, 2000, 1999.9, np.float64(500), np.int32(300)])
@@ -775,13 +776,13 @@ def test_a_prominence_of_zero_reports_every_bump_and_100_needs_a_background_of_e
     starts = [aligned(0.2 * i) for i in range(1, 14)]
     strengths = [1.0 if i == 6 else 0.1 + 0.02 * i for i in range(1, 14)]
     left, right = bursts(starts, strengths, 2.9)
-    every = measure_local_peaks(left, right, RATE, prominence=0)
-    half = measure_local_peaks(left, right, RATE, prominence=50)
+    every = measure_local_peaks(left, right, RATE, min_distance=100, prominence=0)
+    half = measure_local_peaks(left, right, RATE, min_distance=100, prominence=50)
     assert set(starts) <= set(samples_of(every).tolist())  # every bump, and the ripples of the noise between them
     assert len(every.peaks) > len(starts)
     assert samples_of(half).tolist() == [starts[5]]
     # nothing stands out by the whole of the largest energy when there is noise under the click
-    assert measure_local_peaks(left, right, RATE, prominence=100).peaks == ()
+    assert measure_local_peaks(left, right, RATE, min_distance=100, prominence=100).peaks == ()
     # on exact silence the click stands out by all of its energy, and the share of 100 is reached
     quiet_left, quiet_right = np.zeros(len(left)), np.zeros(len(right))
     for start, strength in zip(starts, strengths):

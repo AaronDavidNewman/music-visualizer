@@ -18,10 +18,9 @@ from .test_resolution_api import tiny
 
 TYPE_MESSAGE = f"The image type must be one of {', '.join(IMAGE_TYPES)}."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
-PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent."
 FPS = 10
 OUTER = HEIGHT / 2 - 10  # the outer radius of the first ring: 190
-RINGS = 8
+RINGS = 4
 RING = OUTER / RINGS  # a ring and its gap
 GAP = 4
 
@@ -50,7 +49,7 @@ def middle_radius(k):
 
 
 def notch_row(k):
-    return int(np.rint((1 - (k - 1) / 7) * 255))
+    return int(np.rint((1 - (k - 1) / 3) * 255))
 
 
 def notch_turns(image, k, colormap=COLORMAP):
@@ -145,25 +144,42 @@ def test_every_notch_of_every_frame_is_where_the_library_puts_it_for_the_peaks_t
             assert apart(notch_turns(image, k), want[i, k - 1]) * 360 < 3, (i, k)
 
 
-def test_the_outer_notch_advances_the_tempo_in_turns_a_minute_from_one_frame_to_the_next(client, monkeypatch):
+def test_the_notch_of_the_local_peak_advances_its_rate_in_turns_a_minute_from_one_frame_to_the_next(client, monkeypatch):
     spy = Spy(monkeypatch)
     job = rhythm(client, pulse_wav()).json()
     peaks = spy.results[0]
     for first in (30, 40, 50):  # frames in the middle of the track, between peaks
-        tempo = float(peaks.rate_at_time((first + 1.0) / FPS))  # the speed of the outer circle there: one turn a beat
+        tempo = float(peaks.rate_at_time((first + 1.0) / FPS))  # the speed of the innermost level circle (ring 3, the local peak) there: one turn a beat
         assert 100 < tempo < 140
-        gain = (notch_turns(picture(client, job, first + 1), 1) - notch_turns(picture(client, job, first), 1)) % 1.0
+        gain = (notch_turns(picture(client, job, first + 1), 3) - notch_turns(picture(client, job, first), 3)) % 1.0
         assert apart(gain, tempo / 60.0 / FPS) * 360 < 8, (first, gain, tempo)  # a frame is a tenth of a second: about 72 degrees
+
+
+def test_the_notch_of_the_outer_ring_advances_by_the_current_tempo(client, monkeypatch):
+    spy = Spy(monkeypatch)
+    job = rhythm(client, pulse_wav()).json()
+    peaks = spy.results[0]
+    from app.services.tempo_finder import find_tempo
+
+    times = [p.sample / peaks.file_rate for p in peaks.peaks]
+    tempos = find_tempo(times).tempos
+    for first in (30, 40, 50):
+        latest = int(np.searchsorted(times, (first + 1.0) / FPS, side="right")) - 1  # the tempo of the latest peak at or before the middle of the two frames
+        tempo = float(tempos[latest]) if latest >= 0 else 120.0
+        assert 60 <= tempo <= 156
+        gain = (notch_turns(picture(client, job, first + 1), 1) - notch_turns(picture(client, job, first), 1)) % 1.0  # ring 1 is the current tempo
+        assert apart(gain, tempo / 60.0 / FPS) * 360 < 8, (first, gain, tempo)
 
 
 def test_the_local_peaks_settings_are_the_ones_the_peaks_are_measured_with_and_the_beat_is_not_measured_as_well(client, monkeypatch):
     from app.services.local_peaks import DEFAULT_MIN_DISTANCE, DEFAULT_PROMINENCE
 
     spy = Spy(monkeypatch)
-    assert rhythm(client, tiny(), peak_distance="700", peak_prominence="30").status_code == 200
-    assert spy.calls == [(700, 30)]  # one measurement only: the beat of the other types is not measured
+    assert rhythm(client, tiny(), peak_distance="700").status_code == 200
+    assert spy.calls == [(700, DEFAULT_PROMINENCE)]  # one measurement only: the beat of the other types is not measured
     assert rhythm(client, tiny()).status_code == 200
-    assert spy.calls == [(700, 30), (DEFAULT_MIN_DISTANCE, DEFAULT_PROMINENCE)]
+    assert spy.calls == [(700, DEFAULT_PROMINENCE), (DEFAULT_MIN_DISTANCE, DEFAULT_PROMINENCE)]
+    assert (DEFAULT_MIN_DISTANCE, DEFAULT_PROMINENCE) == (350, 20)  # feature 040: the minimum distance defaults to 350 ms and the prominence is fixed at 20 percent
 
 
 @pytest.mark.parametrize("image_type, measurements", [("energy-graphs", 0), ("contour", 0), ("decay", 1), ("decay-exp", 1), ("polar-chords", 1), ("chromatic-decay", 1), ("chromatic-wireframe", 1), ("rhythm-circles", 1)])
@@ -193,21 +209,17 @@ def test_a_different_minimum_distance_gives_different_peaks_and_different_notche
             assert apart(notch_turns(picture(client, job, i), 1), want[i, 0]) * 360 < 3, i
 
 
-def test_a_different_prominence_gives_different_peaks_and_different_notches_that_still_match_the_library(client, monkeypatch):
+@pytest.mark.parametrize("text", ["0", "20", "100", "101", "-1", "nan", "", "abc"])
+def test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent(client, monkeypatch, text):
     spy = Spy(monkeypatch)
-    low = rhythm(client, pulse_wav(), peak_prominence="0").json()
-    high = rhythm(client, pulse_wav(), peak_prominence="100").json()
-    assert len(spy.results[0].peaks) != len(spy.results[1].peaks)
-    assert raws(client, low) != raws(client, high)
-    for job, peaks in ((low, spy.results[0]), (high, spy.results[1])):
-        want = expected_turns(peaks, job)
-        for i in range(0, job["frame_count"], 7):
-            assert apart(notch_turns(picture(client, job, i), 1), want[i, 0]) * 360 < 3, i
+    r = rhythm(client, tiny(), peak_prominence=text)
+    assert r.status_code == 200, r.text
+    assert "peak_prominence" not in r.json()
+    assert spy.calls == [(350, 20)]
 
 
 @pytest.mark.parametrize("field, text, message", [
     ("peak_distance", "99", DISTANCE_MESSAGE), ("peak_distance", "2001", DISTANCE_MESSAGE), ("peak_distance", "x", DISTANCE_MESSAGE),
-    ("peak_prominence", "-1", PROMINENCE_MESSAGE), ("peak_prominence", "101", PROMINENCE_MESSAGE), ("peak_prominence", "nan", PROMINENCE_MESSAGE),
 ])
 def test_a_bad_peak_setting_is_refused_with_its_message_and_nothing_is_left_behind(client, field, text, message):
     r = rhythm(client, tiny(), **{field: text})
@@ -218,15 +230,15 @@ def test_a_bad_peak_setting_is_refused_with_its_message_and_nothing_is_left_behi
 # --- no peaks, short and silent files -------------------------------------------------------------------------------------------------
 
 
-def test_a_silent_file_turns_the_tempo_and_its_fastest_tempos_a_turn_a_second_and_leaves_the_four_rate_circles_standing(client, monkeypatch):
+def test_a_silent_file_turns_the_two_levels_at_the_defaults_and_leaves_the_two_rate_circles_standing(client, monkeypatch):
     spy = Spy(monkeypatch)
     job = rhythm(client, wav_bytes(np.zeros(44100 * 4))).json()
     assert spy.results[0].peaks == ()
     for i in range(job["frame_count"]):
         image = picture(client, job, i)
-        for k in (1, 3, 5, 7):  # the fastest tempos of 8, 4 and 2 peaks and the tempo: 60 beats per minute, a turn a second
-            assert apart(notch_turns(image, k), (i + 0.5) / FPS) * 360 < 3, (i, k)
-        for k in (2, 4, 6, 8):  # their rates of change
+        for k, rpm in ((1, 120.0), (3, 60.0)):  # the starting tempo 120 and the default rate 60 of a peak: revolutions per minute
+            assert apart(notch_turns(image, k), (i + 0.5) / FPS * rpm / 60.0) * 360 < 3, (i, k)
+        for k in (2, 4):  # their rates of change
             assert apart(notch_turns(image, k), 0.0) * 360 < 3, (i, k)
 
 
@@ -283,7 +295,7 @@ def test_the_same_file_and_settings_give_identical_frames(client):
 
 
 def some_data(frames=6):
-    return rc.RhythmData(np.linspace(0.0, 1.7, frames * 8).reshape(frames, 8))
+    return rc.RhythmData(np.linspace(0.0, 1.7, frames * 4).reshape(frames, 4))
 
 
 def test_write_frames_draws_the_same_bytes_as_write_rhythm_frames(tmp_path):

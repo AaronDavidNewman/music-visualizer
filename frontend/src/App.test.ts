@@ -64,11 +64,9 @@ describe("the result summary: beat coloring (feature 024)", () => {
   });
 
   it("shows the two settings only for those types and only when the box is on", () => {
-    for (const label of ["Minimum distance:", "Prominence:"]) {
-      expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
-    }
+    expect(line("Minimum distance:")).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
     expect(line("Minimum distance:")).toContain("formatPeakDistance(result.peak_distance)");
-    expect(line("Prominence:")).toContain("formatPeakProminence(result.peak_prominence)");
+    expect(summary).not.toContain("Prominence"); // feature 040: it is fixed at 20 percent and no longer a setting
   });
 });
 
@@ -76,8 +74,8 @@ describe("the result summary for Concentric (feature 025)", () => {
   const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
   const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
 
-  it("shows Minimum distance and Prominence through the one rule that includes Concentric and the box", () => {
-    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+  it("shows Minimum distance through the one rule that includes Concentric and the box", () => {
+    expect(line("Minimum distance:")).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
   });
 
   it("shows Beat coloring only where the checkbox applies, which is not for Concentric", () => {
@@ -106,7 +104,7 @@ describe("the result summary for Decay (feature 027)", () => {
 
   it("shows the note layout and the Local peaks settings, and not Threshold, Notes, Interpolate, Oversampling, Gaussian smoothing or Beat coloring", () => {
     expect(line("Note layout:")).toContain("noteLayoutApplies(result.image_type)");
-    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+    expect(line("Minimum distance:")).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
     expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
     for (const label of ["Oversampling:", "Gaussian smoothing:"]) expect(line(label), label).toContain("gridSettingsApply(result.image_type)");
   });
@@ -122,9 +120,9 @@ describe("the result summary for Contour (feature 028)", () => {
     expect(line("Wave count:")).toContain("formatWaveCount(result.wave_count)");
   });
 
-  it("shows Beat coloring, Minimum distance and Prominence for Contour through the same rules as for the tiles", () => {
+  it("shows Beat coloring and Minimum distance for Contour through the same rules as for the tiles", () => {
     expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
-    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+    expect(line("Minimum distance:")).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
   });
 });
 
@@ -150,7 +148,7 @@ describe("the result summary for Decay Exp (feature 030)", () => {
   it("shows the decay rate, and the note layout and Local peaks settings through the rules that include Decay Exp", () => {
     expect(line("Decay rate:")).toContain("decayRateApplies(result.image_type)");
     expect(line("Note layout:")).toContain("noteLayoutApplies(result.image_type)");
-    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+    expect(line("Minimum distance:")).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
   });
 
   it("does not show the four decay amounts for it: they stay Decay's", () => {
@@ -178,7 +176,7 @@ describe("the result summary for Polar Chords (feature 032)", () => {
   });
 
   it("shows the Note layout and the Local peaks settings, and not Threshold, Notes, Interpolate, Oversampling, Gaussian smoothing or Beat coloring", () => {
-    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+    expect(line("Minimum distance:")).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
     expect(line("Note layout:")).toContain("noteLayoutApplies(result.image_type)");
     expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
     for (const label of ["Oversampling:", "Gaussian smoothing:"]) expect(line(label), label).toContain("gridSettingsApply(result.image_type)");
@@ -210,7 +208,7 @@ describe("the result summary for Rhythm Circles (feature 038)", () => {
   const line = (label: string) => summary.split(String.fromCharCode(10)).find((l) => l.includes(label)) ?? "";
 
   it("shows the Local peaks settings for it through the rule that includes it, with or without Beat coloring", () => {
-    for (const label of ["Minimum distance:", "Prominence:"]) expect(line(label), label).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
+    expect(line("Minimum distance:")).toContain("peakSettingsShown(result.image_type, result.beat_coloring)");
   });
 
   it("shows none of the settings of the grid, the decay, the layout or the beat coloring for it", () => {

@@ -14,7 +14,6 @@ from .test_resolution_api import picture, tiny
 
 MESSAGE = "The wave count must be a whole number from 2 to 10."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
-PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent."
 OTHER_TYPES = ["decay", "decay-exp", "polar-chords"]
 
 
@@ -86,7 +85,7 @@ def measured(monkeypatch):
 
 @pytest.mark.parametrize("box", ["true", "True", "1"])
 def test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on(client, measured, box):
-    r = contour(client, tiny(), beat_coloring=box, peak_distance="300", peak_prominence="20")
+    r = contour(client, tiny(), beat_coloring=box, peak_distance="300")
     assert r.status_code == 200 and r.json()["beat_coloring"] is True
     assert measured == [(22050, SR, 300.0, 20.0)]
 
@@ -100,7 +99,7 @@ def test_the_beat_is_not_measured_when_the_box_is_off_or_not_sent(client, measur
 
 @pytest.mark.parametrize(
     "fields, message",
-    [({"peak_distance": "50"}, DISTANCE_MESSAGE), ({"peak_distance": "abc"}, DISTANCE_MESSAGE), ({"peak_prominence": "101"}, PROMINENCE_MESSAGE), ({"peak_prominence": ""}, PROMINENCE_MESSAGE)],
+    [({"peak_distance": "50"}, DISTANCE_MESSAGE), ({"peak_distance": "abc"}, DISTANCE_MESSAGE)],
 )
 def test_the_peak_settings_are_checked_before_the_file_is_read_with_nothing_created(client, measured, fields, message):
     r = client.post("/api/jobs", data={"window_size": "4096", "frame_rate": "10", "image_type": "contour", "beat_coloring": "true", **fields})
@@ -131,12 +130,11 @@ def test_with_the_box_on_the_frames_follow_the_beat_and_the_wave_count(client):
     assert two != ten
 
 
-def test_the_minimum_distance_and_the_prominence_change_the_frames_with_the_box_on(client):
+def test_the_minimum_distance_changes_the_frames_with_the_box_on(client):
     audio = pulse_wav()
     default = all_frames(client, contour(client, audio, beat_coloring="true").json())
     far = all_frames(client, contour(client, audio, beat_coloring="true", peak_distance="2000").json())
-    high = all_frames(client, contour(client, audio, beat_coloring="true", peak_prominence="95").json())
-    assert far != default and high != default
+    assert far != default
 
 
 def test_the_frames_are_600_by_400_rgb_pictures_and_their_count_is_that_of_the_other_types(client):
@@ -182,8 +180,8 @@ def test_a_silent_file_is_the_same_with_the_box_on_and_off(client):
 
 def test_a_file_in_which_no_beat_is_found_is_the_same_with_the_box_on_and_off(client):
     audio = wav_bytes(0.5 * note_tone(TONE_NOTE, 4.0))
-    off = all_frames(client, contour(client, audio, peak_prominence="100").json())
-    on = all_frames(client, contour(client, audio, beat_coloring="true", peak_prominence="100").json())
+    off = all_frames(client, contour(client, audio).json())
+    on = all_frames(client, contour(client, audio, beat_coloring="true").json())
     assert on == off
 
 

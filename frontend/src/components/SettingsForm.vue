@@ -18,9 +18,7 @@ import {
   DECAY_RATE_RANGE,
   NOTE_LAYOUTS,
   DEFAULT_PEAK_DISTANCE,
-  DEFAULT_PEAK_PROMINENCE,
   PEAK_DISTANCE_RANGE,
-  PEAK_PROMINENCE_RANGE,
   DEFAULT_IMAGE_TYPE,
   DEFAULT_GAUSSIAN,
   DEFAULT_INTERPOLATE,
@@ -46,7 +44,6 @@ import {
   formatPolarNotes,
   formatWaveCount,
   formatPeakDistance,
-  formatPeakProminence,
   formatGaussian,
   formatInterpolate,
   formatNoteCount,
@@ -62,7 +59,6 @@ import {
   validateNoteLayout,
   isChromaticType,
   noteLayoutApplies,
-  validatePeakProminence,
   validateColormap,
   validateFile,
   validateFrameRate,
@@ -99,7 +95,6 @@ import {
   waveCountHelp,
   noteLayoutHelp,
   peakDistanceHelp,
-  peakProminenceHelp,
   interpolateHelp,
   noteCountHelp,
   resolutionHelp,
@@ -136,7 +131,6 @@ const waveCount = ref<number>(DEFAULT_WAVE_COUNT);
 const polarNotes = ref<number>(DEFAULT_POLAR_NOTES);
 const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
 const peakDistance = ref<number>(DEFAULT_PEAK_DISTANCE);
-const peakProminence = ref<number>(DEFAULT_PEAK_PROMINENCE);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
 
 function defaultSpacingText(sampleRate: number, frameRate: string, size: number): string | null {
@@ -171,7 +165,6 @@ const decayAmountErrors = computed(() => DECAY_LEVELS.map((level, index) => vali
 const waveCountError = computed(() => validateWaveCount(waveCount.value));
 const polarNotesError = computed(() => validatePolarNotes(polarNotes.value));
 const peakDistanceError = computed(() => validatePeakDistance(peakDistance.value));
-const peakProminenceError = computed(() => validatePeakProminence(peakProminence.value));
 const canSubmit = computed(
   () =>
     !fileError.value &&
@@ -193,8 +186,7 @@ const canSubmit = computed(
     decayAmountErrors.value.every((e) => !e) &&
     !waveCountError.value &&
     !polarNotesError.value &&
-    !peakDistanceError.value &&
-    !peakProminenceError.value,
+    !peakDistanceError.value,
 );
 
 // The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
@@ -232,7 +224,7 @@ const typeGroupProblem = computed(
     (inTypeGroup("wave-count") && !!waveCountError.value),
 );
 const noteLayoutProblem = computed(() => !!noteLayoutError.value);
-const localPeaksProblem = computed(() => !!(peakDistanceError.value || peakProminenceError.value));
+const localPeaksProblem = computed(() => !!peakDistanceError.value);
 const dataSmoothingProblem = computed(() => !!(smoothingWindowError.value || smoothingError.value));
 const imageSmoothingProblem = computed(() => !!(resolutionError.value || interpolateError.value || gaussianError.value));
 
@@ -272,7 +264,6 @@ function onSubmit() {
     polarNotes: polarNotes.value,
     beatColoring: beatColoring.value,
     peakDistance: peakDistance.value,
-    peakProminence: peakProminence.value,
     smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
@@ -554,24 +545,6 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="peakDistanceError" class="error">{{ peakDistanceError }}</small>
-      </div>
-
-      <div class="field">
-        <div class="field-head">
-          <label for="peak-prominence">Prominence</label>
-          <InfoPopover label="prominence" :text="peakProminenceHelp" />
-          <output class="slider-value" for="peak-prominence">{{ formatPeakProminence(peakProminence) }}</output>
-        </div>
-        <input
-          id="peak-prominence"
-          v-model.number="peakProminence"
-          type="range"
-          :min="PEAK_PROMINENCE_RANGE.min"
-          :max="PEAK_PROMINENCE_RANGE.max"
-          :step="PEAK_PROMINENCE_RANGE.step"
-          :disabled="busy"
-        />
-        <small v-if="peakProminenceError" class="error">{{ peakProminenceError }}</small>
       </div>
     </SettingsGroup>
 

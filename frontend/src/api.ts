@@ -25,7 +25,6 @@ export interface JobResult {
   /** Contour: the beat wave is on (feature 028). */
   beat_coloring: boolean;
   peak_distance: number;
-  peak_prominence: number;
   /** Decay, Decay Exp and Polar Chords: which note is in which cell of the grid, rows or spiral (feature 026). */
   note_layout: string;
   /** Decay: the number of frames between two decay steps (feature 027). */
@@ -67,10 +66,9 @@ export interface JobSettings {
   /** 1 to 5: a whole number. */
   interpolate: number;
   gaussian: number;
-  /** Beat coloring on or off; the minimum distance in milliseconds (100 to 2000) and the prominence in percent (0 to 100). */
+  /** Beat coloring on or off; the minimum distance in milliseconds (100 to 2000). The prominence of the peaks is fixed at 20 percent (feature 040). */
   beatColoring: boolean;
   peakDistance: number;
-  peakProminence: number;
   /** "rows" (the default) or "spiral". */
   noteLayout: string;
   decayRate: number;
@@ -100,7 +98,6 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("gaussian", String(settings.gaussian));
   body.append("beat_coloring", String(settings.beatColoring));
   body.append("peak_distance", String(settings.peakDistance));
-  body.append("peak_prominence", String(settings.peakProminence));
   body.append("note_layout", settings.noteLayout);
   body.append("decay_rate", String(settings.decayRate));
   body.append("wave_count", String(settings.waveCount));

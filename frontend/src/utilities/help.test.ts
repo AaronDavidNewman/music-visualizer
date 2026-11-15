@@ -132,7 +132,8 @@ describe("interpolation explanation", () => {
 });
 
 
-import { beatColoringHelp, peakDistanceHelp, peakProminenceHelp } from "./help";
+import { beatColoringHelp, peakDistanceHelp } from "./help";
+import * as helpModule from "./help";
 
 describe("the Local peaks explanations (feature 024)", () => {
   it("explain that the box is off by default and turns on the beat wave of the contour only", () => {
@@ -142,12 +143,13 @@ describe("the Local peaks explanations (feature 024)", () => {
     expect(beatColoringHelp).not.toContain("Tiles");
   });
 
-  it("give the ranges and defaults of the two settings", () => {
+  it("give the range and the default of the minimum distance, and say that the prominence is fixed at 20 percent (feature 040)", () => {
     expect(peakDistanceHelp).toContain("100 to 2000");
-    expect(peakDistanceHelp).toContain("default 100");
-    expect(peakProminenceHelp).toContain("0 to 100");
-    expect(peakProminenceHelp).toContain("default 50");
-    for (const text of [beatColoringHelp, peakDistanceHelp, peakProminenceHelp]) expect(text.length).toBeGreaterThan(60);
+    expect(peakDistanceHelp).toContain("default 350");
+    expect(peakDistanceHelp).toContain("20 percent");
+    expect(peakDistanceHelp).toContain("fixed");
+    expect("peakProminenceHelp" in helpModule).toBe(false);
+    for (const text of [beatColoringHelp, peakDistanceHelp]) expect(text.length).toBeGreaterThan(60);
   });
 });
 
@@ -315,22 +317,25 @@ describe("the image type help for Rhythm Circles (feature 038)", () => {
   });
 
   it("names the eight circles, the four layers and what turns each of them", () => {
-    expect(text()).toContain("eight concentric circles");
-    expect(text()).toContain("four layers");
+    expect(text()).toContain("four concentric circles");
+    expect(text()).toContain("two layers");
     expect(text()).toContain("beats per minute");
-    expect(text()).toContain("rate of change of the tempo");
-    expect(text()).toContain("rate of change of that tempo");
+    expect(text()).toContain("its rate of change");
+    expect(text()).toContain("the difference between the last two peak tempos divided by the time between them");
   });
 
-  it("says that an aggregated tempo is the average or the fastest, whichever is closer to the current tempo", () => {
-    expect(text()).toContain("either their average or the fastest of them");
-    expect(text()).toContain("whichever is closer to the current tempo");
-    expect(text()).not.toContain("not an average"); // the version in which it was always the fastest
+  it("says how a peak nudges the current tempo: matched to the tempo, its half or its two thirds, within one standard deviation or moved by one", () => {
+    expect(text()).toContain("half of it, two thirds of it, twice it and one and a half times it");
+    expect(text()).toContain("the nearest of them is what the peak stands for, as long as the peak is within 15 percent of it");
+    expect(text()).toContain("a peak that is not near any of them stands for itself");
+    expect(text()).toContain("within one standard deviation of the last 5 such tempos");
+    expect(text()).toContain("moves by one standard deviation toward it");
+    expect(text()).toContain("above 156 it becomes 78 and below 60 it becomes 120");
   });
 
-  it("puts the longest aggregation on the outside and the plain tempo in the middle", () => {
+  it("puts the current tempo on the outside and the local peak on the inside", () => {
     const t = text();
-    const order = ["The outer circle turns at the tempo of the last 8 peaks", "the same for the last 4 peaks", "the fifth and sixth for the last 2 peaks", "The seventh turns at the current tempo", "the eighth, the innermost"];
+    const order = ["The outer circle turns at the current tempo", "the second at its rate of change", "The third turns at the local peak", "the fourth, the innermost"];
     const places = order.map((phrase) => t.indexOf(phrase));
     expect(places.every((p) => p >= 0)).toBe(true);
     expect([...places].sort((a, b) => a - b)).toEqual(places); // in the order of the rings, from the outside in
@@ -340,6 +345,8 @@ describe("the image type help for Rhythm Circles (feature 038)", () => {
     expect(imageTypeHelp.slice(imageTypeHelp.indexOf("Rhythm Circles:"))).not.toContain("second rate of change");
     expect(text()).not.toContain("averaged"); // the first version of the circles averaged the tempos
     expect(text()).not.toContain("six concentric");
+    expect(text()).not.toContain("eight concentric");
+    expect(text()).not.toContain("four layers"); // the circles of half and two thirds of the tempo were dropped
   });
 
   it("says which way they turn and what the notch is", () => {
@@ -349,10 +356,16 @@ describe("the image type help for Rhythm Circles (feature 038)", () => {
     expect(text()).toContain("an eighth");
   });
 
-  it("names the Local peaks settings as the only ones", () => {
-    expect(text()).toContain("Minimum distance");
-    expect(text()).toContain("Prominence");
+  it("names Minimum distance as the only setting that applies", () => {
+    expect(text()).toContain("Only Minimum distance applies");
+    expect(text()).not.toContain("Prominence");
     expect(text()).toContain("the others are ignored");
+  });
+
+  it("describes the current tempo and its limits", () => {
+    expect(text()).toContain("starts at 120");
+    expect(text()).toContain("from 60 to 156");
+    expect(text()).not.toContain("the last 8 peaks");
   });
 
   it("has nothing the page would have to escape", () => {

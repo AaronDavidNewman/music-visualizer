@@ -1,7 +1,7 @@
-"""The beat coloring through the job endpoint (feature 024): ``beat_coloring``, ``peak_distance`` and ``peak_prominence``.
+"""The beat coloring through the job endpoint (feature 024): ``beat_coloring`` and ``peak_distance`` (the ``peak_prominence`` it had was removed in feature 040: the measurement always uses 20 percent).
 
 How the colors are worked out is tested on plain arrays in ``test_peak_tile_colors.py``, ``test_colormaps.py`` and
-``test_local_peaks.py``; this module is about the endpoint: the three fields, their refusals, the response, that the beat is
+``test_local_peaks.py``; this module is about the endpoint: the two fields, their refusals, the response, that the beat is
 measured only when it is used, and the frames that are served.
 """
 
@@ -18,10 +18,17 @@ from .test_resolution_api import frame_bytes, picture, tiny
 
 BEAT_MESSAGE = "The beat coloring must be true or false."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
-PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent."
 TONE_NOTE = 36
 COLORMAP = DECODABLE[0]  # every row of this colormap is different, so the row of a color can be read back
 ROWS = {tuple(row): i for i, row in enumerate(lookup_table(COLORMAP).tolist())}
+
+
+@pytest.fixture
+def no_beat(monkeypatch):
+    """The measurement finds no peak in the file (a prominence of 100 percent: nothing stands out by the whole of the largest energy), as the prominence
+    setting used to let a test ask for. Since feature 040 the job's prominence is fixed at 20 percent, which a steady tone does not always stay under."""
+    real = jobs.measure_local_peaks
+    monkeypatch.setattr(jobs, "measure_local_peaks", lambda left, right, rate, distance, prominence, *args, **kwargs: real(left, right, rate, distance, 100.0, *args, **kwargs))
 
 
 def post(client, data=None, **fields):
@@ -50,11 +57,12 @@ def all_frames(client, job):
 
 
 @pytest.mark.parametrize("image_type", ["contour"])
-def test_the_defaults_are_off_100_and_50_and_are_reported_for_every_image_type(client, image_type):
+def test_the_defaults_are_off_and_350_and_are_reported_for_every_image_type(client, image_type):
     r = post(client, tiny(), image_type=image_type)
     assert r.status_code == 200, r.text
     job = r.json()
-    assert (job["beat_coloring"], job["peak_distance"], job["peak_prominence"]) == (False, 100, 50)
+    assert (job["beat_coloring"], job["peak_distance"]) == (False, 350)
+    assert "peak_prominence" not in job
 
 
 @pytest.mark.parametrize("text, expected", [("true", True), ("false", False), ("1", True), ("0", False), ("TRUE", True), (" False ", False), ("True", True)])
@@ -85,32 +93,25 @@ def test_peak_distance_outside_the_range_or_not_a_number_is_refused_with_nothing
     assert leftovers() == []
 
 
-@pytest.mark.parametrize("text, expected", [("0", 0), ("100", 100), ("50.5", 50.5), ("1", 1), ("99.9", 99.9)])
-def test_peak_prominence_accepts_0_to_100_and_the_response_has_it(client, text, expected):
+@pytest.mark.parametrize("text", ["0", "20", "100", "50.5", "101", "-1", "", "abc", "nan", "50%"])
+def test_a_peak_prominence_that_is_sent_is_ignored_and_not_in_the_response(client, text):
     r = post(client, tiny(), peak_prominence=text)
     assert r.status_code == 200, r.text
-    assert r.json()["peak_prominence"] == expected
-
-
-@pytest.mark.parametrize("text", ["-0.1", "-1", "100.1", "101", "", "abc", "nan", "inf", "50%"])
-def test_peak_prominence_outside_the_range_or_not_a_number_is_refused_with_nothing_created(client, text):
-    r = post(client, tiny(), peak_prominence=text)
-    assert r.status_code == 400 and r.json()["detail"] == PROMINENCE_MESSAGE
-    assert leftovers() == []
+    assert "peak_prominence" not in r.json()
 
 
 @pytest.mark.parametrize("box", ["true", "false"])
 @pytest.mark.parametrize("image_type", ["contour"])
 def test_the_two_settings_are_checked_before_the_file_is_read_whether_the_box_is_on_or_off(client, box, image_type):
-    for fields, message in (({"peak_distance": "50"}, DISTANCE_MESSAGE), ({"peak_prominence": "101"}, PROMINENCE_MESSAGE), ({"beat_coloring": "maybe"}, BEAT_MESSAGE)):
+    for fields, message in (({"peak_distance": "50"}, DISTANCE_MESSAGE), ({"beat_coloring": "maybe"}, BEAT_MESSAGE)):
         r = client.post("/api/jobs", data={"window_size": "4096", "frame_rate": "10", "beat_coloring": box, "image_type": image_type, **fields})  # no file at all
         assert r.status_code == 400 and r.json()["detail"] == message
         assert leftovers() == []
 
 
 def test_the_response_keeps_the_values_that_were_sent(client):
-    job = post(client, tiny(), image_type="contour", beat_coloring="true", peak_distance="450", peak_prominence="25").json()
-    assert (job["beat_coloring"], job["peak_distance"], job["peak_prominence"]) == (True, 450, 25)
+    job = post(client, tiny(), image_type="contour", beat_coloring="true", peak_distance="450").json()
+    assert (job["beat_coloring"], job["peak_distance"]) == (True, 450)
 
 
 # --- the frames ---------------------------------------------------------------------------------------------------------------
@@ -120,17 +121,16 @@ def test_the_response_keeps_the_values_that_were_sent(client):
 def test_with_the_box_off_the_frames_are_those_of_a_job_that_sends_none_of_the_fields(client, image_type):
     audio = pulse_wav()
     plain = post(client, audio, image_type=image_type).json()
-    off = post(client, audio, image_type=image_type, beat_coloring="false", peak_distance="1500", peak_prominence="5").json()
+    off = post(client, audio, image_type=image_type, beat_coloring="false", peak_distance="1500").json()
     assert all_frames(client, plain) == all_frames(client, off)
     assert off["frame_count"] == plain["frame_count"]
 
 
-def test_the_minimum_distance_and_the_prominence_change_the_beat_that_is_found(client):
+def test_the_minimum_distance_changes_the_beat_that_is_found(client):
     audio = pulse_wav()
     default = all_frames(client, post(client, audio, image_type="contour", beat_coloring="true").json())
     far = all_frames(client, post(client, audio, image_type="contour", beat_coloring="true", peak_distance="2000").json())
-    high = all_frames(client, post(client, audio, image_type="contour", beat_coloring="true", peak_prominence="95").json())
-    assert far != default and high != default
+    assert far != default
 
 
 @pytest.mark.parametrize("image_type", ["decay", "chromatic-decay", "polar-chords"])  # these always use the beat: the box changes nothing
@@ -168,7 +168,7 @@ def measured(monkeypatch):
 
 @pytest.mark.parametrize("image_type", ["contour"])
 def test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on(client, measured, image_type):
-    post(client, tiny(), image_type=image_type, beat_coloring="true", peak_distance="300", peak_prominence="20")
+    post(client, tiny(), image_type=image_type, beat_coloring="true", peak_distance="300")
     assert measured == [(22050, SR, 300.0, 20.0)]
 
 
@@ -218,3 +218,47 @@ def test_mono_and_stereo_copies_of_the_same_sound_make_the_same_frames(client):
     mono = post(client, wav_bytes(np.clip(audio, -0.99, 0.99)), image_type="contour", beat_coloring="true").json()
     stereo = post(client, wav_bytes(np.clip(audio, -0.99, 0.99), np.clip(audio, -0.99, 0.99)), image_type="contour", beat_coloring="true").json()
     assert all_frames(client, mono) == all_frames(client, stereo)
+
+
+# --- the other image types keep reading the local peak (feature 040) ---------------------------------------------------------------
+
+
+@pytest.fixture
+def drawn(monkeypatch):
+    """The ``beat`` and ``rhythm`` that the job hands to the drawing of every job it makes."""
+    calls = []
+    real = jobs.write_frames
+
+    def spy(*args, **kwargs):
+        calls.append({"beat": kwargs.get("beat"), "rhythm": kwargs.get("rhythm")})
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(jobs, "write_frames", spy)
+    return calls
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"image_type": "decay"}, {"image_type": "decay-exp"}, {"image_type": "polar-chords"}, {"image_type": "chromatic-decay"},
+        {"image_type": "chromatic-wireframe"}, {"image_type": "contour", "beat_coloring": "true"},
+    ],
+)
+@pytest.mark.parametrize("distance", [None, "700"])
+def test_the_types_that_follow_the_beat_read_the_position_in_the_local_peak_measured_at_350_ms_and_20_percent(client, drawn, tmp_path, fields, distance):
+    from app.services.local_peaks import measure_wav
+
+    audio = pulse_wav(seconds=4.0)
+    job = post(client, audio, **fields, **({} if distance is None else {"peak_distance": distance})).json()
+    path = tmp_path / "song.wav"
+    path.write_bytes(audio)
+    expected = measure_wav(path, 350.0 if distance is None else float(distance), 20.0).frame_positions(10, job["frame_count"])  # measured here, on the file itself
+    assert len(drawn) == 1 and drawn[0]["rhythm"] is None
+    assert np.array_equal(np.asarray(drawn[0]["beat"]), expected)
+
+
+@pytest.mark.parametrize("fields", [{"image_type": "energy-graphs"}, {"image_type": "contour"}, {"image_type": "contour", "beat_coloring": "false"}, {"image_type": "rhythm-circles"}])
+def test_the_other_types_are_not_given_a_beat(client, drawn, fields):
+    assert post(client, tiny(), **fields).status_code == 200
+    assert len(drawn) == 1 and drawn[0]["beat"] is None
+    assert (drawn[0]["rhythm"] is not None) == (fields["image_type"] == "rhythm-circles")

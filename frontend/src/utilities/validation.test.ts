@@ -348,27 +348,22 @@ import { DECAY_RATE_RANGE, DEFAULT_DECAY_RATE, decayRateApplies, formatDecayRate
 import {
   DEFAULT_BEAT_COLORING,
   DEFAULT_PEAK_DISTANCE,
-  DEFAULT_PEAK_PROMINENCE,
   PEAK_DISTANCE_RANGE,
-  PEAK_PROMINENCE_RANGE,
   beatColoringApplies,
   formatBeatColoring,
   formatPeakDistance,
-  formatPeakProminence,
   validatePeakDistance,
-  validatePeakProminence,
 } from "./validation";
 
 describe("beat coloring (feature 024)", () => {
   const DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds.";
-  const PROMINENCE_MESSAGE = "The prominence must be a number from 0 to 100 percent.";
 
-  it("is off by default, with a minimum distance of 100 ms and a prominence of 50 percent", () => {
+  it("is off by default, with a minimum distance of 350 ms (feature 040; the prominence is no longer a setting)", () => {
     expect(DEFAULT_BEAT_COLORING).toBe(false);
-    expect(DEFAULT_PEAK_DISTANCE).toBe(100);
-    expect(DEFAULT_PEAK_PROMINENCE).toBe(50);
+    expect(DEFAULT_PEAK_DISTANCE).toBe(350);
     expect(PEAK_DISTANCE_RANGE).toEqual({ min: 100, max: 2000, step: 50 });
-    expect(PEAK_PROMINENCE_RANGE).toEqual({ min: 0, max: 100, step: 5 });
+    expect(PEAK_DISTANCE_RANGE.min <= DEFAULT_PEAK_DISTANCE && DEFAULT_PEAK_DISTANCE <= PEAK_DISTANCE_RANGE.max).toBe(true);
+    expect(DEFAULT_PEAK_DISTANCE % PEAK_DISTANCE_RANGE.step).toBe(0); // the slider can stand on it
   });
 
   it("accepts a minimum distance from 100 to 2000 milliseconds, as a number or as text", () => {
@@ -381,23 +376,16 @@ describe("beat coloring (feature 024)", () => {
     }
   });
 
-  it("accepts a prominence from 0 to 100 percent and refuses the rest, with the server's message", () => {
-    for (const v of [0, 100, 50, 50.5, "0", "100", "25"]) expect(validatePeakProminence(v), String(v)).toBeNull();
-    for (const v of [-0.1, 100.1, 101, NaN, Infinity, "", "abc", "50%"]) expect(validatePeakProminence(v), String(v)).toBe(PROMINENCE_MESSAGE);
-  });
-
   it("applies to Tiles, Blended tiles and Contour only", () => {
     expect(beatColoringApplies("contour")).toBe(true);
     for (const t of ["decay", "nonsense", ""]) expect(beatColoringApplies(t), t).toBe(false);
   });
 
-  it("is shown as Off or On, a number of milliseconds and a percentage", () => {
+  it("is shown as Off or On and a number of milliseconds", () => {
     expect(formatBeatColoring(false)).toBe("Off");
     expect(formatBeatColoring(true)).toBe("On");
     expect(formatPeakDistance(100)).toBe("100 ms");
     expect(formatPeakDistance(1250)).toBe("1250 ms");
-    expect(formatPeakProminence(50)).toBe("50%");
-    expect(formatPeakProminence(0)).toBe("0%");
   });
 });
 

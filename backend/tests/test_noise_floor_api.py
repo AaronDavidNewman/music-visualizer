@@ -106,11 +106,11 @@ def test_a_silent_file_gives_values_of_0(client, given):
 
 
 def test_polar_chords_shows_only_the_loud_note_not_the_faint_one(client):
-    job = job_of(client, audio(-70.0), image_type="polar-chords", polar_notes="8", peak_prominence="100")
+    job = job_of(client, audio(-70.0), image_type="polar-chords", polar_notes="8")
     image = picture(client, job, job["frame_count"] // 2)
     assert row_at(image, (LOUD + 0.5) * ARC, 0.3 * RADIUS) <= 30  # the loud note has its bar
     assert row_at(image, (FAINT + 0.5) * ARC, 0.3 * RADIUS) == MIDDLE  # the faint note has none: with eight bars to give, it is still not a note
-    other = job_of(client, audio(-50.0), image_type="polar-chords", polar_notes="8", peak_prominence="100")
+    other = job_of(client, audio(-50.0), image_type="polar-chords", polar_notes="8")
     assert row_at(picture(client, other, other["frame_count"] // 2), (FAINT + 0.5) * ARC, 0.3 * RADIUS) != MIDDLE  # at 50 dB down it has one
 
 
@@ -122,7 +122,7 @@ def test_a_triad_with_a_faint_extra_tone_gives_the_chord_bar_of_the_triad_not_of
     a5, c6, e6, g6 = 48, 51, 55, 58
     mix = AMPLITUDE / 3 * (note_tone(a5, SECONDS, int(WINDOW)) + note_tone(c6, SECONDS, int(WINDOW)) + note_tone(e6, SECONDS, int(WINDOW)))
     mix = mix + AMPLITUDE / 3 * db(-70.0) * note_tone(g6, SECONDS, int(WINDOW))
-    job = job_of(client, wav_bytes(mix), image_type="polar-chords", polar_notes="8", peak_prominence="100")
+    job = job_of(client, wav_bytes(mix), image_type="polar-chords", polar_notes="8")
     image = picture(client, job, job["frame_count"] // 2)
     assert row_at(image, 360.0 - (2 + 0.5) * CHORD_ARC, 0.3 * RADIUS) >= 200  # the triad's bar, in the second half of the colormap
     assert row_at(image, 360.0 - (5 + 0.5) * CHORD_ARC, 0.3 * RADIUS) == MIDDLE  # not the seventh chord's

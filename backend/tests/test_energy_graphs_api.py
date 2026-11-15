@@ -153,7 +153,7 @@ SETTINGS = [
     {"resolution": "3", "note_count": "20", "interpolate": "2"},
     {"note_layout": "spiral"},
     {"polar_notes": "7", "decay_rate": "2"},
-    {"peak_distance": "500", "peak_prominence": "20", "beat_coloring": "true"},
+    {"peak_distance": "500", "beat_coloring": "true"},
 ]
 
 

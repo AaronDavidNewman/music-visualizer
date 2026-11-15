@@ -32,9 +32,9 @@ export const GROUPS: readonly GroupDefinition[] = [
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
   // the beat coloring of Contour, its beat wave (feature 028): its own group, after the group of the type
-  { id: "local-peaks", title: "Local peaks", controls: ["beat-coloring", "peak-distance", "peak-prominence"] },
+  { id: "local-peaks", title: "Local peaks", controls: ["beat-coloring", "peak-distance"] },
   // the same two settings for Decay (feature 027) and the pictures after it: the beat always charges them, so no checkbox (the id is from Concentric, feature 025, the first picture that had it)
-  { id: "concentric-peaks", title: "Local peaks", controls: ["peak-distance", "peak-prominence"] },
+  { id: "concentric-peaks", title: "Local peaks", controls: ["peak-distance"] },
   { id: "data-smoothing", title: "Data smoothing", controls: ["smoothing-window", "smoothing"] },
   { id: "image-smoothing", title: "Image smoothing", controls: ["resolution", "interpolate", "gaussian"] },
 ];

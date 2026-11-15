@@ -147,14 +147,14 @@ def test_the_beat_is_measured_with_the_local_peaks_settings(client, monkeypatch)
         return real(left, right, rate, distance, prominence)
 
     monkeypatch.setattr(jobs, "measure_local_peaks", spy)
-    assert wireframe(client, tiny(), peak_distance="700", peak_prominence="30").status_code == 200
-    assert seen == [(700, 30)]
+    assert wireframe(client, tiny(), peak_distance="700").status_code == 200
+    assert seen == [(700, 20)]  # the prominence is fixed at 20 percent (feature 040)
 
 
 def test_the_local_peaks_settings_change_the_frames(client):
     data = pulse_wav()
-    near = served_bytes(client, wireframe(client, data, peak_distance="100", peak_prominence="0").json())
-    far = served_bytes(client, wireframe(client, data, peak_distance="2000", peak_prominence="90").json())
+    near = served_bytes(client, wireframe(client, data, peak_distance="100").json())
+    far = served_bytes(client, wireframe(client, data, peak_distance="2000").json())
     assert near != far
 
 

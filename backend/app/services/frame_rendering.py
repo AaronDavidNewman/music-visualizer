@@ -264,7 +264,7 @@ def write_frames(
     ``beat`` (the last color at the top of a peak; the first for every line without a beat). Smoothing, the colormap, the threshold and ``beat`` apply; ``note_layout``,
     ``decay_amounts`` and every other setting are checked and ignored.
 
-    ``image_type="rhythm-circles"`` draws eight concentric notched rings turned by the tempo of the local peaks, the aggregated tempos (the average or the fastest) of its latest 2, 4 and 8 peaks and the rates of change of all four (see
+    ``image_type="rhythm-circles"`` draws four concentric notched rings turned by the current tempo found from the local peaks, the tempo of the latest local peak and the rates of change of both (see
     ``rhythm_circles``), from ``rhythm``, the angles of every frame made by ``rhythm_circles.rhythm_angles`` (required for this type, ignored by the others; it
     must have one frame for each row of ``frames``). Only the colormap applies; every other setting is checked and ignored.
 
@@ -321,7 +321,7 @@ def write_frames(
             raise ValueError(f"The energy data has {energy.frame_count} frames but {len(frames)} were given.")
         write_energy_frames(energy, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
-    if image_type == "rhythm-circles":  # eight notched rings turned by ``rhythm`` (the rest of the settings above are checked and not used)
+    if image_type == "rhythm-circles":  # four notched rings turned by ``rhythm`` (the rest of the settings above are checked and not used)
         if rhythm is None:
             raise ValueError("Rhythm Circles needs the rhythm data.")
         if rhythm.frame_count != len(frames):

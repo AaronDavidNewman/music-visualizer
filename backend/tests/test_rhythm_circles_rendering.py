@@ -1,4 +1,4 @@
-"""The picture of the ``rhythm-circles`` image type (feature 038): eight concentric rings, each with a notch that rotates."""
+"""The picture of the ``rhythm-circles`` image type (features 038 and 040): four concentric rings (eight until feature 040), each with a notch that rotates."""
 
 import math
 import time
@@ -13,15 +13,15 @@ from app.services.colormaps import COLORMAPS, lookup_table
 WIDTH, HEIGHT = 600, 400
 CENTER = (WIDTH / 2, HEIGHT / 2)
 R = HEIGHT / 2 - 10  # the outer radius: 190
-N = 8  # the rings
-W = R / N  # the width of a ring with its gap: 23.75
+N = 4  # the rings
+W = R / N  # the width of a ring with its gap: 47.5
 GAP = 4
 MIDDLE = 128
 
 
 def ring_rows(k):
-    """The colormap rows of ring k (1 outer, 8 innermost) and of its notch, written out here: rint(p x 255) and rint((1 - p) x 255), p = (k - 1) / 7."""
-    p = (k - 1) / 7
+    """The colormap rows of ring k (1 outer, 4 innermost) and of its notch, written out here: rint(p x 255) and rint((1 - p) x 255), p = (k - 1) / 3."""
+    p = (k - 1) / 3
     return int(np.rint(p * 255)), int(np.rint((1 - p) * 255))
 
 
@@ -88,7 +88,7 @@ def test_the_same_angles_draw_the_same_bytes(tmp_path):
 # --- the rings ---------------------------------------------------------------------------------------------------------------
 
 
-def test_the_eight_rings_have_equal_width_with_a_gap_between_them_and_nothing_outside_or_in_the_hole(tmp_path):
+def test_the_four_rings_have_equal_width_with_a_gap_between_them_and_nothing_outside_or_in_the_hole(tmp_path):
     (picture,) = draw(tmp_path, np.zeros((1, N)))  # every notch at the top: look straight down, away from them
     table = lookup_table("viridis")
     background = color(table, MIDDLE)
@@ -129,7 +129,7 @@ def test_the_notch_of_every_ring_is_in_the_color_at_the_opposite_end_at_the_dire
 
 
 def test_each_ring_has_its_own_angle(tmp_path):
-    angles = [0.0, 0.25, 0.5, 0.75, 0.125, 0.875, 0.375, 0.625]
+    angles = [0.0, 0.25, 0.625, 0.875]
     (picture,) = draw(tmp_path, angles)
     table = lookup_table("viridis")
     for k, theta in enumerate(angles, start=1):
@@ -169,8 +169,8 @@ def test_the_notch_moves_with_the_angle_and_only_the_ring_that_moved_changes(tmp
     ys, xs = np.mgrid[0:HEIGHT, 0:WIDTH]
     distance = np.hypot(xs + 0.5 - CENTER[0], ys + 0.5 - CENTER[1])
     outside_last_ring = distance > outer_radius(N) + 2
-    assert np.array_equal(still[outside_last_ring], moved[outside_last_ring])  # rings 1 to 7 are the same
-    assert not np.array_equal(still[~outside_last_ring], moved[~outside_last_ring])  # ring 8 turned half way round
+    assert np.array_equal(still[outside_last_ring], moved[outside_last_ring])  # rings 1 to 3 are the same
+    assert not np.array_equal(still[~outside_last_ring], moved[~outside_last_ring])  # ring 4 turned half way round
 
 
 def test_the_angle_is_taken_modulo_one_turn_and_a_negative_angle_turns_the_other_way(tmp_path):
@@ -202,7 +202,7 @@ def test_a_clockwise_quarter_turn_puts_the_notch_on_the_right(tmp_path):
 # --- bad input, other sizes, speed -------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("angles", [np.zeros(N), np.zeros((3, 7)), np.zeros((3, 6)), np.zeros((2, N, 1)), np.full((2, N), np.nan), np.full((2, N), np.inf)])
+@pytest.mark.parametrize("angles", [np.zeros(N), np.zeros((3, 5)), np.zeros((3, 8)), np.zeros((3, 6)), np.zeros((2, N, 1)), np.full((2, N), np.nan), np.full((2, N), np.inf)])
 def test_bad_angles_are_refused_before_anything_is_written(tmp_path, angles):
     with pytest.raises(ValueError):
         rc.write_rhythm_frames(rc.RhythmData(angles), "viridis", tmp_path / "out", WIDTH, HEIGHT)
@@ -225,12 +225,12 @@ def test_another_frame_size_scales_the_rings(tmp_path):
     (picture,) = draw(tmp_path, np.zeros((1, N)), size=(300, 200), name="small")
     table = lookup_table("viridis")
     center = (150.0, 100.0)
-    outer = 100 - 10  # 90
+    outer = 100 - 10  # 90; a ring and its gap are 22.5 wide, the gap 2 pixels (4 scaled to half the size)
     assert picture.shape == (200, 300, 3)
     assert pixel(picture, 0.5, outer - 1.5, center) == color(table, ring_rows(1)[0])
     assert pixel(picture, 0.5, outer + 2.0, center) == color(table, MIDDLE)
-    assert pixel(picture, 0.5, 79.75, center) == color(table, MIDDLE)  # the gap of 2 pixels between ring 1 (it starts at 80.75) and ring 2 (it ends at 78.75)
-    assert pixel(picture, 0.5, 74.0, center) == color(table, ring_rows(2)[0])
+    assert pixel(picture, 0.5, 68.5, center) == color(table, MIDDLE)  # the gap of 2 pixels between ring 1 (it starts at 69.5) and ring 2 (it ends at 67.5)
+    assert pixel(picture, 0.5, 60.0, center) == color(table, ring_rows(2)[0])
 
 
 def test_a_hundred_frames_draw_in_a_few_seconds(tmp_path):
