@@ -40,7 +40,13 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Answer each rule of `.specify/memory/constitution.md` for this feature (the rules that exist today are listed; read the constitution for any added since):
+
+- [ ] **I. Every function is typed**: every function this feature adds or changes in `backend/app` has a type on every parameter and its return value (arrays by the aliases of `array_types.py`); `test_type_hints.py` will pass.
+- [ ] **II. Every array is documented with its meaning and shape**: each array this feature adds or changes is documented (name, alias, shape with named axes, what it represents), a new kind of array gets its alias and its one description in `array_types.py`; `test_documentation.py` will pass.
+- [ ] **III. Every processing module states its order of operations**: each module this feature adds or changes has an up-to-date `Order of operations:` (or `No data processing:`), and a new or changed image type has its block in the pipeline overview of `services/image_types.py`.
+
+[Any other gate of the constitution, and any violation to justify in Complexity Tracking]
 
 ## Project Structure
 

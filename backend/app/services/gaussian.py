@@ -1,18 +1,27 @@
 """Gaussian smoothing of the finished pictures (the *Gaussian smoothing* setting of the Image smoothing group).
 
-The setting is a number from 0 to 5. At 0 nothing is done and the frames are exactly what they were without it. Above 0 every
-drawn frame is blurred with Pillow's ``ImageFilter.GaussianBlur``, whose radius is the standard deviation of the Gaussian in
-pixels. The frame is 3:2, so the radius is 3:2 as well: a setting of ``v`` blurs by ``1.5 * v`` pixels across and ``v`` pixels
-down (a setting of 4 is a radius of 6 in x and 4 in y), so the smoothing looks the same in both directions.
+The setting is a number from 0 to 5. At 0 nothing is done and the frames are exactly what they were without it. Above 0
+every drawn frame is blurred with Pillow's ``ImageFilter.GaussianBlur``, whose radius is the standard deviation of the
+Gaussian in pixels. The frame is 3:2, so the radius is 3:2 as well: a setting of ``v`` blurs by ``1.5 * v`` pixels
+across and ``v`` pixels down (a setting of 4 is a radius of 6 in x and 4 in y), so the smoothing looks the same in both
+directions.
 
 It applies to the one kind of picture that is made from a grid, the contour; the other pictures do not use it. The
 blur is applied to the frames that are drawn, before the in-between frames of ``interpolate`` are made from them, so an
 in-between frame is a blend of blurred frames.
+
+Order of operations:
+    1. Check the setting - ``check_gaussian()`` - a number from 0 to 5, else refused.
+    2. At 0 stop: the frames are left exactly as they are.
+    3. Turn the setting into a radius - ``blur_radius()`` - 3:2 like the frame: ``(1.5 * v, v)`` pixels across and down.
+    4. Blur each written frame in place - ``blur_frames()`` - read the PNG, apply Pillow's Gaussian blur, write it back;
+       the frames are independent, so a few threads share them.
 """
 
 import math
 import numbers
 import os
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -29,7 +38,7 @@ ASPECT = 3 / 2
 _WORKERS = max(1, min(4, os.cpu_count() or 1))
 
 
-def check_gaussian(value) -> float:
+def check_gaussian(value: object) -> float:
     """Return ``value`` as a ``float`` when it is a number from 0 to 5; anything else is refused."""
     if (
         isinstance(value, bool)
@@ -46,7 +55,7 @@ def blur_radius(value: float) -> tuple[float, float]:
     return (value * ASPECT, value)
 
 
-def blur_frames(directory: Path, indices, value: float) -> None:
+def blur_frames(directory: Path, indices: Iterable[int], value: float) -> None:
     """Blur the written frames ``frame_<index>.png`` of ``indices`` in place; a setting of 0 changes nothing at all."""
     value = check_gaussian(value)
     if value == 0.0:

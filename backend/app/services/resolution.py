@@ -11,6 +11,14 @@ returned unchanged. Beyond the corners the new positions usually fall between or
 finer grid can be a little below the original largest value, never above it.
 
 This module knows nothing about the note analysis or the pictures: the grid shape is passed in.
+
+Order of operations:
+    1. Check the setting - ``check_resolution()`` - a whole number from 1 to 5, else refused.
+    2. Check the grid - ``interpolate_grid()`` - ``GridValues`` ``(frames, rows * columns)``.
+    3. At resolution 1 return a copy; otherwise, for each frame, read each original row at ``columns * r`` evenly spaced
+       positions (``np.interp``), giving ``(rows, columns * r)``, then read each new column at ``rows * r`` evenly
+       spaced positions, giving ``(rows * r, columns * r)``.
+    4. Flatten each frame row by row - ``GridValues`` ``(frames, rows * r * columns * r)``.
 """
 
 import math
@@ -18,12 +26,14 @@ import numbers
 
 import numpy as np
 
+from .array_types import GridValues
+
 MIN_RESOLUTION = 1
 MAX_RESOLUTION = 5
 DEFAULT_RESOLUTION = 1
 
 
-def check_resolution(value) -> int:
+def check_resolution(value: object) -> int:
     """Return ``value`` as an ``int`` when it is a whole number from 1 to 5 (no strings, no fractions, no booleans)."""
     if (
         isinstance(value, bool)
@@ -36,12 +46,22 @@ def check_resolution(value) -> int:
     return int(value)
 
 
-def interpolate_grid(values: np.ndarray, columns: int, rows: int, resolution: int) -> np.ndarray:
+def interpolate_grid(values: GridValues, columns: int, rows: int, resolution: int) -> GridValues:
     """The grid of every frame made ``resolution`` times finer: shape ``(frames, rows * r * columns * r)``, row-major.
 
-    ``values`` has one row per frame and ``rows * columns`` values per frame (the original grid row by row, so note ``n``
-    is at row ``n // columns`` and column ``n % columns``). The result has the new row ``y`` and column ``x`` of a frame
-    at index ``y * columns * r + x``. The input is never modified; at resolution 1 a copy of it is returned.
+    ``values`` has one row per frame and ``rows * columns`` values per frame (the original grid row by row, so note
+    ``n`` is at row ``n // columns`` and column ``n % columns``). The result has the new row ``y`` and column ``x`` of a
+    frame at index ``y * columns * r + x``. The input is never modified; at resolution 1 a copy of it is returned.
+
+    Arrays:
+        ``values``: ``GridValues`` ``(frames, rows * columns)`` - one value for each cell of the original grid in each
+            frame, row by row (for the drawn notes, 84 cells:
+        7 rows by 12 columns).
+
+    Returns:
+        ``GridValues`` ``(frames, rows * r * columns * r)`` - the same grid made ``r = resolution`` times finer in each
+        direction, row by row; each new value lies between the original values around it, and the four corners keep
+        their values.
     """
     r = check_resolution(resolution)
     values = np.asarray(values, dtype=np.float64)

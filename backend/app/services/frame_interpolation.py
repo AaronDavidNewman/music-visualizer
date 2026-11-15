@@ -4,19 +4,28 @@ The *interpolate* value ``n`` (a whole number from 1 to 5) means that only every
 with the frames numbered from 0 as their files are, the drawn frames are ``0, n, 2n, ...`` and always the last frame of
 the file (so every frame in between has a drawn frame on each side). The drawn frames are made exactly as they are at
 ``n = 1``. The other frames, the **interpolated** ones, are made from the nearest drawn frame before and after them with
-``Image.blend(earlier, later, w)``, the weighted mix of the two pictures, where ``w = k / g`` is the position of the frame
-in its gap (``k`` frames after the earlier drawn frame, ``g`` the length of the gap: ``n``, or less at the end of the file).
+``Image.blend(earlier, later, w)``, the weighted mix of the two pictures, where ``w = k / g`` is the position of the
+frame in its gap (``k`` frames after the earlier drawn frame, ``g`` the length of the gap: ``n``, or less at the end of
+the file).
 
 (The other Pillow operations, ``ImageChops.soft_light``, ``hard_light``, ``overlay``, ``screen`` and ``subtract``, were
 offered as a choice in feature 018 and removed again: they take no weight and did not give useful in-between frames.)
 
 All the arithmetic is Pillow's: this module only chooses the pictures and the weights. The interpolated frames are made
 from the PNG files of the drawn frames (read back and converted to plain RGB) and written as RGB PNG files with the
-numbers they have; the drawn files are not touched. The gaps are independent, so runs of consecutive gaps are made on a few
-threads (Pillow releases the interpreter lock; a run reads each drawn frame once), and the files are the same whatever the
-number of threads.
+numbers they have; the drawn files are not touched. The gaps are independent, so runs of consecutive gaps are made on a
+few threads (Pillow releases the interpreter lock; a run reads each drawn frame once), and the files are the same
+whatever the number of threads.
 
 This module knows nothing about the note analysis or what the pictures show.
+
+Order of operations:
+    1. Check the setting - ``check_interpolate()`` - a whole number from 1 to 5, else refused.
+    2. Choose the frames that are drawn from the music - ``key_frames()`` - ``0, n, 2n, ...`` and the last frame.
+    3. (After the drawn frames are written) find the gaps between consecutive drawn frames -
+       ``write_interpolated_frames()`` - and share runs of gaps among a few threads.
+    4. Make each in-between frame - ``_make_gaps()`` - read the drawn frame before and the one after the gap as RGB
+       pictures and mix them with ``Image.blend`` at the frame's place in the gap; write it as a PNG.
 """
 
 import math
@@ -35,7 +44,7 @@ DEFAULT_INTERPOLATE = 1
 _WORKERS = max(1, min(4, os.cpu_count() or 1))
 
 
-def check_interpolate(value) -> int:
+def check_interpolate(value: object) -> int:
     """Return ``value`` as an ``int`` when it is a whole number from 1 to 5 (no strings, no fractions, no booleans)."""
     if (
         isinstance(value, bool)
@@ -89,7 +98,8 @@ def write_interpolated_frames(directory: Path, count: int, interpolate: int) -> 
     gaps = [(a, b) for a, b in zip(drawn[:-1], drawn[1:]) if b - a > 1]
     if not gaps:
         return
-    # runs of consecutive gaps, a few per worker so that the work is shared evenly and each drawn frame is read once per run
+    # runs of consecutive gaps, a few per worker so that the work is shared evenly and each drawn frame is read once per
+    # run
     run = max(1, -(-len(gaps) // (_WORKERS * 4)))
     runs = [gaps[k : k + run] for k in range(0, len(gaps), run)]
     pool = ThreadPoolExecutor(max_workers=_WORKERS)

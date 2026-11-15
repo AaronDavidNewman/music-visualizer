@@ -4,16 +4,37 @@ For each window the left and right channels are transformed with a real FFT and
 their magnitude spectra are averaged. Each of 88 notes (55 Hz, rising one
 semitone at a time) then reads the spectrum at position
 ``int((window_size / sample_rate) * note_frequency)``.
+
+Order of operations:
+    1. Read the file - ``read_wav()`` - two channels of ``RawSamples`` ``(samples,)`` (a mono file gives the same
+       channel twice) and the file's sample rate.
+    2. Choose the windows - ``window_count()``, ``window_starts()`` - ``WindowStarts`` ``(windows,)``: the nearest whole
+       sample to ``k * step`` for each window ``k``.
+    3. Scale the samples - ``_to_float()`` - ``Samples`` ``(samples,)``: integer files are divided by their full scale,
+       so the bit depth does not matter (done a chunk of windows at a time, so a long file never sits in memory as
+       float64).
+    4. Cut out each window, zero-padded to the window size - ``analyze_channels()`` - two arrays
+       ``(windows in the chunk, window_size)``.
+    5. Transform each window - ``NoteBinAnalyzer._note_values()`` - a real FFT of each channel; the two magnitude
+       spectra are averaged.
+    6. Read the 88 notes - ``NoteBinAnalyzer._note_values()`` - the average spectrum at the bin of each note's
+       frequency: ``NoteStrengths`` ``(windows, 88)``.
+    7. Return everything (steps 2 to 7 are inside ``analyze_channels()``) - ``analyze_channels()`` - an
+       ``AnalysisResult`` with the strengths, the window starts, the step and the sample rate (``analyze_wav()`` reads
+       the file first, then does steps 2 to 7).
 """
 
 import math
 import numbers
 import warnings
 from dataclasses import dataclass
+from os import PathLike
 from pathlib import Path
 
 import numpy as np
 from scipy.io import wavfile
+
+from .array_types import ArrayLike, NoteFrequencies, NoteStrengths, RawSamples, Samples, WindowPositions, WindowStarts, WindowTimes
 
 NOTE_COUNT = 88
 BASE_FREQUENCY = 55.0
@@ -26,15 +47,25 @@ class AudioAnalysisError(ValueError):
     """Invalid audio or analysis parameters."""
 
 
-def note_frequencies() -> np.ndarray:
-    """Frequencies in Hz of the 88 notes, starting at 55 Hz, one semitone apart."""
+def note_frequencies() -> NoteFrequencies:
+    """Frequencies in Hz of the 88 notes, starting at 55 Hz, one semitone apart.
+
+    Returns:
+        ``NoteFrequencies`` ``(88,)`` - the frequency in hertz of each note, from 55 Hz (index 0) upward by semitones.
+    """
     return BASE_FREQUENCY * 2.0 ** (np.arange(NOTE_COUNT) / 12)
 
 
 class NoteBinAnalyzer:
-    """Turns one window of left/right audio into 88 note values."""
+    """Turns one window of left/right audio into 88 note values.
 
-    def __init__(self, sample_rate: float, window_size: int):
+    Attributes:
+        ``frequencies``: ``NoteFrequencies`` ``(88,)`` - the frequency in hertz of each note.
+        ``bin_indices``: ``Indices`` ``(88,)`` - the index into the spectrum of a window (its FFT bin) that each note
+            reads: ``int((window_size / sample_rate) * frequency)``.
+    """
+
+    def __init__(self, sample_rate: float, window_size: int) -> None:
         if (
             isinstance(sample_rate, bool)
             or not isinstance(sample_rate, numbers.Real)
@@ -63,8 +94,18 @@ class NoteBinAnalyzer:
                 f"Use a sample rate of at least {min_rate} Hz."
             )
 
-    def analyze(self, left, right) -> np.ndarray:
-        """Return the 88 note values (lowest note first) for one window of audio."""
+    def analyze(self, left: ArrayLike, right: ArrayLike) -> NoteStrengths:
+        """Return the 88 note values (lowest note first) for one window of audio.
+
+        Arrays:
+            ``left``: ``ArrayLike`` ``(n,)`` with ``n`` at most the window size - the samples of the left channel of one
+                window (any numbers; they are used as they are).
+            ``right``: ``ArrayLike`` ``(n,)`` - the same for the right channel, the same length as ``left``.
+
+        Returns:
+            ``NoteStrengths`` ``(88,)`` - the strength of each of the 88 notes in this one window (0 or more), lowest
+            note first.
+        """
         try:
             left = np.asarray(left, dtype=np.float64)
             right = np.asarray(right, dtype=np.float64)
@@ -82,8 +123,18 @@ class NoteBinAnalyzer:
             )
         return self._note_values(left, right)
 
-    def _note_values(self, left: np.ndarray, right: np.ndarray) -> np.ndarray:
-        """Note values for buffers of shape (..., n), zero-padded to the window size on the last axis."""
+    def _note_values(self, left: Samples, right: Samples) -> NoteStrengths:
+        """Note values for buffers of shape (..., n), zero-padded to the window size on the last axis.
+
+        Arrays:
+            ``left``: ``Samples`` ``(..., n)`` - the scaled samples of the left channel; one row for each window when
+                there are several, ``n`` at most the window size.
+            ``right``: ``Samples`` ``(..., n)`` - the same for the right channel.
+
+        Returns:
+            ``NoteStrengths`` ``(..., 88)`` - for each window (each row of the buffers) the strength of each of the 88
+            notes: the average of the two channels' magnitude spectra at the bin of each note.
+        """
         left_mag = np.abs(np.fft.rfft(left, n=self.window_size, axis=-1))
         right_mag = np.abs(np.fft.rfft(right, n=self.window_size, axis=-1))
         return ((left_mag + right_mag) / 2)[..., self.bin_indices]
@@ -91,35 +142,57 @@ class NoteBinAnalyzer:
 
 @dataclass(frozen=True)
 class AnalysisResult:
-    """Note values for every window of a file, in time order."""
+    """Note values for every window of a file, in time order.
+
+    Attributes:
+        ``frames``: ``NoteStrengths`` ``(windows, 88)`` - the strength of each of the 88 notes in each analysis window
+            (0 or more); axis 0 is the window in time order, axis 1 the note (index 0 is 55 Hz, each next one a semitone
+            higher). They are called ``frames`` for historical reasons: they are windows of the audio, and
+            ``frame_rendering.average_frames`` turns them into the frames of the animation.
+        ``starts``: ``WindowStarts`` ``(windows,)`` or ``None`` - the first sample of each window; ``None`` means
+            consecutive windows of the window size.
+    """
 
     sample_rate: float
     window_size: int
-    frames: np.ndarray  # shape (window_count, 88)
+    frames: NoteStrengths  # shape (window_count, 88)
     sample_count: int = 0  # samples per channel in the analyzed audio
-    starts: np.ndarray | None = None  # start sample of each window; default: consecutive windows
+    starts: WindowStarts | None = None  # start sample of each window; default: consecutive windows
     step: float | None = None  # exact distance in samples between window starts, if known
 
     @property
     def window_count(self) -> int:
+        """The number of analysis windows: the length of axis 0 of ``frames``."""
         return self.frames.shape[0]
 
     @property
-    def window_starts(self) -> np.ndarray:
-        """Start sample of each window (rounded to whole samples)."""
+    def window_starts(self) -> WindowStarts:
+        """Start sample of each window (rounded to whole samples).
+
+        Returns:
+            ``WindowStarts`` ``(windows,)`` - the first sample of each window.
+        """
         if self.starts is not None:
             return self.starts
         return np.arange(self.window_count) * self.window_size
 
     @property
-    def window_positions(self) -> np.ndarray:
-        """Exact start position of each window in samples (``k * step``), used to assign windows to frames."""
+    def window_positions(self) -> WindowPositions:
+        """Exact start position of each window in samples (``k * step``), used to assign windows to frames.
+
+        Returns:
+            ``WindowPositions`` ``(windows,)`` - the exact start of each window in samples (not rounded).
+        """
         if self.step is not None:
             return np.arange(self.window_count) * self.step
         return self.window_starts.astype(np.float64)
 
-    def window_start_times(self) -> np.ndarray:
-        """Start time in seconds of each window."""
+    def window_start_times(self) -> WindowTimes:
+        """Start time in seconds of each window.
+
+        Returns:
+            ``WindowTimes`` ``(windows,)`` - the start of each window in seconds from the start of the file.
+        """
         return self.window_starts / self.sample_rate
 
 
@@ -135,13 +208,25 @@ def window_count(sample_count: int, step: float) -> int:
     return n
 
 
-def window_starts(sample_count: int, step: float) -> np.ndarray:
-    """Start sample of each window: the nearest whole sample to ``k * step``, counted from sample 0."""
+def window_starts(sample_count: int, step: float) -> WindowStarts:
+    """Start sample of each window: the nearest whole sample to ``k * step``, counted from sample 0.
+
+    Returns:
+        ``WindowStarts`` ``(windows,)`` - the first sample of each window, from sample 0.
+    """
     return np.rint(np.arange(window_count(sample_count, step)) * step).astype(np.int64)
 
 
-def _to_float(samples: np.ndarray) -> np.ndarray:
-    """Scale PCM samples to float64 in about [-1, 1] so bit depth does not matter."""
+def _to_float(samples: RawSamples) -> Samples:
+    """Scale PCM samples to float64 in about [-1, 1] so bit depth does not matter.
+
+    Arrays:
+        ``samples``: ``RawSamples`` ``(samples,)`` - one channel as read from the file (unsigned 8 bit around 128,
+            signed integers, or floating point).
+
+    Returns:
+        ``Samples`` ``(samples,)`` - the same samples as float64, the full range of the file scaled to about -1 to 1.
+    """
     if samples.dtype == np.uint8:
         return (samples.astype(np.float64) - 128.0) / 128.0
     if np.issubdtype(samples.dtype, np.integer):
@@ -149,10 +234,14 @@ def _to_float(samples: np.ndarray) -> np.ndarray:
     return samples.astype(np.float64)
 
 
-def read_wav(path, display_name: str | None = None) -> tuple[int, np.ndarray, np.ndarray]:
+def read_wav(path: str | PathLike[str], display_name: str | None = None) -> tuple[int, RawSamples, RawSamples]:
     """Read a mono or stereo WAV file. Returns (file sample rate, left, right) as raw PCM arrays.
 
     ``display_name`` is the file name used in error messages (default: the name in ``path``).
+
+    Returns:
+        A tuple of the file's sample rate in hertz, then two ``RawSamples`` ``(samples,)``: the left and the right
+        channel as read (a mono file gives the same channel twice).
     """
     name = display_name or Path(path).name
     try:
@@ -174,7 +263,7 @@ def read_wav(path, display_name: str | None = None) -> tuple[int, np.ndarray, np
     )
 
 
-def analyze_wav(path, sample_rate: float, window_size: int) -> AnalysisResult:
+def analyze_wav(path: str | PathLike[str], sample_rate: float, window_size: int) -> AnalysisResult:
     """Analyze a WAV file in consecutive, non-overlapping windows.
 
     The final partial window is zero-padded. ``sample_rate`` is the value used
@@ -194,12 +283,20 @@ def analyze_wav(path, sample_rate: float, window_size: int) -> AnalysisResult:
 
 
 def analyze_channels(
-    left: np.ndarray, right: np.ndarray, sample_rate: float, window_size: int, step: float | None = None
+    left: RawSamples, right: RawSamples, sample_rate: float, window_size: int, step: float | None = None
 ) -> AnalysisResult:
     """Analyze already-read PCM channels in windows ``step`` samples apart (see analyze_wav).
 
     ``step`` defaults to the window size: consecutive, non-overlapping windows. A smaller step
     overlaps the windows and a larger one leaves gaps between them. It must be at least 1 sample.
+
+    Arrays:
+        ``left``: ``RawSamples`` ``(samples,)`` - the left channel as read from the file.
+        ``right``: ``RawSamples`` ``(samples,)`` - the right channel, the same length as ``left``.
+
+    Returns:
+        An ``AnalysisResult`` whose ``frames`` is ``NoteStrengths`` ``(windows, 88)``: the strength of each note in each
+        window; ``windows`` is the number of windows that ``window_count()`` gives for ``samples`` and ``step``.
     """
     analyzer = NoteBinAnalyzer(sample_rate, window_size)
     window = analyzer.window_size

@@ -1,3 +1,9 @@
+"""The endpoint ``POST /api/images/info``, which reports the format, mode and size of an uploaded image.
+
+No data processing: this module only reads the upload (refused above the size limit) and calls
+``services/image_processing.image_info()``.
+"""
+
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from ..config import settings

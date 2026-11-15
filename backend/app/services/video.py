@@ -1,4 +1,21 @@
-"""Join the frames of a render into one silent MP4 with ffmpeg (feature 029)."""
+"""Join the frames of a render into one silent MP4 with ffmpeg (feature 029).
+
+These are the steps of ``create_video()``.
+
+Order of operations:
+    1. Refuse a second request for the same render while one is being made - ``create_video()`` - 409.
+    2. Read the render's record - ``_read_render()`` - the number of frame files in the render's folder and the frame
+       rate in ``render.json``; 404 when the frames are gone.
+    3. Find ffmpeg - ``_create()`` - 503 when it is not installed.
+    4. Make the output folder for the render - ``_create()`` - remembering whether this attempt made it.
+    5. Build the command - ``build_command()`` - only the frames go in (no audio); H.264 in yuv420p comes out, the size
+       padded up to even numbers.
+    6. Run ffmpeg into a temporary file, with a time limit - ``_create()`` - 504 when it takes too long, 500 when it
+       fails.
+    7. Move the temporary file over the video and describe it - ``_create()`` - a ``VideoResult`` with the path, size,
+       frame count, frame rate and duration. On any failure the temporary file, and a folder made by this attempt, are
+       removed again and an earlier video is kept.
+"""
 
 import json
 import logging
@@ -30,7 +47,7 @@ _working_lock = threading.Lock()
 class VideoError(Exception):
     """A failure with a message fit to show the user and the HTTP status that goes with it."""
 
-    def __init__(self, status: int, message: str):
+    def __init__(self, status: int, message: str) -> None:
         super().__init__(message)
         self.status = status
 
@@ -46,7 +63,8 @@ class VideoResult:
 
 
 def build_command(ffmpeg: str, frames_dir: Path, frame_rate: float, output_file: Path) -> list[str]:
-    """The ffmpeg command: only the frames go in (no audio), H.264 in yuv420p comes out, the size padded up to even numbers."""
+    """The ffmpeg command: only the frames go in (no audio), H.264 in yuv420p comes out, the size padded up to even
+    numbers."""
     return [
         ffmpeg,
         "-y",
@@ -91,8 +109,8 @@ def create_video(
 ) -> VideoResult:
     """Make ``output_root/<job_id>/video.mp4`` from the frames of the render, replacing an earlier one.
 
-    Nothing is left behind on a failure: ffmpeg writes a temporary file that is moved over the video only when it succeeded,
-    and a directory made by this attempt is removed again. A video that already existed is kept.
+    Nothing is left behind on a failure: ffmpeg writes a temporary file that is moved over the video only when it
+    succeeded, and a directory made by this attempt is removed again. A video that already existed is kept.
     """
     with _working_lock:
         if job_id in _working:

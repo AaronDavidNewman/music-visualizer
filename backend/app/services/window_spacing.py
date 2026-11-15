@@ -2,6 +2,12 @@
 
 Both functions are mirrored in ``frontend/src/utilities/spacing.ts``; the two test suites share a table of
 expected values so the formulas stay in agreement.
+
+Order of operations:
+    1. Choose the spacing when none was given - ``default_spacing()`` - one frame period in samples over the window
+       size, rounded down to 6 decimals: a number of window sizes.
+    2. Turn a spacing into the step used - ``resolve_step()`` - the spacing times the window size, in samples; a step
+       below one sample is raised to one sample.
 """
 
 import math

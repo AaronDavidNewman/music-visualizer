@@ -1,3 +1,9 @@
+"""The application: the FastAPI app of the Music Visualizer.
+
+No data processing: this module only makes the app, allows the frontend's origins (CORS), adds the routers (``hello``,
+``images``, ``jobs``, ``video``, all under ``/api``) and, when it has been built, serves the frontend.
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles

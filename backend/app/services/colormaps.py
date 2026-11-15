@@ -1,15 +1,25 @@
 """Colors from a named matplotlib colormap.
 
-A picture takes its colors from the table of the chosen colormap (256 entries, row 0 the first color and row 255 the last; row 128 is the middle color that most
-pictures use as their background).
+A picture takes its colors from the table of the chosen colormap (256 entries, row 0 the first color and row 255 the
+last; row 128 is the middle color that most pictures use as their background).
 
 This is the only module that uses matplotlib. It is imported the first time a table is needed (never ``pyplot``), so the
 server starts and the tests that do not draw run without paying for it.
+
+Order of operations:
+    1. Check the name - ``check_colormap()`` - one of ``COLORMAPS``, else refused.
+    2. Build the table - ``lookup_table()`` (made once for each name, then cached) - samples the colormap at 256 evenly
+       spaced positions: ``ColorTable`` ``(256, 3)``, the RGB color of each step, read-only.
+    3. (Separate check, used by the drawing of the types that follow the beat) ``check_beat()`` - turns the beat
+       positions into a float64 array and refuses what is not one number from 0 to 1 for each frame: ``BeatPositions``
+       ``(frames,)``.
 """
 
 import functools
 
 import numpy as np
+
+from .array_types import ArrayLike, BeatPositions, ColorTable
 
 COLORMAPS = ("coolwarm", "YlOrRd", "inferno", "Blues", "viridis", "Greys", "hsv", "hot", "Wistia", "Paired", "gist_rainbow")
 DEFAULT_COLORMAP = "coolwarm"
@@ -17,7 +27,7 @@ COLORMAP_STEPS = 256
 MIDDLE_COLOR_ROW = 128  # the middle color of the colormap: the background of most pictures
 
 
-def check_colormap(value) -> str:
+def check_colormap(value: object) -> str:
     """Return ``value`` when it is exactly one of the offered names (no trimming, no case folding)."""
     if not isinstance(value, str) or value not in COLORMAPS:
         raise ValueError(f"The colormap must be one of {', '.join(COLORMAPS)}.")
@@ -25,11 +35,15 @@ def check_colormap(value) -> str:
 
 
 @functools.lru_cache(maxsize=None)
-def lookup_table(name: str) -> np.ndarray:
+def lookup_table(name: str) -> ColorTable:
     """The 8-bit colors of the colormap ``name``: a read-only ``uint8`` array of shape ``(256, 3)``.
 
-    The scale is sampled at 256 evenly spaced positions, so the table spans the whole colormap whatever its own number of
-    entries is: row 0 is the first color of the scale and row 255 the last.
+    The scale is sampled at 256 evenly spaced positions, so the table spans the whole colormap whatever its own number
+    of entries is: row 0 is the first color of the scale and row 255 the last.
+
+    Returns:
+        ``ColorTable`` ``(256, 3)`` - the red, green and blue (0 to 255) of each of the 256 steps of the colormap, from
+        its first color to its last; read-only.
     """
     check_colormap(name)
     from matplotlib import colormaps  # imported here on purpose: see the module docstring
@@ -39,8 +53,17 @@ def lookup_table(name: str) -> np.ndarray:
     return table
 
 
-def check_beat(beat, frames: int) -> np.ndarray:
-    """Return ``beat`` as a float64 array when it is one number from 0 to 1 for each of ``frames`` frames; else refuse it."""
+def check_beat(beat: ArrayLike, frames: int) -> BeatPositions:
+    """Return ``beat`` as a float64 array when it is one number from 0 to 1 for each of ``frames`` frames; else refuse
+    it.
+
+    Arrays:
+        ``beat``: ``ArrayLike`` ``(frames,)`` - the place of the middle of each frame in the local energy peak, from 0
+            (the bottom of the beat) to 1 (the top).
+
+    Returns:
+        ``BeatPositions`` ``(frames,)`` - the same numbers as float64, checked to be finite and from 0 to 1.
+    """
     message = f"The beat must be one number from 0 to 1 for each of the {frames} frames."
     array = np.asarray(beat)
     if array.ndim != 1 or array.shape[0] != frames or array.dtype.kind not in "iuf":

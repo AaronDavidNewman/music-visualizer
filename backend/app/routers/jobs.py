@@ -1,9 +1,38 @@
+"""The job endpoints: ``POST /api/jobs`` turns an uploaded WAV file into the frames of an animation,
+``GET /api/jobs/{job_id}/frames/{index}`` serves one frame.
+
+These are the steps of ``create_job()``, the shared steps READ to SAVE of the pipeline overview in
+``services/image_types.py``.
+
+Order of operations:
+    1. Read and check every setting of the form - ``create_job()`` with the ``_parse_*`` functions - a setting that is
+       not sent takes its default and one that is wrong is refused (400) before the file is read.
+    2. Save the upload - ``_save_upload()`` - into the audio folder, refused above the size limit.
+    3. Read the file - ``note_analysis.read_wav()`` - two ``RawSamples`` ``(samples,)``; a file with no audio is
+       refused.
+    4. Count the frames and the windows - ``frame_rendering.frame_count()``, ``window_spacing.default_spacing()``,
+       ``window_spacing.resolve_step()`` and ``note_analysis.window_count()`` - refused above ``max_frames`` and
+       ``max_windows``.
+    5. Analyze and apply the noise floor - ``note_analysis.analyze_channels()`` then ``noise_floor.floor_analysis()`` -
+       ``NoteStrengths`` ``(windows, 88)``.
+    6. Measure, only for the image types that use it - ``local_peaks.measure_local_peaks()`` with ``frame_positions()``
+       (the beat: ``BeatPositions`` ``(frames,)``) or ``rhythm_circles.rhythm_angles()`` (``CircleAngles``
+       ``(frames, 4)``).
+    7. Average the windows into frames and draw them - ``frame_rendering.average_frames()`` then
+       ``frame_rendering.write_frames()`` (for Energy Graphs ``energy_graphs.frame_energy()`` is made in the same call,
+       after the averaging) - one PNG for each frame in the frames folder of the job.
+    8. Record the frame rate - ``render.json`` in the same folder - for the video that is made later.
+    9. On any failure remove everything the job made (``_remove_job()``) and answer with the message; on success answer
+       with the settings used and the address of the frames.
+"""
+
 import json
 import logging
 import math
 import re
 import shutil
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -149,7 +178,8 @@ def _parse_gaussian(text: str | None, sent: bool) -> float:
 
 
 def _parse_beat_coloring(text: str | None, sent: bool) -> bool:
-    """Whether the contour's beat wave is on. Not sent means off; anything sent must be true, false, 1 or 0 (any case)."""
+    """Whether the contour's beat wave is on. Not sent means off; anything sent must be true, false, 1 or 0 (any case).
+    """
     if text is None and not sent:
         return False
     word = (text or "").strip().lower()
@@ -160,8 +190,9 @@ def _parse_beat_coloring(text: str | None, sent: bool) -> bool:
     raise HTTPException(status_code=400, detail="The beat coloring must be true or false.")
 
 
-def _parse_peak_setting(text: str | None, sent: bool, default: float, check) -> float:
-    """A setting of the local peaks measurement. Not sent means the default; anything sent must pass the measurement's own check."""
+def _parse_peak_setting(text: str | None, sent: bool, default: float, check: Callable[[object], float]) -> float:
+    """A setting of the local peaks measurement. Not sent means the default; anything sent must pass the measurement's
+    own check."""
     if text is None and not sent:
         return default
     try:
@@ -203,8 +234,9 @@ def _parse_image_type(text: str | None, sent: bool) -> str:
 
 
 def _parse_decay_rate(text: str | None, sent: bool, image_type: str = DEFAULT_IMAGE_TYPE) -> float | int:
-    """The requested number of frames between decay steps. Not sent means the default; anything sent must be a number 0.25..4 in steps of 0.25, or, for
-    Chromatic Decay (feature 035) and Chromatic Wireframe (feature 039), a whole number from 1 to 10."""
+    """The requested number of frames between decay steps. Not sent means the default; anything sent must be a number
+    0.25..4 in steps of 0.25, or, for Chromatic Decay (feature 035) and Chromatic Wireframe (feature 039), a whole
+    number from 1 to 10."""
     chromatic = image_type in CHROMATIC_TYPES
     if text is None and not sent:
         return DEFAULT_CHROMATIC_RATE if chromatic else DEFAULT_DECAY_RATE
@@ -216,7 +248,8 @@ def _parse_decay_rate(text: str | None, sent: bool, image_type: str = DEFAULT_IM
 
 
 def _parse_decay_amount(text: str | None, sent: bool, index: int) -> float:
-    """The requested decay amount of one saturation level (``LEVELS[index]``). Not sent means the default; anything sent must be a number 0.5..3."""
+    """The requested decay amount of one saturation level (``LEVELS[index]``). Not sent means the default; anything sent
+    must be a number 0.5..3."""
     if text is None and not sent:
         return DEFAULT_DECAY_AMOUNTS[index]
     text = text or ""
@@ -231,7 +264,8 @@ def _parse_decay_amount(text: str | None, sent: bool, index: int) -> float:
 
 
 def _parse_polar_notes(text: str | None, sent: bool) -> int:
-    """The requested number of notes shown by Polar Chords. Not sent means the default; anything sent must be a whole number 5..8."""
+    """The requested number of notes shown by Polar Chords. Not sent means the default; anything sent must be a whole
+    number 5..8."""
     if text is None and not sent:
         return DEFAULT_POLAR_NOTES
     try:
@@ -241,7 +275,8 @@ def _parse_polar_notes(text: str | None, sent: bool) -> int:
 
 
 def _parse_wave_count(text: str | None, sent: bool) -> int:
-    """The requested number of waves of the contour's beat wave. Not sent means the default; anything sent must be a whole number 2..10."""
+    """The requested number of waves of the contour's beat wave. Not sent means the default; anything sent must be a
+    whole number 2..10."""
     if text is None and not sent:
         return DEFAULT_WAVE_COUNT
     text = text or ""
@@ -256,7 +291,8 @@ def _parse_wave_count(text: str | None, sent: bool) -> int:
 
 
 def _parse_interpolate(text: str | None, sent: bool) -> int:
-    """The requested interpolate value. Not sent means 1 (every frame drawn); anything sent must be a whole number 1..5."""
+    """The requested interpolate value. Not sent means 1 (every frame drawn); anything sent must be a whole number 1..5.
+    """
     if text is None and not sent:
         return DEFAULT_INTERPOLATE
     text = text or ""
@@ -445,24 +481,28 @@ def create_job(
                     "Use a larger window spacing."
                 ),
             )
-        # the noise floor (feature 033): a note more than 60 dB below the loudest note of the file is 0 in every window, whatever the image type, so
-        # that no picture or measurement counts it as a note. It is fixed (no setting) and made once, here, before the frames are averaged and smoothed
+        # the noise floor (feature 033): a note more than 60 dB below the loudest note of the file is 0 in every window,
+        # whatever the image type, so that no picture or measurement counts it as a note. It is fixed (no setting) and
+        # made once, here, before the frames are averaged and smoothed
         result = floor_analysis(analyze_channels(left, right, file_rate, window, step=step))
-        # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local peaks
-        # measurement. Decay, Decay Exp, Polar Chords, Chromatic Decay and Chromatic Wireframe are always colored by it; contour (its beat wave) only with the beat coloring box on; the
-        # other pictures and the box off never measure it
+        # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local
+        # peaks measurement. Decay, Decay Exp, Polar Chords, Chromatic Decay and Chromatic Wireframe are always colored
+        # by it; contour (its beat wave) only with the beat coloring box on; the other pictures and the box off never
+        # measure it
         beat = None
         if image_type_value in ("decay", "decay-exp", "polar-chords", *CHROMATIC_TYPES) or (beat_coloring_value and image_type_value == "contour"):
             beat = measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE).frame_positions(fps, frames)
-        # Rhythm Circles (features 038 and 040) turns its rings with the local peaks themselves (and the current tempo found from them), not with the beat: one
-        # measurement, with the minimum distance of the request. The prominence is not a setting (feature 040): every measurement uses 20 percent
+        # Rhythm Circles (features 038 and 040) turns its rings with the local peaks themselves (and the current tempo
+        # found from them), not with the beat: one measurement, with the minimum distance of the request. The prominence
+        # is not a setting (feature 040): every measurement uses 20 percent
         rhythm = None
         if image_type_value == "rhythm-circles":
             rhythm = rhythm_angles(measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE), fps, frames)
-        # write_frames smooths the note values (each frame is mixed with the earlier frames of the window) and draws them as the
-        # chosen image type; for the contour, a resolution above 1 first interpolates the grid of smoothed note values to a finer
-        # one, a number of notes below 84 first builds the picture from the notes with the most energy in the file only, and an
-        # interpolate value above 1 draws only every n-th frame and makes the others from their neighbors with Pillow
+        # write_frames smooths the note values (each frame is mixed with the earlier frames of the window) and draws
+        # them as the chosen image type; for the contour, a resolution above 1 first interpolates the grid of smoothed
+        # note values to a finer one, a number of notes below 84 first builds the picture from the notes with the most
+        # energy in the file only, and an interpolate value above 1 draws only every n-th frame and makes the others
+        # from their neighbors with Pillow
         write_frames(
             average_frames(result, fps, frames),
             frames_dir,

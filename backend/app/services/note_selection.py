@@ -1,24 +1,37 @@
 """The number of notes: using only the notes with the most energy, spread over the whole grid.
 
 A frame is drawn from one value for each of the 84 drawn notes. The *number of notes* ``n`` (a whole number from 12 to
-84) keeps only the ``n`` notes with the most **energy**, where the energy of a note is the sum of its smoothed values over
-all frames of the file. The notes are chosen once for the whole file, so the same notes are used in every frame (a choice
-made in every frame would flip at the margin); notes of equal energy are ranked by pitch, the lower note first, so the
-choice is repeatable. The chosen notes keep their order of pitch.
+84) keeps only the ``n`` notes with the most **energy**, where the energy of a note is the sum of its smoothed values
+over all frames of the file. The notes are chosen once for the whole file, so the same notes are used in every frame (a
+choice made in every frame would flip at the margin); notes of equal energy are ranked by pitch, the lower note first,
+so the choice is repeatable. The chosen notes keep their order of pitch.
 
 For each frame the ``n`` values of the chosen notes are then *spread* over 84 values: evenly spaced positions made with
-``np.linspace`` from the first to the last chosen note (84 of them), read with ``np.interp`` by linear interpolation. The
-first chosen note keeps its value at the first position and the last at the last, every value lies between the values of
-its neighbours, and with ``n = 84`` the values are returned unchanged. The 84 values take the place of the 84 note values in
-everything that follows (the grid of 12 columns by 7 rows, the resolution, the threshold, the colors, the picture).
+``np.linspace`` from the first to the last chosen note (84 of them), read with ``np.interp`` by linear interpolation.
+The first chosen note keeps its value at the first position and the last at the last, every value lies between the
+values of its neighbours, and with ``n = 84`` the values are returned unchanged. The 84 values take the place of the 84
+note values in everything that follows (the grid of 12 columns by 7 rows, the resolution, the threshold, the colors, the
+picture).
 
 This module knows nothing about the note analysis or the pictures.
+
+Order of operations:
+    1. Check the number of notes - ``check_note_count()`` - a whole number from 12 to 84, else refused.
+    2. Check the values - ``_check_values()`` (called first by the two functions below) - ``NoteStrengths``
+       ``(frames, 84)`` as float64.
+    3. Rank the notes by their energy over the whole file - ``top_energy_notes()`` - sums each column and keeps the
+       ``count`` largest: ``Indices`` ``(count,)``, the chosen note numbers in order of pitch, the same for every frame.
+    4. Spread the chosen notes over 84 values - ``spread_notes()`` - takes the chosen columns of each frame and reads
+       them with linear interpolation at 84 evenly spaced positions: ``NoteStrengths`` ``(frames, 84)`` (a copy of the
+       input when ``count`` is 84).
 """
 
 import math
 import numbers
 
 import numpy as np
+
+from .array_types import ArrayLike, Indices, NoteStrengths
 
 MIN_NOTE_COUNT = 12
 MAX_NOTE_COUNT = 84
@@ -28,8 +41,9 @@ DEFAULT_NOTE_COUNT = 84
 _NOTES = 84
 
 
-def check_note_count(value) -> int:
-    """Return ``value`` as an ``int`` when it is a whole number from 12 to 84 (no strings, no fractions, no booleans)."""
+def check_note_count(value: object) -> int:
+    """Return ``value`` as an ``int`` when it is a whole number from 12 to 84 (no strings, no fractions, no booleans).
+    """
     if (
         isinstance(value, bool)
         or not isinstance(value, numbers.Real)
@@ -41,18 +55,34 @@ def check_note_count(value) -> int:
     return int(value)
 
 
-def _check_values(values) -> np.ndarray:
+def _check_values(values: ArrayLike) -> NoteStrengths:
+    """The values as a float64 array with exactly 84 columns; anything else is refused.
+
+    Arrays:
+        ``values``: ``ArrayLike`` ``(frames, 84)`` - the strength of each of the 84 drawn notes in each frame.
+
+    Returns:
+        ``NoteStrengths`` ``(frames, 84)`` - the same numbers as float64.
+    """
     values = np.asarray(values, dtype=np.float64)
     if values.ndim != 2 or values.shape[1] != _NOTES:
         raise ValueError(f"Each frame needs {_NOTES} note values (got shape {values.shape}).")
     return values
 
 
-def top_energy_notes(values: np.ndarray, count: int) -> np.ndarray:
+def top_energy_notes(values: NoteStrengths, count: int) -> Indices:
     """The ``count`` notes with the most energy, as sorted note numbers (0 to 83), the same for every frame.
 
-    ``values`` has one row per frame and 84 columns (the drawn notes, after smoothing). The energy of a note is the sum of
-    its column. Notes of equal energy are ranked by pitch, the lower one first.
+    ``values`` has one row per frame and 84 columns (the drawn notes, after smoothing). The energy of a note is the sum
+    of its column. Notes of equal energy are ranked by pitch, the lower one first.
+
+    Arrays:
+        ``values``: ``NoteStrengths`` ``(frames, 84)`` - the smoothed strength of each drawn note in each frame; the
+            energy of a note is the sum of its column.
+
+    Returns:
+        ``Indices`` ``(count,)`` - the note numbers (0 to 83, 0 is the lowest drawn note) of the ``count`` notes with
+        the most energy, sorted by pitch.
     """
     count = check_note_count(count)
     values = _check_values(values)
@@ -60,10 +90,18 @@ def top_energy_notes(values: np.ndarray, count: int) -> np.ndarray:
     return np.sort(np.argsort(-energy, kind="stable")[:count])
 
 
-def spread_notes(values: np.ndarray, count: int) -> np.ndarray:
+def spread_notes(values: NoteStrengths, count: int) -> NoteStrengths:
     """The values of the ``count`` highest-energy notes of every frame, spread over 84 values: shape ``(frames, 84)``.
 
     See the module docstring. With ``count`` 84 the result equals ``values`` (a copy); the input is never modified.
+
+    Arrays:
+        ``values``: ``NoteStrengths`` ``(frames, 84)`` - the smoothed strength of each drawn note in each frame.
+
+    Returns:
+        ``NoteStrengths`` ``(frames, 84)`` - for each frame the strengths of the ``count`` chosen notes, interpolated
+        linearly to 84 evenly spaced positions; the first and last chosen note keep their values at the first and last
+        position.
     """
     count = check_note_count(count)
     values = _check_values(values)

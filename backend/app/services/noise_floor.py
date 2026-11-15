@@ -1,19 +1,33 @@
 """The noise floor: a note this far below the loudest note of the file is not a note.
 
-The note analysis gives every analysis window a strength for each note, and the strengths are never exactly 0: the spectrum leaks into notes nobody
-plays, and recordings carry hiss. A strength **strictly below** one thousandth of the largest strength anywhere in the file (60 dB below it: the
-strengths are magnitudes of the spectrum, amplitudes, so -60 dB is a factor of 1,000) is set to exactly 0, so that it is not counted as a note or as
-part of a chord by any picture or measurement. A strength exactly at the floor is kept.
+The note analysis gives every analysis window a strength for each note, and the strengths are never exactly 0: the
+spectrum leaks into notes nobody plays, and recordings carry hiss. A strength **strictly below** one thousandth of the
+largest strength anywhere in the file (60 dB below it: the strengths are magnitudes of the spectrum, amplitudes, so -60
+dB is a factor of 1,000) is set to exactly 0, so that it is not counted as a note or as part of a chord by any picture
+or measurement. A strength exactly at the floor is kept.
 
-The floor is **fixed**: there is no setting for it, and it applies to every image type, whether or not the image type has a Threshold. The reference
-is the loudest value of the whole file, the four notes above the 84 piano notes included, as for the Threshold setting; the analysed strengths have
-no absolute decibel scale (they depend on the window size and on the recording), so "-60 dB" can only be a ratio to the loudest note of the file.
+The floor is **fixed**: there is no setting for it, and it applies to every image type, whether or not the image type
+has a Threshold. The reference is the loudest value of the whole file, the four notes above the 84 piano notes included,
+as for the Threshold setting; the analysed strengths have no absolute decibel scale (they depend on the window size and
+on the recording), so "-60 dB" can only be a ratio to the loudest note of the file.
 
-The cut is made once, on the analysed windows (``floor_analysis``, called by the job right after the analysis), and again by the chord measurement
-on the strengths it is given (``chords.measure_chords``), so that it holds for any array. It is idempotent: the largest value is never cut, and what
-is cut is below the floor of the array it came from.
+The cut is made once, on the analysed windows (``floor_analysis``, called by the job right after the analysis), and
+again by the chord measurement on the strengths it is given (``chords.measure_chords``), so that it holds for any array.
+It is idempotent: the largest value is never cut, and what is cut is below the floor of the array it came from.
 
 This module knows nothing about the audio, the pictures or the job: it takes arrays of note strengths.
+
+The job calls ``floor_analysis()`` (step 4), which calls ``apply_noise_floor()`` (steps 1 to 3).
+
+Order of operations:
+    1. Check the values - ``apply_noise_floor()`` - finite numbers that are not negative, as float64 (``NoteStrengths``,
+       any shape), else refused.
+    2. Choose the reference - ``apply_noise_floor()`` - the ``peak`` given, or the largest value of the whole array (all
+       windows, all notes).
+    3. Cut - ``apply_noise_floor()`` - a copy in which every value strictly below ``NOISE_FLOOR * reference`` (0.001 of
+       it) is 0.0: ``NoteStrengths``, the shape of the input.
+    4. For a whole analysis - ``floor_analysis()`` (called by the job right after the analysis) - the same cut on the
+       windows, in a new ``AnalysisResult`` with the same sample rate, window size and window starts.
 """
 
 import dataclasses
@@ -21,6 +35,7 @@ import numbers
 
 import numpy as np
 
+from .array_types import ArrayLike, NoteStrengths
 from .note_analysis import AnalysisResult
 
 NOISE_FLOOR_DB = -60  # decibels of amplitude below the loudest note of the file
@@ -30,12 +45,19 @@ VALUES_MESSAGE = "The note values must be finite numbers that are not negative."
 PEAK_MESSAGE = "The peak must be a finite number that is not negative."
 
 
-def apply_noise_floor(values, peak=None) -> np.ndarray:
+def apply_noise_floor(values: ArrayLike, peak: float | None = None) -> NoteStrengths:
     """A ``float64`` copy of ``values`` with every value strictly below ``NOISE_FLOOR * peak`` set to ``0.0``.
 
-    ``values`` is an array of any shape of finite numbers that are not negative. ``peak`` is the largest value the floor is measured against: by
-    default the largest value of ``values`` (all of it, whatever the columns), or 0 for an empty array. With a peak of 0 nothing is cut. The input is
-    not changed.
+    ``values`` is an array of any shape of finite numbers that are not negative. ``peak`` is the largest value the floor
+    is measured against: by default the largest value of ``values`` (all of it, whatever the columns), or 0 for an empty
+    array. With a peak of 0 nothing is cut. The input is not changed.
+
+    Arrays:
+        ``values``: ``ArrayLike`` any shape, usually ``(windows, 88)`` - the strength of each note in each analysis
+            window (finite, 0 or more).
+
+    Returns:
+        ``NoteStrengths`` the shape of ``values`` - a float64 copy in which every value below the floor is exactly 0.0.
     """
     try:
         array = np.asarray(values, dtype=np.float64)
@@ -55,8 +77,10 @@ def apply_noise_floor(values, peak=None) -> np.ndarray:
 
 
 def floor_analysis(result: AnalysisResult) -> AnalysisResult:
-    """A new analysis result whose frames are cut by the noise floor (the reference is the largest value of all windows and all columns).
+    """A new analysis result whose frames are cut by the noise floor (the reference is the largest value of all windows
+    and all columns).
 
-    The sample rate, the window size, the sample count and the window starts and step are those of ``result``, which is not changed.
+    The sample rate, the window size, the sample count and the window starts and step are those of ``result``, which is
+    not changed.
     """
     return dataclasses.replace(result, frames=apply_noise_floor(result.frames))

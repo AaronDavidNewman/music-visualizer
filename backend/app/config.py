@@ -1,3 +1,10 @@
+"""The settings of the application (``Settings``), read from the environment variables that start with ``MV_`` or from a
+``.env`` file.
+
+No data processing: this module only holds the folders, the limits (upload size, frames, windows, window size, frame
+rate) and the ffmpeg settings.
+"""
+
 import tempfile
 from pathlib import Path
 
@@ -21,7 +28,8 @@ class Settings(BaseSettings):
     max_window_size: int = 32768
     min_frame_rate: float = 1
     max_frame_rate: float = 60
-    # Frames -> silent MP4. Each render's video is output_dir/<job_id>/video.mp4; ffmpeg is a name on the PATH or a full path.
+    # Frames -> silent MP4. Each render's video is output_dir/<job_id>/video.mp4; ffmpeg is a name on the PATH or a full
+    # path.
     output_dir: Path = Path(__file__).resolve().parent.parent / "output"
     ffmpeg_path: str = "ffmpeg"
     video_timeout_seconds: int = 600

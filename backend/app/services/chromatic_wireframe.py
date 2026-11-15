@@ -1,35 +1,71 @@
-"""The ``chromatic-wireframe`` kind of picture (feature 039): the 12 letters of Chromatic Decay as a ridge plot in three dimensions.
+"""The ``chromatic-wireframe`` kind of picture (feature 039): the 12 letters of Chromatic Decay as a ridge plot in three
+dimensions.
 
-The data is that of ``chromatic_decay`` and is not changed here: for every frame, the points of the 12 letters (``circle_points``) and the radius that the circle of
-a letter has for its points (``circle_radii``). Only the drawing differs.
+The data is that of ``chromatic_decay`` and is not changed here: for every frame, the points of the 12 letters
+(``circle_points``) and the radius that the circle of a letter has for its points (``circle_radii``). Only the drawing
+differs.
 
-**One line for each frame, one function across the whole width.** The 12 letters are spread evenly over the width of the plot (the picture less ``MARGIN`` pixels on each
-side), in the order of the letters (A first), each starting at ``start = b x xmax`` where ``xmax`` is the width of a letter's share (``band_width``). Every letter
-adds a sine to **every** point ``u`` of the line (not only to the points of its own share), so the line is one smooth function and not twelve pieces. The sine of the
-letter ``b`` with ``p`` points has **its own frequency, amplitude and phase**:
+**One line for each frame, one function across the whole width.** The 12 letters are spread evenly over the width of the
+plot (the picture less ``MARGIN`` pixels on each side), in the order of the letters (A first), each starting at
+``start = b x xmax`` where ``xmax`` is the width of a letter's share (``band_width``). Every letter adds a sine to
+**every** point ``u`` of the line (not only to the points of its own share), so the line is one smooth function and not
+twelve pieces. The sine of the letter ``b`` with ``p`` points has **its own frequency, amplitude and phase**:
 
-- the **frequency** comes from the points: the angle makes ``p / (64 / 4)`` turns across the whole width, so a letter with 0 points makes none and a fully charged one
-  (64 points) makes 4 (``CYCLES_AT_FULL_POINTS``); the wave is the **sine squared** of the angle, so it has two humps for each turn and is never negative (the letters can only
-  add to each other, not cancel);
+- the **frequency** comes from the points: the angle makes ``p / (64 / 4)`` turns across the whole width, so a letter
+  with 0 points makes none and a fully charged one (64 points) makes 4 (``CYCLES_AT_FULL_POINTS``); the wave is the
+  **sine squared** of the angle, so it has two humps for each turn and is never negative (the letters can only add to
+  each other, not cancel);
 - the **amplitude** is the radius of its circle as a share of the full radius (a twelfth at 0 points, 1 from 24);
-- the **phase** is that of its start: ``2 pi x start / width of the plot``, so a letter a quarter of the way along the axis adds pi/2.
+- the **phase** is that of its start: ``2 pi x start / width of the plot``, so a letter a quarter of the way along the
+  axis adds pi/2.
 
-The sum of the 12 waves, divided by 12, is between 0 and 1 (``S``). The height of the line above its base is ``A`` (two fifths of the picture's height) times
-``(S - FLOOR_SHARE) / (CEILING_SHARE - FLOOR_SHARE)`` held between 0 and 1: a **stretch of the contrast**, because 12 loud letters never peak together, so real music only uses about 0.28 to 0.78 of
-the range and the plot would leave a fifth of the room at the top empty (the floor of loud music, about 0.28, is the sum of the means of its waves: louder is higher). A frame
-that is quiet (``S`` at or under the floor, for instance a silent one) is a flat line on the base and nothing leaves the picture. Waves of different frequencies,
-phases and amplitudes interfere in a way that need not mean anything musically (``line_angles``, ``line_heights``).
+The sum of the 12 waves, divided by 12, is between 0 and 1 (``S``). The height of the line above its base is ``A`` (two
+fifths of the picture's height) times ``(S - FLOOR_SHARE) / (CEILING_SHARE - FLOOR_SHARE)`` held between 0 and 1: a
+**stretch of the contrast**, because 12 loud letters never peak together, so real music only uses about 0.28 to 0.78 of
+the range and the plot would leave a fifth of the room at the top empty (the floor of loud music, about 0.28, is the sum
+of the means of its waves: louder is higher). A frame that is quiet (``S`` at or under the floor, for instance a silent
+one) is a flat line on the base and nothing leaves the picture. Waves of different frequencies, phases and amplitudes
+interfere in a way that need not mean anything musically (``line_angles``, ``line_heights``).
 
-**The view.** The picture shows the line of the current frame in front, with its base at the bottom margin (the line is never below its base), and the lines of the
-earlier frames behind it, each ``step`` pixels higher and smaller (to 75 % at the oldest, about the middle of the width), **as many as fill the picture up to the top
-margin**: as many as fit without the highest height of the oldest leaving it (``line_geometry``, ``project_line``). A nearer line hides the lines behind it (the area below every line is filled with the background before it is drawn), and the
-lines are drawn from the back to the front. The background is **black** (``BACKGROUND_COLOR``), whatever the colormap, so the lines are seen against it.
+**The view.** The picture shows the line of the current frame in front, with its base at the bottom margin (the line is
+never below its base), and the lines of the earlier frames behind it, each ``step`` pixels higher and smaller (to 75 %
+at the oldest, about the middle of the width), **as many as fill the picture up to the top margin**: as many as fit
+without the highest height of the oldest leaving it (``line_geometry``, ``project_line``). A nearer line hides the lines
+behind it (the area below every line is filled with the background before it is drawn), and the lines are drawn from the
+back to the front. The background is **black** (``BACKGROUND_COLOR``), whatever the colormap, so the lines are seen
+against it.
 
-**The color.** A line is one color along its whole length, taken from the colormap by the place of its frame in the beat (the local peak of ``local_peaks``,
-stretched over the range of the file as for the rings of Peak Rings): the **last** color at the top of a peak and the first at the bottom of the beat (the reverse of
-Peak Rings). The color belongs to the frame, so it moves back with it (``line_colors``).
+**The color.** A line is one color along its whole length, taken from the colormap by the place of its frame in the beat
+(the local peak of ``local_peaks``, stretched over the range of the file as for the rings of Peak Rings): the **last**
+color at the top of a peak and the first at the bottom of the beat (the reverse of Peak Rings). The color belongs to the
+frame, so it moves back with it (``line_colors``).
 
-This module knows nothing about the audio, the job or the page: the points, the beat, the colormap and the picture size are passed in.
+This module knows nothing about the audio, the job or the page: the points, the beat, the colormap and the picture size
+are passed in.
+
+Order of operations:
+    1. Check the inputs - ``write_wireframe_frames()`` with ``_check_points()``, ``_check_beat()``, ``_check_size()``
+       and ``line_geometry()`` - ``CirclePoints`` ``(frames, 12)`` (from ``chromatic_decay.circle_points()``), the beat,
+       and a picture big enough for one line.
+    2. Take the color of each frame's line - ``line_colors()`` (with ``chromatic_decay.beat_distances()``) -
+       ``LineColors`` ``(frames, 3)``: the last color of the colormap at the top of a peak, the first at the bottom of
+       the beat (the first for every line without a beat).
+    3. Make the positions across the picture, the same for every line - ``line_heights()`` - ``LineX`` ``(n,)``: every
+       half pixel from margin to margin.
+    4. For each frame, work out the angle of the sine of each letter at each sample - ``line_angles()`` (called by
+       ``line_sums()``, which ``line_heights()`` calls) - ``LineAngles`` ``(12, n)``: its frequency from the letter's
+       points and its phase from where the letter's share of the width starts.
+    5. Add the 12 waves - ``line_sums()`` - ``LineSums`` ``(n,)``: each letter's radius over the full radius times the
+       sine squared, added and divided by 12.
+    6. Stretch the contrast and scale to pixels - ``line_heights()`` - ``LineHeights`` ``(frames, n)``:
+       ``A * clip((S - 0.05) / (0.8 - 0.05), 0, 1)``, ``A`` two fifths of the height.
+    7. Choose the view - ``line_geometry()`` - how many earlier lines fit, the base of the front line and the step
+       between lines.
+    8. Draw each frame on its own (a few threads) - ``_frame()`` - from the oldest line to the newest: move each back
+       and make it smaller by its depth (``project_line()``
+       - ``ScreenCoordinates``), fill everything below it with the background, then draw it in its color, on a canvas
+         three times larger that is reduced:
+       ``Pictures`` ``(height, width, 3)``, saved as ``frame_<index>.png``.
 """
 
 import math
@@ -40,33 +76,61 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+from .array_types import (
+    ArrayLike,
+    BeatPositions,
+    CirclePoints,
+    LineAngles,
+    LineColors,
+    LineHeights,
+    LineSums,
+    LineX,
+    Pictures,
+    Rgb,
+    ScreenCoordinates,
+)
 from .chromatic_decay import LETTERS, MAX_POINTS, _check_beat, _check_points, beat_distances, circle_radii, ring_geometry
 from .colormaps import COLORMAP_STEPS, check_colormap, lookup_table
 from .frame_saving import SAVE_WORKERS
 
 MARGIN = 10  # pixels between the plot and every edge of the picture
-AMPLITUDE_SHARE = 2 / 5  # the highest height of a line above its base (it is never below it: the waves are sine squared), as a share of the picture's height
+# the highest height of a line above its base (it is never below it: the waves are sine squared), as a share of the
+# picture's height
+AMPLITUDE_SHARE = 2 / 5
 REFERENCE_HEIGHT = 400  # the height that the step and the line width are for
 STEP = 4  # pixels from a line to the one behind it, on a picture 400 high (scaled with the height)
 DEPTH_SHRINK = 0.25  # how much smaller the oldest line is than the front one
-FLOOR_SHARE = 0.05  # the sum of the waves (as a share of the most it can be, 12 x 1) at or under this is height 0 (one steady note makes 0.04 to 0.12, so it must stay low or a solo line goes flat)
-CEILING_SHARE = 0.8  # and at or over this it is the highest height (A): real music tops out at about 0.78 (and goes down to about 0.28), so the stretch fills the room without cutting it
+# the sum of the waves (as a share of the most it can be, 12 x 1) at or under this is height 0 (one steady note makes
+# 0.04 to 0.12, so it must stay low or a solo line goes flat)
+FLOOR_SHARE = 0.05
+# and at or over this it is the highest height (A): real music tops out at about 0.78 (and goes down to about 0.28), so
+# the stretch fills the room without cutting it
+CEILING_SHARE = 0.8
 CYCLES_AT_FULL_POINTS = 4  # the turns that the sine of a letter with the most points (64) makes across the whole width
 SAMPLES_PER_PIXEL = 2  # vertices of the polyline for every pixel along the plot
 LINE_WIDTH = 1.5  # pixels, on a picture 400 high (scaled with the height)
 SUPERSAMPLE = 3  # the picture is drawn this many times larger and reduced, which smooths the lines
-BACKGROUND_COLOR = (0, 0, 0)  # the picture is on black, whatever the colormap (the other types use the colormap's middle color)
+# the picture is on black, whatever the colormap (the other types use the colormap's middle color)
+BACKGROUND_COLOR = (0, 0, 0)
 SIZE_MESSAGE = "The picture size must be two whole numbers, large enough for one line."
 
 
-def _check_size(width, height) -> tuple[int, int]:
+def _check_size(width: object, height: object) -> tuple[int, int]:
     for size in (width, height):
         if isinstance(size, (bool, np.bool_)) or not isinstance(size, numbers.Integral) or size < 1:
             raise ValueError(SIZE_MESSAGE)
     return int(width), int(height)
 
 
-def _check_row(points_row) -> np.ndarray:
+def _check_row(points_row: ArrayLike) -> CirclePoints:
+    """The points of one frame as a float64 array of 12 numbers from 0 to 64; anything else is refused.
+
+    Arrays:
+        ``points_row``: ``ArrayLike`` ``(12,)`` - the points (0 to 64) of each letter in one frame, in letter order.
+
+    Returns:
+        ``CirclePoints`` ``(12,)`` - the same points as float64.
+    """
     try:
         row = np.asarray(points_row, dtype=np.float64)
     except (TypeError, ValueError):
@@ -95,12 +159,21 @@ def _samples(width: int) -> int:
     return math.ceil(SAMPLES_PER_PIXEL * plot_width(width)) + 1
 
 
-def line_angles(points_row, width: int) -> np.ndarray:
+def line_angles(points_row: ArrayLike, width: int) -> LineAngles:
     """The angle of the sine of every letter at every sample of the line: ``(12, n)``.
 
-    The sample ``i`` is at ``u`` pixels from the left of the plot (0 to the width of the plot, every half pixel) and the letter ``b`` starts at ``start = b x xmax``:
-    ``2 pi x (p / (64 / 4)) x u / width of the plot + 2 pi x start / width of the plot``, with ``p`` the points of the letter. The first term is the **frequency**, from
-    the points: ``p / 16`` turns across the whole width (none at 0 points, 4 at 64); the second is the **phase of the start** (pi/2 for a quarter of the way along).
+    The sample ``i`` is at ``u`` pixels from the left of the plot (0 to the width of the plot, every half pixel) and the
+    letter ``b`` starts at ``start = b x xmax``:
+    ``2 pi x (p / (64 / 4)) x u / width of the plot + 2 pi x start / width of the plot``, with ``p`` the points of the
+    letter. The first term is the **frequency**, from the points: ``p / 16`` turns across the whole width (none at 0
+    points, 4 at 64); the second is the **phase of the start** (pi/2 for a quarter of the way along).
+
+    Arrays:
+        ``points_row``: ``ArrayLike`` ``(12,)`` - the points (0 to 64) of each letter in one frame, in letter order.
+
+    Returns:
+        ``LineAngles`` ``(12, n)`` - the angle in radians of the sine of each letter at each of the ``n`` samples across
+        the plot (two for each pixel).
     """
     row = _check_row(points_row)
     span = plot_width(width)
@@ -112,11 +185,18 @@ def line_angles(points_row, width: int) -> np.ndarray:
     return 2 * math.pi * cycles[:, None] * (u[None, :] / span) + (2 * math.pi * start / span)[:, None]
 
 
-def line_sums(points_row, width: int, height: int) -> np.ndarray:
+def line_sums(points_row: ArrayLike, width: int, height: int) -> LineSums:
     """The sum of the 12 waves at every sample of the line, divided by 12: ``(n,)`` from 0 to 1 (``S``).
 
-    The wave of a letter is ``(radius / full radius) x sin(angle) squared`` (:func:`line_angles`), where the radius is that of the circle of Chromatic Decay for the
-    letter's points on a picture of this size (a twelfth of the full radius at 0 points, the full radius from 24).
+    The wave of a letter is ``(radius / full radius) x sin(angle) squared`` (:func:`line_angles`), where the radius is
+    that of the circle of Chromatic Decay for the letter's points on a picture of this size (a twelfth of the full
+    radius at 0 points, the full radius from 24).
+
+    Arrays:
+        ``points_row``: ``ArrayLike`` ``(12,)`` - the points (0 to 64) of each letter in one frame, in letter order.
+
+    Returns:
+        ``LineSums`` ``(n,)`` - ``S`` at each sample across the plot: the 12 waves added and divided by 12, from 0 to 1.
     """
     width, height = _check_size(width, height)
     row = _check_row(points_row)
@@ -125,12 +205,19 @@ def line_sums(points_row, width: int, height: int) -> np.ndarray:
     return (ratio[:, None] * np.sin(angles) ** 2).sum(axis=0) / LETTERS
 
 
-def line_heights(points_row, width: int, height: int) -> tuple[np.ndarray, np.ndarray]:
+def line_heights(points_row: ArrayLike, width: int, height: int) -> tuple[LineX, LineHeights]:
     """The line of one frame: ``(X, Z)``, two float arrays of ``n`` values in pixels.
 
-    ``X`` is the position across the picture (``MARGIN`` to ``width - MARGIN``, every half pixel) and ``Z`` the height above the base of the line, from 0 to ``A``
-    (two fifths of the picture's height): the sum of the waves ``S`` (:func:`line_sums`) stretched,
-    ``Z = A x clip((S - FLOOR_SHARE) / (CEILING_SHARE - FLOOR_SHARE), 0, 1)``.
+    ``X`` is the position across the picture (``MARGIN`` to ``width - MARGIN``, every half pixel) and ``Z`` the height
+    above the base of the line, from 0 to ``A`` (two fifths of the picture's height): the sum of the waves ``S``
+    (:func:`line_sums`) stretched, ``Z = A x clip((S - FLOOR_SHARE) / (CEILING_SHARE - FLOOR_SHARE), 0, 1)``.
+
+    Arrays:
+        ``points_row``: ``ArrayLike`` ``(12,)`` - the points (0 to 64) of each letter in one frame, in letter order.
+
+    Returns:
+        A tuple of ``LineX`` ``(n,)`` (the position of each sample across the picture, in pixels) and ``LineHeights``
+        ``(n,)`` (the height of the line above its base at each sample, in pixels, from 0 to ``A``).
     """
     total = line_sums(points_row, width, height)
     x = MARGIN + np.arange(total.size) * plot_width(width) / (total.size - 1)
@@ -139,13 +226,17 @@ def line_heights(points_row, width: int, height: int) -> tuple[np.ndarray, np.nd
 
 
 def line_geometry(width: int, height: int) -> tuple[int, float, float]:
-    """The view: ``(lines, base, step)``, the number of lines that fit, the base of the front line (its height 0, in pixels from the top) and the step between lines.
+    """The view: ``(lines, base, step)``, the number of lines that fit, the base of the front line (its height 0, in
+    pixels from the top) and the step between lines.
 
-    A line is never below its base (``Z`` is 0 to ``A``), so the front line's base is at the bottom margin, ``height - MARGIN``. Every older line is ``step``
-    (``4 x height / 400``) higher and smaller (``1 - DEPTH_SHRINK`` at the oldest). The lines that fit are as many as leave the highest height of the oldest,
-    ``base - (lines - 1) x step - A x (1 - DEPTH_SHRINK)``, not above ``MARGIN``: the stack fills the picture from the bottom margin to the top one. (The highest height
-    of the line at depth ``k`` is ``base - k x step - A x (1 - DEPTH_SHRINK x k / (lines - 1))``, which goes down as ``k`` goes up, so the oldest line is the one that decides.)
-    A picture that is too small for the front line's highest height, ``base - A``, to be inside the margin is refused with ``ValueError``.
+    A line is never below its base (``Z`` is 0 to ``A``), so the front line's base is at the bottom margin,
+    ``height - MARGIN``. Every older line is ``step`` (``4 x height / 400``) higher and smaller (``1 - DEPTH_SHRINK`` at
+    the oldest). The lines that fit are as many as leave the highest height of the oldest,
+    ``base - (lines - 1) x step - A x (1 - DEPTH_SHRINK)``, not above ``MARGIN``: the stack fills the picture from the
+    bottom margin to the top one. (The highest height of the line at depth ``k`` is
+    ``base - k x step - A x (1 - DEPTH_SHRINK x k / (lines - 1))``, which goes down as ``k`` goes up, so the oldest line
+    is the one that decides.) A picture that is too small for the front line's highest height, ``base - A``, to be
+    inside the margin is refused with ``ValueError``.
     """
     width, height = _check_size(width, height)
     swing = amplitude(height)
@@ -156,11 +247,21 @@ def line_geometry(width: int, height: int) -> tuple[int, float, float]:
     return int((base - MARGIN - swing * (1 - DEPTH_SHRINK)) // step) + 1, base, step
 
 
-def project_line(X, Z, depth, lines: int, width: int, height: int) -> tuple[np.ndarray, np.ndarray]:
-    """The screen positions ``(x, y)`` (pixels, ``y`` from the top) of the line ``(X, Z)`` at ``depth`` frames behind the front one (0 is the front).
+def project_line(X: ArrayLike, Z: ArrayLike, depth: int, lines: int, width: int, height: int) -> tuple[ScreenCoordinates, ScreenCoordinates]:
+    """The screen positions ``(x, y)`` (pixels, ``y`` from the top) of the line ``(X, Z)`` at ``depth`` frames behind
+    the front one (0 is the front).
 
-    The line is smaller by ``1 - DEPTH_SHRINK x depth / (lines - 1)`` about the middle of the width (both ``X`` and the heights; 1 when there is a single line) and its
-    base is ``depth x step`` higher.
+    The line is smaller by ``1 - DEPTH_SHRINK x depth / (lines - 1)`` about the middle of the width (both ``X`` and the
+    heights; 1 when there is a single line) and its base is ``depth x step`` higher.
+
+    Arrays:
+        ``X``: ``ArrayLike`` ``(n,)`` - the position of each sample across the picture, in pixels (``LineX``).
+        ``Z``: ``ArrayLike`` ``(n,)`` - the height of the line above its base at each sample, in pixels (``LineHeights``
+            of one frame).
+
+    Returns:
+        A tuple of two ``ScreenCoordinates`` ``(n,)``: the x positions (pixels from the left) and the y positions
+        (pixels from the top) of the line on the screen.
     """
     width, height = _check_size(width, height)
     if isinstance(lines, (bool, np.bool_)) or not isinstance(lines, numbers.Integral) or lines < 1:
@@ -174,12 +275,20 @@ def project_line(X, Z, depth, lines: int, width: int, height: int) -> tuple[np.n
     return width / 2 + (X - width / 2) * scale, base - depth * step - Z * scale
 
 
-def line_colors(beat, colormap: str, frames: int | None = None) -> np.ndarray:
-    """The color of the line of every frame: a ``uint8`` array ``(frames, 3)``, the colormap's table row ``rint((1 - distance) x 255)``.
+def line_colors(beat: ArrayLike | None, colormap: str, frames: int | None = None) -> LineColors:
+    """The color of the line of every frame: a ``uint8`` array ``(frames, 3)``, the colormap's table row
+    ``rint((1 - distance) x 255)``.
 
-    ``beat`` is one position in the local peak from 0 to 1 for each frame, and the distance is that of ``chromatic_decay.beat_distances`` (stretched over the range
-    of the beat of the file; a frame outside every peak is 1), so the top of a peak has the **last** row and the bottom of the beat the first. ``None`` has no beat: every
-    line has the first row, for ``frames`` frames (required then).
+    ``beat`` is one position in the local peak from 0 to 1 for each frame, and the distance is that of
+    ``chromatic_decay.beat_distances`` (stretched over the range of the beat of the file; a frame outside every peak is
+    1), so the top of a peak has the **last** row and the bottom of the beat the first. ``None`` has no beat: every line
+    has the first row, for ``frames`` frames (required then).
+
+    Arrays:
+        ``beat``: ``ArrayLike`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to 1.
+
+    Returns:
+        ``LineColors`` ``(frames, 3)`` - the red, green and blue (0 to 255) of the line of each frame.
     """
     table = lookup_table(check_colormap(colormap))
     if beat is None:
@@ -191,15 +300,28 @@ def line_colors(beat, colormap: str, frames: int | None = None) -> np.ndarray:
 
 
 def _stroke_width(height: int) -> int:
-    """The width of a line on the enlarged canvas, in its pixels: 1.5 pixels of the picture, scaled with the height, and never under one pixel of the picture."""
+    """The width of a line on the enlarged canvas, in its pixels: 1.5 pixels of the picture, scaled with the height, and
+    never under one pixel of the picture."""
     return max(SUPERSAMPLE, int(LINE_WIDTH * SUPERSAMPLE * height / REFERENCE_HEIGHT + 0.5))
 
 
-def _frame(heights: np.ndarray, colors: np.ndarray, t: int, X: np.ndarray, background, width: int, height: int) -> np.ndarray:
-    """One picture, a ``uint8`` array ``(height, width, 3)``: the lines of frames ``t``, ``t - 1``, ... (as many as fit) drawn from the oldest to the newest.
+def _frame(heights: LineHeights, colors: LineColors, t: int, X: LineX, background: Rgb, width: int, height: int) -> Pictures:
+    """One picture, a ``uint8`` array ``(height, width, 3)``: the lines of frames ``t``, ``t - 1``, ... (as many as fit)
+    drawn from the oldest to the newest.
 
-    ``heights`` is ``(frames, 12 x n)``, the ``Z`` of every frame's line (``line_heights``), ``colors`` ``(frames, 3)`` the line colors and ``X`` the positions across
-    the picture that all lines share. The picture is drawn ``SUPERSAMPLE`` times larger and reduced by an exact box filter, which smooths the lines.
+    ``heights`` is ``(frames, n)``, the ``Z`` of every frame's line (``line_heights``), ``colors`` ``(frames, 3)`` the
+    line colors and ``X`` the positions across the picture that all lines share. The picture is drawn ``SUPERSAMPLE``
+    times larger and reduced by an exact box filter, which smooths the lines.
+
+    Arrays:
+        ``heights``: ``LineHeights`` ``(frames, n)`` - the height of every frame's line above its base at each sample,
+            in pixels.
+        ``colors``: ``LineColors`` ``(frames, 3)`` - the color of every frame's line.
+        ``X``: ``LineX`` ``(n,)`` - the position of each sample across the picture, in pixels (the same for every line).
+        ``background``: ``Rgb`` ``(3,)`` - the background color (black).
+
+    Returns:
+        ``Pictures`` ``(height, width, 3)`` - the picture of frame ``t``.
     """
     lines, _, _ = line_geometry(width, height)
     canvas = Image.new("RGB", (width * SUPERSAMPLE, height * SUPERSAMPLE), tuple(int(v) for v in background))
@@ -210,16 +332,24 @@ def _frame(heights: np.ndarray, colors: np.ndarray, t: int, X: np.ndarray, backg
         x, y = project_line(X, heights[t - depth], depth, lines, width, height)
         points = list(zip((x * SUPERSAMPLE).tolist(), (y * SUPERSAMPLE).tolist()))
         bottom = height * SUPERSAMPLE
-        draw.polygon(points + [(points[-1][0], bottom), (points[0][0], bottom)], fill=fill)  # hides what is behind: everything below the line
+        # hides what is behind: everything below the line
+        draw.polygon(points + [(points[-1][0], bottom), (points[0][0], bottom)], fill=fill)
         draw.line(points, fill=tuple(int(v) for v in colors[t - depth]), width=stroke)
     return np.asarray(canvas.reduce(SUPERSAMPLE), dtype=np.uint8)
 
 
-def write_wireframe_frames(points, colormap: str, directory: Path, width: int, height: int, beat=None) -> None:
+def write_wireframe_frames(points: ArrayLike, colormap: str, directory: Path, width: int, height: int, beat: BeatPositions | None = None) -> None:
     """Save one PNG of ``width`` x ``height`` pixels per row of ``points`` as ``frame_000000.png`` and up.
 
-    ``points`` is ``(frames, 12)``: the points of every letter in every frame, in letter order (``chromatic_decay.circle_points``). ``beat`` is ``None`` (every line has
-    the first color) or one position in the local peak from 0 to 1 for each frame (:func:`line_colors`). Everything is checked before anything is written.
+    ``points`` is ``(frames, 12)``: the points of every letter in every frame, in letter order
+    (``chromatic_decay.circle_points``). ``beat`` is ``None`` (every line has the first color) or one position in the
+    local peak from 0 to 1 for each frame (:func:`line_colors`). Everything is checked before anything is written.
+
+    Arrays:
+        ``points``: ``ArrayLike`` ``(frames, 12)`` - the points (0 to 64) of each letter after each frame, in letter
+            order.
+        ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
+            1; ``None`` gives every line the first color.
     """
     colormap = check_colormap(colormap)
     points = _check_points(points)

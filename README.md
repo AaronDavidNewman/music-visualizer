@@ -14,6 +14,16 @@ uvicorn app.main:app --reload  # http://localhost:8000 (docs at /docs)
 pytest
 ```
 
+### Reading the backend code (documentation standard, spec 041)
+
+The backend is meant to be read without rereading every function. Three rules (the project constitution, `.specify/memory/constitution.md`; their forms are in `specs/041-code-readability-docs/contracts/documentation-standard.md`):
+
+- **Every function is typed** (every parameter and the return value, nested functions included). An array is annotated with a **named alias of its kind** from `backend/app/services/array_types.py` (`NoteStrengths`, `BeatPositions`, `CirclePoints`, `Pictures`, ...): search the name there to find what the numbers are, the shape with the meaning of each axis and which function makes them.
+- **Every array is documented**: a function that takes or returns one says, in its docstring (`Arrays:` and `Returns:`), its alias, its concrete shape (for example `(frames, 88)`) and what it represents; classes with array fields have an `Attributes:` block.
+- **Every processing module starts with its `Order of operations:`** (the steps in the order the data is transformed, the function that does each, and the data after it), or says `No data processing:`. `backend/app/services/image_types.py` has the **pipeline overview** of the eight image types, from the uploaded file to the saved frames, with the steps they share (READ, ANALYZE, FLOOR, MEASURE, AVERAGE, SMOOTH, DRAW, SAVE).
+
+Two tests keep them from being forgotten: `backend/tests/test_type_hints.py` (no function without a complete type, no exceptions) and `backend/tests/test_documentation.py` (the documentation is there; a new module must be put in one of its two lists). Whether it is *true* is for review, with the tools of `specs/041-code-readability-docs/tools/`: `shape_probe.py` (the shapes a job really passes), `trace_pipeline.py` (the order in which a job first calls the functions of each image type) and `verify_frames.py` (the hash of every frame against a baseline: it proves that a change of types or documents moved no picture). When a function, an array or the steps of a module change, the documentation changes in the same piece of work.
+
 ## Frontend
 
 ```

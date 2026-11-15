@@ -1,28 +1,54 @@
-"""The ``energy-graphs`` kind of picture: a running histogram of the 84 piano notes with two data sets, which updates from frame to frame.
+"""The ``energy-graphs`` kind of picture: a running histogram of the 84 piano notes with two data sets, which updates
+from frame to frame.
 
-The picture is 600 x 400 pixels on the colormap's middle color: 84 pairs of thin bars, one pair for each note, the lowest (A1) on the left.
+The picture is 600 x 400 pixels on the colormap's middle color: 84 pairs of thin bars, one pair for each note, the
+lowest (A1) on the left.
 
-* **The frequency data set** (the first bar of a pair, in the start color of the colormap): in every analysis window the 84 notes are ranked by strength and
-  each adds its **rank score** to its own total: 84 for the loudest, 83 for the second loudest, and so on down to 1; a note with no strength (under the
-  noise floor, feature 033) adds nothing, and neither do the notes ranked below it. Equal strengths: the lower note ranks first.
-* **The amplitude data set** (the second bar of a pair, in the end color): in every window each note adds its **quasi-decibel** value, ``20 log10(amp) /
-  (20 log10(max))``, to its own total, ``max`` being the largest amplitude of any of the 84 notes in any window of the file. It is 1 for the loudest note of
-  the file, and smaller for fainter ones; a silent note adds 0, a value below 0 (an amplitude under 1) is clamped to 0, and a file whose loudest amplitude is
-  1 or less (where the ratio of logarithms is meaningless) adds nothing at all.
+* **The frequency data set** (the first bar of a pair, in the start color of the colormap): in every analysis window the
+  84 notes are ranked by strength and each adds its **rank score** to its own total: 84 for the loudest, 83 for the
+  second loudest, and so on down to 1; a note with no strength (under the noise floor, feature 033) adds nothing, and
+  neither do the notes ranked below it. Equal strengths: the lower note ranks first.
+* **The amplitude data set** (the second bar of a pair, in the end color): in every window each note adds its
+  **quasi-decibel** value, ``20 log10(amp) / (20 log10(max))``, to its own total, ``max`` being the largest amplitude of
+  any of the 84 notes in any window of the file. It is 1 for the loudest note of the file, and smaller for fainter ones;
+  a silent note adds 0, a value below 0 (an amplitude under 1) is clamped to 0, and a file whose loudest amplitude is 1
+  or less (where the ratio of logarithms is meaningless) adds nothing at all.
 
-Both totals **accumulate** from the start of the file up to the frame (a window is counted once, in the frame it starts in, so the last frame holds the sum
-over every window). They are not drawn as they are: a total grows with the length of the file and the two have different sizes. Each data set is divided by
-its own largest total (so it runs from 0 to 1) and then **softmaxed** over the 84 notes (``exp(x) / sum(exp(x))``), so that the two are on the same scale, each
-adding up to 1. A softmax is never 0 and its values are close to each other, so the clear winners would hardly show: **the smallest value of each data set is
-given the height 0** (its smallest share is subtracted from all its shares, ``above_smallest``). The bars are then scaled by the larger of all the values of
-the frame, so that **the tallest bar is always the same height**. A data set with no total yet (before the first sound), or whose totals are all equal (so
-that nothing is above the smallest), has no bars.
+Both totals **accumulate** from the start of the file up to the frame (a window is counted once, in the frame it starts
+in, so the last frame holds the sum over every window). They are not drawn as they are: a total grows with the length of
+the file and the two have different sizes. Each data set is divided by its own largest total (so it runs from 0 to 1)
+and then **softmaxed** over the 84 notes (``exp(x) / sum(exp(x))``), so that the two are on the same scale, each adding
+up to 1. A softmax is never 0 and its values are close to each other, so the clear winners would hardly show: **the
+smallest value of each data set is given the height 0** (its smallest share is subtracted from all its shares,
+``above_smallest``). The bars are then scaled by the larger of all the values of the frame, so that **the tallest bar is
+always the same height**. A data set with no total yet (before the first sound), or whose totals are all equal (so that
+nothing is above the smallest), has no bars.
 
-The numbers of all frames are worked out first (``frame_energy``, small arrays, testable on their own: the totals are cumulative sums over the windows, so a
-frame does not depend on the drawing of the frames before it). Drawing is then independent for every frame: the background (title, legend, baseline,
-labels) is drawn once and copied, and the bars are rectangles.
+The numbers of all frames are worked out first (``frame_energy``, small arrays, testable on their own: the totals are
+cumulative sums over the windows, so a frame does not depend on the drawing of the frames before it). Drawing is then
+independent for every frame: the background (title, legend, baseline, labels) is drawn once and copied, and the bars are
+rectangles.
 
-This module knows nothing about the audio, the job or the page: the analysis result, the frame rate and the size are passed in.
+This module knows nothing about the audio, the job or the page: the analysis result, the frame rate and the size are
+passed in.
+
+Order of operations:
+    1. Rank the notes of every analysis window - ``rank_scores()`` (called by ``frame_energy()``) - ``RankScores``
+       ``(windows, 84)``: 84 points for the loudest note, 83 for the next, and so on; 0 for a silent note.
+    2. Turn the strengths into quasi-decibels - ``quasi_db()`` (called by ``frame_energy()``) - ``QuasiDecibels``
+       ``(windows, 84)``: ``20 log10(amplitude) / (20 log10(loudest amplitude of the file))``, from 0 to 1.
+    3. Add up the windows up to each frame - ``frame_energy()`` - cumulative sums over the windows, read at the last
+       window each frame owns: ``EnergyTotals`` ``(frames, 84)`` for each data set, in an ``EnergyGraphData`` (the job
+       calls this once, from the analysis after the noise floor).
+    4. (Drawing, ``write_energy_frames()``) check the data - ``_check_data()`` - and the picture size.
+    5. Make the layout and the part of the picture that never changes, once - ``_Layout``, ``_background()`` - the
+       title, the legend, the baseline and the octave labels.
+    6. Turn each data set into bar heights - ``softmax_shares()`` then ``above_smallest()`` - ``BarShares``
+       ``(frames, 84)``: each row divided by its largest total, softmaxed over the 84 notes, then lowered so that its
+       smallest share is 0.
+    7. Draw each frame on its own (a few threads) - ``_frame()`` - two thin bars for each note, scaled so that the
+       tallest bar of the frame is always the same height: a ``Pictures`` ``(height, width, 3)`` picture saved as
+       ``frame_<index>.png``.
 """
 
 import numbers
@@ -33,6 +59,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from .array_types import ArrayLike, BarShares, ColorTable, EnergyTotals, NoteStrengths, QuasiDecibels, RankScores, Rgb
 from .colormaps import COLORMAP_STEPS, MIDDLE_COLOR_ROW, check_colormap, lookup_table
 from .frame_saving import SAVE_WORKERS
 from .note_analysis import AnalysisResult
@@ -40,7 +67,8 @@ from .note_analysis import AnalysisResult
 NOTES = 84  # the bars of the histogram: the 84 piano notes (the first 84 of the 88 note values)
 RANK_CHUNK = 4096  # windows ranked at a time, so that memory stays bounded for a long file
 
-# The layout of the 600 x 400 picture, in pixels from the top left (specs/034-energy-graphs/contracts/energy-graphs.md). Another size scales it.
+# The layout of the 600 x 400 picture, in pixels from the top left (specs/034-energy-graphs/contracts/energy-graphs.md).
+# Another size scales it.
 REFERENCE_WIDTH = 600
 REFERENCE_HEIGHT = 400
 MARGIN = 10
@@ -58,18 +86,35 @@ LEGEND = ("frequency: rank points", "amplitude: quasi-dB")
 
 @dataclass(frozen=True)
 class EnergyGraphData:
-    """The totals of every frame, one row per frame: ``histogram`` is ``(frames, 84)`` whole numbers (the rank points of each note so far) and
-    ``amplitude`` is ``(frames, 84)`` numbers that are not negative (the quasi-decibel values of each note so far)."""
+    """The totals of every frame, one row per frame: ``histogram`` is ``(frames, 84)`` whole numbers (the rank points of
+    each note so far) and ``amplitude`` is ``(frames, 84)`` numbers that are not negative (the quasi-decibel values of
+    each note so far).
 
-    histogram: np.ndarray
-    amplitude: np.ndarray
+    Attributes:
+        ``histogram``: ``EnergyTotals`` ``(frames, 84)`` - the whole-number rank points that each of the 84 notes has
+            scored up to each frame (the frequency data set).
+        ``amplitude``: ``EnergyTotals`` ``(frames, 84)`` - the quasi-decibel values that each of the 84 notes has added
+            up to each frame (the amplitude data set).
+    """
+
+    histogram: EnergyTotals
+    amplitude: EnergyTotals
 
     @property
     def frame_count(self) -> int:
+        """The number of frames: the length of axis 0 of ``histogram``."""
         return int(self.histogram.shape[0])
 
 
-def _check_note_values(values) -> np.ndarray:
+def _check_note_values(values: ArrayLike) -> NoteStrengths:
+    """The note values as a float64 array with at least 84 columns, finite and not negative; anything else is refused.
+
+    Arrays:
+        ``values``: ``ArrayLike`` ``(windows, 84 or more)`` - the strength of each note in each analysis window.
+
+    Returns:
+        ``NoteStrengths`` ``(windows, columns)`` - the same numbers as float64.
+    """
     try:
         array = np.asarray(values, dtype=np.float64)
     except (TypeError, ValueError):
@@ -81,12 +126,20 @@ def _check_note_values(values) -> np.ndarray:
     return array
 
 
-def rank_scores(values) -> np.ndarray:
+def rank_scores(values: ArrayLike) -> RankScores:
     """The points each of the 84 notes scores in each window: an ``int64`` array ``(windows, 84)``.
 
-    ``values`` is ``(windows, 84 or more)`` note strengths (columns after the 84th are not piano notes and are left out). In every window the loudest
-    note scores 84, the next 83, and so on by rank; a note with no strength (0) scores 0, and so do the notes ranked below it. Equal strengths: the lower
-    note ranks first. The input is not changed.
+    ``values`` is ``(windows, 84 or more)`` note strengths (columns after the 84th are not piano notes and are left
+    out). In every window the loudest note scores 84, the next 83, and so on by rank; a note with no strength (0) scores
+    0, and so do the notes ranked below it. Equal strengths: the lower note ranks first. The input is not changed.
+
+    Arrays:
+        ``values``: ``ArrayLike`` ``(windows, 84 or more)`` - the strength of each note in each analysis window
+            (``NoteStrengths``).
+
+    Returns:
+        ``RankScores`` ``(windows, 84)`` - the points each note scores in each window: 84 for the loudest down to 1, 0
+        for a silent note and those ranked below it.
     """
     drawn = _check_note_values(values)[:, :NOTES]
     scores = np.zeros(drawn.shape, dtype=np.int64)
@@ -101,12 +154,23 @@ def rank_scores(values) -> np.ndarray:
     return scores
 
 
-def quasi_db(values, peak=None) -> np.ndarray:
-    """What each of the 84 notes adds to its amplitude total in each window: a ``float64`` array ``(windows, 84)``, ``20 log10(amp) / (20 log10(peak))``.
+def quasi_db(values: ArrayLike, peak: float | None = None) -> QuasiDecibels:
+    """What each of the 84 notes adds to its amplitude total in each window: a ``float64`` array ``(windows, 84)``,
+    ``20 log10(amp) / (20 log10(peak))``.
 
-    ``peak`` is the largest amplitude of any note of any window (by default the largest of the 84 columns of ``values``). The loudest note of the file adds
-    1 and every fainter note less. A note with no strength adds 0; a negative result (an amplitude under 1) is clamped to 0; with a ``peak`` of 1 or less
-    (the ratio of logarithms is not defined, or turned upside down) nothing is added at all. Columns after the 84th are left out; the input is not changed.
+    ``peak`` is the largest amplitude of any note of any window (by default the largest of the 84 columns of
+    ``values``). The loudest note of the file adds 1 and every fainter note less. A note with no strength adds 0; a
+    negative result (an amplitude under 1) is clamped to 0; with a ``peak`` of 1 or less (the ratio of logarithms is not
+    defined, or turned upside down) nothing is added at all. Columns after the 84th are left out; the input is not
+    changed.
+
+    Arrays:
+        ``values``: ``ArrayLike`` ``(windows, 84 or more)`` - the strength (amplitude) of each note in each analysis
+            window (``NoteStrengths``).
+
+    Returns:
+        ``QuasiDecibels`` ``(windows, 84)`` - what each note adds to its amplitude total in each window: 1 for the
+        loudest note of the file, less for fainter notes, never below 0.
     """
     drawn = _check_note_values(values)[:, :NOTES]
     if peak is None:
@@ -121,11 +185,21 @@ def quasi_db(values, peak=None) -> np.ndarray:
     return np.maximum(out, 0.0)
 
 
-def softmax_shares(totals) -> np.ndarray:
-    """The softmax of each row of ``totals`` after dividing the row by its largest value: a ``float64`` array of the same shape, each row adding up to 1.
+def softmax_shares(totals: ArrayLike) -> BarShares:
+    """The softmax of each row of ``totals`` after dividing the row by its largest value: a ``float64`` array of the
+    same shape, each row adding up to 1.
 
-    ``totals`` is ``(rows, n)`` numbers that are not negative. A row of ``x`` becomes ``exp(x / max(x)) / sum(exp(x / max(x)))``, so the values the softmax
-    sees run from 0 to 1 whatever the size of the totals. A row with no total (its largest is 0) has nothing to show and becomes all 0.
+    ``totals`` is ``(rows, n)`` numbers that are not negative. A row of ``x`` becomes
+    ``exp(x / max(x)) / sum(exp(x / max(x)))``, so the values the softmax sees run from 0 to 1 whatever the size of the
+    totals. A row with no total (its largest is 0) has nothing to show and becomes all 0.
+
+    Arrays:
+        ``totals``: ``ArrayLike`` ``(rows, n)`` - the running totals of a data set, one row for each frame, one column
+            for each note (``EnergyTotals``); not negative.
+
+    Returns:
+        ``BarShares`` ``(rows, n)`` - the softmax of each row after dividing it by its largest value; each row adds up
+        to 1 (or is all 0 for a row with no total).
     """
     try:
         array = np.asarray(totals, dtype=np.float64)
@@ -140,11 +214,19 @@ def softmax_shares(totals) -> np.ndarray:
     return np.where(largest > 0, shares, 0.0)
 
 
-def above_smallest(shares) -> np.ndarray:
-    """Each row of ``shares`` lowered so that its smallest value is 0: a ``float64`` array of the same shape; a row that is all 0 stays all 0.
+def above_smallest(shares: ArrayLike) -> BarShares:
+    """Each row of ``shares`` lowered so that its smallest value is 0: a ``float64`` array of the same shape; a row that
+    is all 0 stays all 0.
 
-    ``shares`` is ``(rows, n)`` numbers that are not negative (the softmax of the totals, which is never 0 and whose values are close to each other). A row
-    that is all equal has nothing above its smallest value and becomes all 0. The input is not changed.
+    ``shares`` is ``(rows, n)`` numbers that are not negative (the softmax of the totals, which is never 0 and whose
+    values are close to each other). A row that is all equal has nothing above its smallest value and becomes all 0. The
+    input is not changed.
+
+    Arrays:
+        ``shares``: ``ArrayLike`` ``(rows, n)`` - the softmax shares of each row (``BarShares``).
+
+    Returns:
+        ``BarShares`` ``(rows, n)`` - each row lowered so that its smallest value is 0.
     """
     try:
         array = np.asarray(shares, dtype=np.float64)
@@ -160,11 +242,18 @@ def above_smallest(shares) -> np.ndarray:
 def frame_energy(result: AnalysisResult, frame_rate: float, frames: int) -> EnergyGraphData:
     """The totals of every one of ``frames`` frames, from an analysis after the noise floor.
 
-    Windows belong to frames as ``frame_rendering.frame_windows`` says. Frame ``i`` holds, for each note, the sum of the rank scores (``histogram``) and of
-    the quasi-decibel values (``amplitude``, see ``quasi_db``; the peak is the largest of the 84 notes in any window of the whole file) of every window that
-    starts before the end of the frame, so a window is counted once and a frame with no window of its own adds nothing.
+    Windows belong to frames as ``frame_rendering.frame_windows`` says. Frame ``i`` holds, for each note, the sum of the
+    rank scores (``histogram``) and of the quasi-decibel values (``amplitude``, see ``quasi_db``; the peak is the
+    largest of the 84 notes in any window of the whole file) of every window that starts before the end of the frame, so
+    a window is counted once and a frame with no window of its own adds nothing.
+
+    Returns:
+        An ``EnergyGraphData`` whose ``histogram`` and ``amplitude`` are ``EnergyTotals`` ``(frames, 84)``: the rank
+        points (whole numbers) and the quasi-decibel values of each note summed over the windows up to each frame.
+        ``result.frames`` is ``NoteStrengths`` ``(windows, 88)`` after the noise floor.
     """
-    from .frame_rendering import frame_windows  # here, not at the top: frame_rendering imports this module to draw the type
+    # here, not at the top: frame_rendering imports this module to draw the type
+    from .frame_rendering import frame_windows
 
     frames = int(frames)
     windows = result.frames
@@ -190,9 +279,10 @@ def _check_data(data: EnergyGraphData) -> None:
 
 
 class _Layout:
-    """The pixel positions of the picture for a frame size: the 600 x 400 layout scaled by the smaller ratio and centered."""
+    """The pixel positions of the picture for a frame size: the 600 x 400 layout scaled by the smaller ratio and
+    centered."""
 
-    def __init__(self, width: int, height: int):
+    def __init__(self, width: int, height: int) -> None:
         scale = min(width / REFERENCE_WIDTH, height / REFERENCE_HEIGHT)
         dx = (width - REFERENCE_WIDTH * scale) / 2
         dy = (height - REFERENCE_HEIGHT * scale) / 2
@@ -207,20 +297,31 @@ class _Layout:
         self.font_size = max(6, int(round(FONT_SIZE * scale)))
 
     def bars(self, note: int) -> tuple[tuple[int, int], tuple[int, int]]:
-        """The columns (first, last) of the frequency bar and of the amplitude bar of a note: the two halves of its slot, with a gap at the end."""
+        """The columns (first, last) of the frequency bar and of the amplitude bar of a note: the two halves of its
+        slot, with a gap at the end."""
         x0, x1 = self.slots[note]
         half = max(1, (x1 - x0 - GAP) // 2)
         return (x0, x0 + half - 1), (x0 + half, x0 + 2 * half - 1)
 
 
-def _text_color(background: np.ndarray) -> tuple[int, int, int]:
-    """Black on a light background, white on a dark one (by the relative luminance of the color)."""
+def _text_color(background: Rgb) -> tuple[int, int, int]:
+    """Black on a light background, white on a dark one (by the relative luminance of the color).
+
+    Arrays:
+        ``background``: ``Rgb`` ``(3,)`` - the background color (red, green, blue, 0 to 255).
+    """
     luminance = (0.2126 * background[0] + 0.7152 * background[1] + 0.0722 * background[2]) / 255.0
     return (0, 0, 0) if luminance > 0.5 else (255, 255, 255)
 
 
-def _background(layout: _Layout, table: np.ndarray, ink: tuple[int, int, int]) -> Image.Image:
-    """The part of the picture that never changes: the background color, the title, the legend, the baseline and the octave labels."""
+def _background(layout: _Layout, table: ColorTable, ink: tuple[int, int, int]) -> Image.Image:
+    """The part of the picture that never changes: the background color, the title, the legend, the baseline and the
+    octave labels.
+
+    Arrays:
+        ``table``: ``ColorTable`` ``(256, 3)`` - the colors of the colormap (the middle row is the background, the first
+            and last rows the colors of the two data sets).
+    """
     background = tuple(int(c) for c in table[MIDDLE_COLOR_ROW])
     picture = Image.new("RGB", (layout.width, layout.height), background)
     draw = ImageDraw.Draw(picture)
@@ -242,8 +343,15 @@ def _background(layout: _Layout, table: np.ndarray, ink: tuple[int, int, int]) -
     return picture
 
 
-def _frame(shares: tuple[np.ndarray, np.ndarray], base: Image.Image, layout: _Layout, table: np.ndarray) -> Image.Image:
-    """One picture: the bars of the two data sets (their softmax shares above the smallest, for this frame) over the background."""
+def _frame(shares: tuple[BarShares, BarShares], base: Image.Image, layout: _Layout, table: ColorTable) -> Image.Image:
+    """One picture: the bars of the two data sets (their softmax shares above the smallest, for this frame) over the
+    background.
+
+    Arrays:
+        ``shares``: a tuple of two ``BarShares`` ``(84,)`` - the height of the bar of each note, for the frequency data
+            set and for the amplitude data set, in this frame.
+        ``table``: ``ColorTable`` ``(256, 3)`` - the colors of the colormap.
+    """
     picture = base.copy()
     tallest = max(float(shares[0].max()), float(shares[1].max()))
     if tallest <= 0:
@@ -262,7 +370,8 @@ def _frame(shares: tuple[np.ndarray, np.ndarray], base: Image.Image, layout: _La
 
 
 def write_energy_frames(data: EnergyGraphData, colormap: str, directory: Path, width: int, height: int) -> None:
-    """Save one PNG of ``width`` x ``height`` pixels per frame of ``data`` as ``frame_000000.png`` and up. Everything is checked before anything is written."""
+    """Save one PNG of ``width`` x ``height`` pixels per frame of ``data`` as ``frame_000000.png`` and up. Everything is
+    checked before anything is written."""
     colormap = check_colormap(colormap)
     _check_data(data)
     if isinstance(width, bool) or isinstance(height, bool) or not isinstance(width, numbers.Integral) or not isinstance(height, numbers.Integral) or width < 1 or height < 1:

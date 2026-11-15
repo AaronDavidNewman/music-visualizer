@@ -1,3 +1,10 @@
+"""The endpoints of the video of a render: ``POST /api/jobs/{job_id}/video`` makes it, ``GET /api/jobs/{job_id}/video``
+downloads it.
+
+No data processing: this module only checks the job number and calls ``services/video.py`` (which joins the frames with
+ffmpeg), turning its failures into HTTP errors.
+"""
+
 import re
 
 from fastapi import APIRouter, HTTPException
@@ -18,7 +25,8 @@ def _check_id(job_id: str) -> None:
 
 @router.post("/{job_id}/video")
 def make_video(job_id: str) -> dict:
-    """Join the frames of the render into a silent MP4 in the output directory (a plain ``def``: ffmpeg runs in a worker thread)."""
+    """Join the frames of the render into a silent MP4 in the output directory (a plain ``def``: ffmpeg runs in a worker
+    thread)."""
     _check_id(job_id)
     try:
         video = create_video(
