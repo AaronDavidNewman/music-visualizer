@@ -174,7 +174,7 @@ describe("smoothing window", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Contour, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay, Rhythm Circles and Chromatic Wireframe in that order and starts at contour", () => {
+  it("offers Contour, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay, Rhythm Circles, Chromatic Wireframe and Polychord in that order and starts at contour", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["contour", "Contour"],
       ["decay", "Decay"],
@@ -184,6 +184,7 @@ describe("image type", () => {
       ["chromatic-decay", "Chromatic Decay"],
       ["rhythm-circles", "Rhythm Circles"],
       ["chromatic-wireframe", "Chromatic Wireframe"],
+      ["polychord", "Polychord"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("contour");
     expect(imageTypeLabel("contour")).toBe("Contour");
@@ -194,6 +195,7 @@ describe("image type", () => {
     expect(imageTypeLabel("chromatic-decay")).toBe("Chromatic Decay");
     expect(imageTypeLabel("rhythm-circles")).toBe("Rhythm Circles");
     expect(imageTypeLabel("chromatic-wireframe")).toBe("Chromatic Wireframe");
+    expect(imageTypeLabel("polychord")).toBe("Polychord");
   });
 
   it.each(values)("accepts %j", (v) => {
@@ -201,7 +203,7 @@ describe("image type", () => {
   });
 
   it.each(["", "Contour", "contour ", " contour", "contours", "gradient", "contour,decay", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "polar_chords", "polarchords", "Polar-Chords", "polar-chords ", "polar-", "energy_graphs", "energygraphs", "Energy-Graphs", "energy-graphs ", "energy-", "chromatic_decay", "chromaticdecay", "Chromatic-Decay", "chromatic-decay ", "chromatic", "rhythm_circles", "rhythm-circles ", "Rhythm-Circles"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe.");
+    expect(validateImageType(v)).toBe("The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.");
   });
 
   it.each(["tiles", "blended", "circles", "circles_paint", "concentric"])("rejects %j, one of the five kinds of picture that were removed", (v) => {
@@ -675,14 +677,14 @@ describe("Rhythm Circles (feature 038)", () => {
 
 
 describe("Chromatic Wireframe (feature 039)", () => {
-  it("is the last image type, with the label Chromatic Wireframe, and is accepted", () => {
-    expect(IMAGE_TYPES[IMAGE_TYPES.length - 1]).toEqual({ value: "chromatic-wireframe", label: "Chromatic Wireframe" });
-    expect(IMAGE_TYPES).toHaveLength(8);
+  it("is the eighth image type, with the label Chromatic Wireframe, and is accepted", () => {
+    expect(IMAGE_TYPES[7]).toEqual({ value: "chromatic-wireframe", label: "Chromatic Wireframe" });
+    expect(IMAGE_TYPES).toHaveLength(9);
     expect(validateImageType("chromatic-wireframe")).toBeNull();
   });
 
   it.each(["chromatic_wireframe", "chromaticwireframe", "Chromatic-Wireframe", "chromatic-wireframe ", " chromatic-wireframe", "wireframe", "chromatic-wire", "CHROMATIC-WIREFRAME"])("refuses the near miss %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe.");
+    expect(validateImageType(v)).toBe("The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.");
   });
 
   it("uses the settings of Chromatic Decay: the Local peaks always, and none of the grid, layout, beat, decay, wave or blend settings", () => {
@@ -696,5 +698,97 @@ describe("Chromatic Wireframe (feature 039)", () => {
     expect(noteLayoutApplies("chromatic-wireframe")).toBe(false);
     expect(decayRateApplies("chromatic-wireframe")).toBe(false); // its decay rate is the whole number of Chromatic Decay, not the 0.25 to 4 one
     expect(waveCountApplies("chromatic-wireframe")).toBe(false);
+  });
+});
+
+import {
+  DEFAULT_POLYCHORD_MAX_COPIES,
+  DEFAULT_POLYCHORD_MIN_COPIES,
+  DEFAULT_POLYCHORD_NOTES,
+  DEFAULT_POLYCHORD_ROTATION,
+  POLYCHORD_COPIES_RANGE,
+  POLYCHORD_NOTES_RANGE,
+  POLYCHORD_ROTATION_RANGE,
+  formatPolychordCopies,
+  formatPolychordNotes,
+  formatPolychordRotation,
+  isPolychordType,
+  validatePolychordMaxCopies,
+  validatePolychordMinCopies,
+  validatePolychordNotes,
+  validatePolychordRotation,
+} from "./validation";
+
+describe("Polychord (feature 042)", () => {
+  it("is the last of the nine image types, with the label Polychord, and is accepted", () => {
+    expect(IMAGE_TYPES[IMAGE_TYPES.length - 1]).toEqual({ value: "polychord", label: "Polychord" });
+    expect(IMAGE_TYPES).toHaveLength(9);
+    expect(validateImageType("polychord")).toBeNull();
+  });
+
+  it.each(["Polychord", "poly-chord", "poly_chord", "polychord ", " polychord", "chord", "POLYCHORD"])("refuses the near miss %j", (v) => {
+    expect(validateImageType(v)).toBe(
+      "The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.",
+    );
+  });
+
+  it("is the Polychord type only for polychord, and uses the Local peaks always and none of the other types' settings", () => {
+    expect(isPolychordType("polychord")).toBe(true);
+    for (const type of IMAGE_TYPES.map((t) => t.value).filter((t) => t !== "polychord")) expect(isPolychordType(type), type).toBe(false);
+    for (const box of [true, false]) expect(peakSettingsShown("polychord", box), String(box)).toBe(true);
+    expect(gridSettingsApply("polychord")).toBe(false);
+    expect(isChromaticType("polychord")).toBe(false);
+    expect(isRingsType("polychord")).toBe(false);
+    expect(isPolarType("polychord")).toBe(false);
+    expect(isEnergyType("polychord")).toBe(false);
+    expect(isRhythmType("polychord")).toBe(false);
+    expect(beatColoringApplies("polychord")).toBe(false);
+    expect(noteLayoutApplies("polychord")).toBe(false);
+    expect(decayRateApplies("polychord")).toBe(false);
+    expect(waveCountApplies("polychord")).toBe(false);
+  });
+
+  it("has the limits and the defaults of the four settings", () => {
+    expect(POLYCHORD_NOTES_RANGE).toEqual({ min: 5, max: 8, step: 1 });
+    expect(POLYCHORD_COPIES_RANGE).toEqual({ min: 1, max: 12, step: 1 });
+    expect(POLYCHORD_ROTATION_RANGE).toEqual({ min: -360, max: 360, step: 1 });
+    expect([DEFAULT_POLYCHORD_NOTES, DEFAULT_POLYCHORD_MIN_COPIES, DEFAULT_POLYCHORD_MAX_COPIES, DEFAULT_POLYCHORD_ROTATION]).toEqual([6, 3, 12, 15]);
+  });
+
+  it.each([5, 6, 8, "7", " 6 ", "8.0"])("accepts %j notes", (v) => expect(validatePolychordNotes(v)).toBeNull());
+  it.each([4, 9, 5.5, 0, -6, "abc", "", " ", NaN, Infinity, "1e1"])("refuses %j notes with the message of the server", (v) => {
+    expect(validatePolychordNotes(v)).toBe("The number of notes must be a whole number from 5 to 8.");
+  });
+
+  it.each([1, 12, 3, "4", " 12 ", "2.0"])("accepts %j as the minimum number of copies", (v) => expect(validatePolychordMinCopies(v)).toBeNull());
+  it.each([0, 13, 2.5, -1, "abc", "", NaN, Infinity])("refuses %j as the minimum number of copies", (v) => {
+    expect(validatePolychordMinCopies(v)).toBe("The minimum number of copies must be a whole number from 1 to 12.");
+  });
+
+  it.each([1, 12, 3, "4"])("accepts %j as the maximum number of copies when it is not below the minimum", (v) => expect(validatePolychordMaxCopies(v, 1)).toBeNull());
+  it.each([0, 13, 2.5, "abc", "", NaN])("refuses %j as the maximum number of copies", (v) => {
+    expect(validatePolychordMaxCopies(v, 3)).toBe("The maximum number of copies must be a whole number from 1 to 12.");
+  });
+
+  it("refuses a maximum below the minimum, accepts an equal one, and does not compare with a minimum that is itself not valid", () => {
+    expect(validatePolychordMaxCopies(7, 8)).toBe("The maximum number of copies must not be less than the minimum.");
+    expect(validatePolychordMaxCopies("2", "3")).toBe("The maximum number of copies must not be less than the minimum.");
+    expect(validatePolychordMaxCopies(8, 8)).toBeNull();
+    expect(validatePolychordMaxCopies(1, 99)).toBeNull(); // the minimum's own control says that 99 is wrong
+    expect(validatePolychordMaxCopies(1, "")).toBeNull();
+  });
+
+  it.each([-360, 0, 15, 15.5, -30, 360, "90", " -45.5 ", "1e2"])("accepts %j as the rotation", (v) => expect(validatePolychordRotation(v)).toBeNull());
+  it.each([-360.5, 361, 1000, "abc", "", " ", NaN, Infinity, -Infinity])("refuses %j as the rotation", (v) => {
+    expect(validatePolychordRotation(v)).toBe("The rotation must be a number from -360 to 360 degrees a second.");
+  });
+
+  it("writes the readouts", () => {
+    expect(formatPolychordNotes(6)).toBe("6 notes");
+    expect(formatPolychordCopies(1)).toBe("1 copy");
+    expect(formatPolychordCopies(12)).toBe("12 copies");
+    expect(formatPolychordRotation(0)).toBe("Still");
+    expect(formatPolychordRotation(15)).toBe("15 degrees/s");
+    expect(formatPolychordRotation(-22.5)).toBe("-22.5 degrees/s");
   });
 });

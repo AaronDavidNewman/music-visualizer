@@ -61,8 +61,8 @@ def color_at_position(image, position):
 
 
 def test_chromatic_decay_is_the_sixth_image_type_and_the_message_lists_it():
-    assert IMAGE_TYPES[5] == "chromatic-decay" and len(IMAGE_TYPES) == 8
-    assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe.")
+    assert IMAGE_TYPES[5] == "chromatic-decay" and len(IMAGE_TYPES) == 9
+    assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.")
 
 
 @pytest.mark.parametrize("name", ["chromatic_decay", "chromaticdecay", "Chromatic-Decay", "chromatic-decay ", "chromatic", "chromatic-", "CHROMATIC-DECAY", ""])

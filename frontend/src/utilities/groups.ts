@@ -1,4 +1,4 @@
-import { beatColoringApplies, gridSettingsApply, isChromaticType, isEnergyType, isPolarType, isRhythmType, isRingsType, noteLayoutApplies } from "./validation";
+import { beatColoringApplies, gridSettingsApply, isChromaticType, isEnergyType, isPolarType, isPolychordType, isRhythmType, isRingsType, noteLayoutApplies } from "./validation";
 
 /**
  * The groups of the settings form (feature 020): which groups there are, what is in each, which are shown for an image type, and
@@ -29,6 +29,8 @@ export const GROUPS: readonly GroupDefinition[] = [
   { id: "chromatic-decay", title: "Chromatic Decay", controls: ["threshold", "chromatic-decay-rate"] },
   // Chromatic Wireframe (feature 039) draws the points of Chromatic Decay, so it has the same two controls (and the same values) in a group of its own
   { id: "chromatic-wireframe", title: "Chromatic Wireframe", controls: ["threshold", "chromatic-decay-rate"] },
+  // Polychord (feature 042): the links in a figure, the fewest and the most copies of it, and how fast the picture turns
+  { id: "polychord", title: "Polychord", controls: ["polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation"] },
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
   // the beat coloring of Contour, its beat wave (feature 028): its own group, after the group of the type
@@ -40,7 +42,7 @@ export const GROUPS: readonly GroupDefinition[] = [
 ];
 
 /** The ids of the groups that belong to one image type: exactly one of them follows the Image type group. */
-const TYPE_GROUPS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"];
+const TYPE_GROUPS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"];
 
 const byId = new Map(GROUPS.map((g) => [g.id, g]));
 
@@ -55,7 +57,7 @@ export function controlsIn(id: string): readonly string[] {
 /**
  * The ids of the groups shown for an image type, top to bottom: the top group, Colormap, Image type, the group of the type
  * (none for Energy graphs and Rhythm Circles, which have no controls of their own, nor for a type that is not one of the eight), Note layout for Decay, Decay Exp and Polar Chords,
- * Local peaks for Contour (with the checkbox) and for Decay, Decay Exp, Polar Chords, Chromatic Decay and Chromatic Wireframe (without it), Data smoothing (not for Energy graphs and Rhythm
+ * Local peaks for Contour (with the checkbox) and for Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord (without it), Data smoothing (not for Energy graphs and Rhythm
  * Circles, which do not smooth the data), and Image smoothing when the type draws a grid (Contour). Energy graphs has
  * no group of its own: only the top group, Colormap and Image type. Rhythm Circles has none either, and adds only Local peaks (without the checkbox) to those three.
  */
@@ -64,7 +66,7 @@ export function groupsFor(imageType: string): string[] {
   if (TYPE_GROUPS.includes(imageType)) ids.push(imageType);
   if (noteLayoutApplies(imageType)) ids.push("note-layout");
   if (beatColoringApplies(imageType)) ids.push("local-peaks");
-  if (isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || isRhythmType(imageType)) ids.push("concentric-peaks");
+  if (isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || isRhythmType(imageType) || isPolychordType(imageType)) ids.push("concentric-peaks");
   if (!isEnergyType(imageType) && !isRhythmType(imageType)) ids.push("data-smoothing");
   if (gridSettingsApply(imageType)) ids.push("image-smoothing");
   return ids;

@@ -50,9 +50,9 @@ def chord(seconds=3.0):
 
 
 def test_polar_chords_is_the_fourth_image_type_and_the_message_lists_all_eight():
-    assert IMAGE_TYPES[3] == "polar-chords" and len(IMAGE_TYPES) == 8
+    assert IMAGE_TYPES[3] == "polar-chords" and len(IMAGE_TYPES) == 9
     assert TYPE_MESSAGE == (
-        "The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe."
+        "The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord."
     )
 
 

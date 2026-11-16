@@ -33,6 +33,11 @@ export interface JobResult {
   wave_count: number;
   /** Polar Chords: how many of the loudest notes get a bar (feature 032). */
   polar_notes: number;
+  /** Polychord: the links in a figure, the fewest and the most copies of it, and the rotation in degrees a second (feature 042). */
+  polychord_notes: number;
+  polychord_min_copies: number;
+  polychord_max_copies: number;
+  polychord_rotation: number;
   /** Decay: the points a circle gives to each neighbour per frame at the low, medium, high and saturated levels (0.5 to 3 each). */
   decay_low: number;
   decay_medium: number;
@@ -74,6 +79,11 @@ export interface JobSettings {
   decayRate: number;
   waveCount: number;
   polarNotes: number;
+  /** Polychord (feature 042): 5 to 8 links, 1 to 12 copies (the minimum not above the maximum), -360 to 360 degrees a second. */
+  polychordNotes: number;
+  polychordMinCopies: number;
+  polychordMaxCopies: number;
+  polychordRotation: number;
   decayLow: number;
   decayMedium: number;
   decayHigh: number;
@@ -102,6 +112,10 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("decay_rate", String(settings.decayRate));
   body.append("wave_count", String(settings.waveCount));
   body.append("polar_notes", String(settings.polarNotes));
+  body.append("polychord_notes", String(settings.polychordNotes));
+  body.append("polychord_min_copies", String(settings.polychordMinCopies));
+  body.append("polychord_max_copies", String(settings.polychordMaxCopies));
+  body.append("polychord_rotation", String(settings.polychordRotation));
   body.append("decay_low", String(settings.decayLow));
   body.append("decay_medium", String(settings.decayMedium));
   body.append("decay_high", String(settings.decayHigh));

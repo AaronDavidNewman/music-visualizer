@@ -70,7 +70,7 @@ def test_the_response_has_the_usual_keys_and_nothing_extra_for_contour(client):
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
         "smoothing", "smoothing_window", "threshold", "image_type", "colormap", "resolution", "note_count", "interpolate",
-        "gaussian", "beat_coloring", "peak_distance", "note_layout", "decay_rate", "wave_count", "polar_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing",
+        "gaussian", "beat_coloring", "peak_distance", "note_layout", "decay_rate", "wave_count", "polar_notes", "polychord_notes", "polychord_min_copies", "polychord_max_copies", "polychord_rotation", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing",
         "step_samples", "window_count", "spacing_raised", "frame_url_template",
     }  # fmt: skip
     for key in REMOVED:

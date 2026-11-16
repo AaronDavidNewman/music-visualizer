@@ -10,6 +10,10 @@ import {
   decayExpRateHelp,
   decayRateHelp,
   polarNotesHelp,
+  polychordMaxCopiesHelp,
+  polychordMinCopiesHelp,
+  polychordNotesHelp,
+  polychordRotationHelp,
   waveCountHelp,
   noteCountHelp,
   resolutionHelp,
@@ -420,5 +424,31 @@ describe("the Threshold help and the decay rate help name Chromatic Wireframe (f
   it("says that the decay rate is also the one of the points that Chromatic Wireframe draws", () => {
     expect(chromaticRateHelp).toContain("Chromatic Wireframe");
     expect(chromaticRateHelp).not.toMatch(/['"<>&]/);
+  });
+});
+
+describe("the Polychord help (feature 042)", () => {
+  it("explains the number of notes: 5 to 8, default 6, the loudest notes, a link each, 30 degrees per fifth", () => {
+    for (const piece of ["5 to 8", "default 6", "Only used by Polychord", "loudest", "30 degrees"]) expect(polychordNotesHelp).toContain(piece);
+  });
+
+  it("explains the copies: 1 to 12, the defaults 3 and 12, the beat, and that the maximum cannot be less than the minimum", () => {
+    for (const piece of ["1 to 12", "default 3", "lowest point of the beat", "Copies (maximum)"]) expect(polychordMinCopiesHelp).toContain(piece);
+    for (const piece of ["1 to 12", "default 12", "top of a beat", "Copies (minimum)", "full turn"]) expect(polychordMaxCopiesHelp).toContain(piece);
+  });
+
+  it("explains the rotation: -360 to 360 degrees a second, default 15, either way, still at 0", () => {
+    for (const piece of ["-360 to 360", "default 15", "clockwise", "counterclockwise", "0 holds it still"]) expect(polychordRotationHelp).toContain(piece);
+  });
+
+  it("is in the image type help, after Chromatic Wireframe, with the tempo coloring and the black background", () => {
+    expect(imageTypeHelp).toContain("Polychord:");
+    expect(imageTypeHelp.indexOf("Polychord:")).toBeGreaterThan(imageTypeHelp.indexOf("Chromatic Wireframe:"));
+    const text = imageTypeHelp.slice(imageTypeHelp.indexOf("Polychord:"));
+    for (const piece of ["fifth", "Copies (maximum)", "Rotation", "60", "156", "black"]) expect(text).toContain(piece);
+  });
+
+  it("names Polychord in the Local peaks help", () => {
+    expect(peakDistanceHelp).toContain("Polychord");
   });
 });

@@ -39,6 +39,7 @@ PROCESSING_MODULES = {
     "services/note_layout.py",
     "services/note_selection.py",
     "services/polar_chords.py",
+    "services/polychord.py",
     "services/resolution.py",
     "services/rhythm_circles.py",
     "services/tempo_finder.py",

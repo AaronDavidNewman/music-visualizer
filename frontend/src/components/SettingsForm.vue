@@ -13,6 +13,13 @@ import {
   WAVE_COUNT_RANGE,
   DEFAULT_POLAR_NOTES,
   POLAR_NOTES_RANGE,
+  DEFAULT_POLYCHORD_MAX_COPIES,
+  DEFAULT_POLYCHORD_MIN_COPIES,
+  DEFAULT_POLYCHORD_NOTES,
+  DEFAULT_POLYCHORD_ROTATION,
+  POLYCHORD_COPIES_RANGE,
+  POLYCHORD_NOTES_RANGE,
+  POLYCHORD_ROTATION_RANGE,
   DEFAULT_NOTE_LAYOUT,
   CHROMATIC_RATE_RANGE,
   DECAY_RATE_RANGE,
@@ -42,6 +49,9 @@ import {
   formatChromaticRate,
   formatDecayRate,
   formatPolarNotes,
+  formatPolychordCopies,
+  formatPolychordNotes,
+  formatPolychordRotation,
   formatWaveCount,
   formatPeakDistance,
   formatGaussian,
@@ -55,6 +65,10 @@ import {
   validateChromaticRate,
   validateDecayRate,
   validatePolarNotes,
+  validatePolychordMaxCopies,
+  validatePolychordMinCopies,
+  validatePolychordNotes,
+  validatePolychordRotation,
   validateWaveCount,
   validateNoteLayout,
   isChromaticType,
@@ -92,6 +106,10 @@ import {
   chromaticRateHelp,
   decayRateHelp,
   polarNotesHelp,
+  polychordMaxCopiesHelp,
+  polychordMinCopiesHelp,
+  polychordNotesHelp,
+  polychordRotationHelp,
   waveCountHelp,
   noteLayoutHelp,
   peakDistanceHelp,
@@ -129,6 +147,10 @@ const chromaticRate = ref<number>(DEFAULT_CHROMATIC_RATE); // the decay rate of 
 const decayAmounts = ref<number[]>([...DEFAULT_DECAY_AMOUNTS]); // low, medium, high, saturated
 const waveCount = ref<number>(DEFAULT_WAVE_COUNT);
 const polarNotes = ref<number>(DEFAULT_POLAR_NOTES);
+const polychordNotes = ref<number>(DEFAULT_POLYCHORD_NOTES);
+const polychordMinCopies = ref<number>(DEFAULT_POLYCHORD_MIN_COPIES);
+const polychordMaxCopies = ref<number>(DEFAULT_POLYCHORD_MAX_COPIES);
+const polychordRotation = ref<number>(DEFAULT_POLYCHORD_ROTATION);
 const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
 const peakDistance = ref<number>(DEFAULT_PEAK_DISTANCE);
 const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
@@ -164,6 +186,10 @@ const chromaticRateError = computed(() => validateChromaticRate(chromaticRate.va
 const decayAmountErrors = computed(() => DECAY_LEVELS.map((level, index) => validateDecayAmount(decayAmounts.value[index], level.name)));
 const waveCountError = computed(() => validateWaveCount(waveCount.value));
 const polarNotesError = computed(() => validatePolarNotes(polarNotes.value));
+const polychordNotesError = computed(() => validatePolychordNotes(polychordNotes.value));
+const polychordMinCopiesError = computed(() => validatePolychordMinCopies(polychordMinCopies.value));
+const polychordMaxCopiesError = computed(() => validatePolychordMaxCopies(polychordMaxCopies.value, polychordMinCopies.value));
+const polychordRotationError = computed(() => validatePolychordRotation(polychordRotation.value));
 const peakDistanceError = computed(() => validatePeakDistance(peakDistance.value));
 const canSubmit = computed(
   () =>
@@ -186,17 +212,21 @@ const canSubmit = computed(
     decayAmountErrors.value.every((e) => !e) &&
     !waveCountError.value &&
     !polarNotesError.value &&
+    !polychordNotesError.value &&
+    !polychordMinCopiesError.value &&
+    !polychordMaxCopiesError.value &&
+    !polychordRotationError.value &&
     !peakDistanceError.value,
 );
 
 // The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
 // shown. Every value stays in its ref, so it is kept when a group is folded or the type is changed, and is still sent.
-const TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"];
+const TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"];
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showDataSmoothing = computed(() => shownGroups.value.includes("data-smoothing")); // not for Energy graphs (feature 034)
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
-// the Local peaks group has one of two ids: local-peaks (Contour: with the checkbox) or concentric-peaks (Decay, Decay Exp, Polar Chords, Chromatic Decay and Chromatic Wireframe: without; the id is from the first picture that had it)
+// the Local peaks group has one of two ids: local-peaks (Contour: with the checkbox) or concentric-peaks (Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord: without; the id is from the first picture that had it)
 const showNoteLayout = computed(() => noteLayoutApplies(imageType.value));
 const peaksGroup = computed(() => shownGroups.value.find((id) => id === "local-peaks" || id === "concentric-peaks") ?? "");
 function inTypeGroup(control: string): boolean {
@@ -221,6 +251,10 @@ const typeGroupProblem = computed(
     (inTypeGroup("chromatic-decay-rate") && !!chromaticRateError.value) ||
     (inTypeGroup("decay-low") && decayAmountErrors.value.some((e) => !!e)) ||
     (inTypeGroup("polar-notes") && !!polarNotesError.value) ||
+    (inTypeGroup("polychord-notes") && !!polychordNotesError.value) ||
+    (inTypeGroup("polychord-min-copies") && !!polychordMinCopiesError.value) ||
+    (inTypeGroup("polychord-max-copies") && !!polychordMaxCopiesError.value) ||
+    (inTypeGroup("polychord-rotation") && !!polychordRotationError.value) ||
     (inTypeGroup("wave-count") && !!waveCountError.value),
 );
 const noteLayoutProblem = computed(() => !!noteLayoutError.value);
@@ -262,6 +296,10 @@ function onSubmit() {
     decaySaturated: decayAmounts.value[3],
     waveCount: waveCount.value,
     polarNotes: polarNotes.value,
+    polychordNotes: polychordNotes.value,
+    polychordMinCopies: polychordMinCopies.value,
+    polychordMaxCopies: polychordMaxCopies.value,
+    polychordRotation: polychordRotation.value,
     beatColoring: beatColoring.value,
     peakDistance: peakDistance.value,
     smoothing: Math.round(smoothing.value * 100) / 100,
@@ -415,6 +453,78 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="polarNotesError" class="error">{{ polarNotesError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('polychord-notes')" class="field">
+        <div class="field-head">
+          <label for="polychord-notes">Number of notes</label>
+          <InfoPopover label="number of notes" :text="polychordNotesHelp" />
+          <output class="slider-value" for="polychord-notes">{{ formatPolychordNotes(polychordNotes) }}</output>
+        </div>
+        <input
+          id="polychord-notes"
+          v-model.number="polychordNotes"
+          type="range"
+          :min="POLYCHORD_NOTES_RANGE.min"
+          :max="POLYCHORD_NOTES_RANGE.max"
+          :step="POLYCHORD_NOTES_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="polychordNotesError" class="error">{{ polychordNotesError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('polychord-min-copies')" class="field">
+        <div class="field-head">
+          <label for="polychord-min-copies">Copies (minimum)</label>
+          <InfoPopover label="minimum copies" :text="polychordMinCopiesHelp" />
+          <output class="slider-value" for="polychord-min-copies">{{ formatPolychordCopies(polychordMinCopies) }}</output>
+        </div>
+        <input
+          id="polychord-min-copies"
+          v-model.number="polychordMinCopies"
+          type="range"
+          :min="POLYCHORD_COPIES_RANGE.min"
+          :max="POLYCHORD_COPIES_RANGE.max"
+          :step="POLYCHORD_COPIES_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="polychordMinCopiesError" class="error">{{ polychordMinCopiesError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('polychord-max-copies')" class="field">
+        <div class="field-head">
+          <label for="polychord-max-copies">Copies (maximum)</label>
+          <InfoPopover label="maximum copies" :text="polychordMaxCopiesHelp" />
+          <output class="slider-value" for="polychord-max-copies">{{ formatPolychordCopies(polychordMaxCopies) }}</output>
+        </div>
+        <input
+          id="polychord-max-copies"
+          v-model.number="polychordMaxCopies"
+          type="range"
+          :min="POLYCHORD_COPIES_RANGE.min"
+          :max="POLYCHORD_COPIES_RANGE.max"
+          :step="POLYCHORD_COPIES_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="polychordMaxCopiesError" class="error">{{ polychordMaxCopiesError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('polychord-rotation')" class="field">
+        <div class="field-head">
+          <label for="polychord-rotation">Rotation</label>
+          <InfoPopover label="rotation" :text="polychordRotationHelp" />
+          <output class="slider-value" for="polychord-rotation">{{ formatPolychordRotation(polychordRotation) }}</output>
+        </div>
+        <input
+          id="polychord-rotation"
+          v-model.number="polychordRotation"
+          type="range"
+          :min="POLYCHORD_ROTATION_RANGE.min"
+          :max="POLYCHORD_ROTATION_RANGE.max"
+          :step="POLYCHORD_ROTATION_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="polychordRotationError" class="error">{{ polychordRotationError }}</small>
       </div>
 
       <div v-if="inTypeGroup('decay-rate')" class="field">

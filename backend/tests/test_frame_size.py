@@ -12,6 +12,7 @@ from PIL import Image
 
 import app.services.frame_rendering as rendering
 from app.services.colormaps import COLORMAPS
+from app.services.polychord import PolychordData
 
 from .frame_size import HEIGHT, WIDTH
 from .test_jobs_api import SR, chord_wav, client, wav_bytes  # noqa: F401
@@ -43,6 +44,7 @@ CONFIGS = [
     ("polar-chords", {"image_type": "polar-chords"}),
     ("chromatic-decay", {"image_type": "chromatic-decay"}),
     ("chromatic-wireframe", {"image_type": "chromatic-wireframe"}),
+    ("polychord", {"image_type": "polychord", "polychord": PolychordData(np.full(4, 120.0), 10.0)}),
 ]
 IDS = [c[0] for c in CONFIGS]
 

@@ -4,7 +4,18 @@ import { describe, expect, it } from "vitest";
 import SettingsForm from "./SettingsForm.vue";
 import formSource from "./SettingsForm.vue?raw";
 import { COLORMAPS, DEFAULT_COLORMAP } from "../utilities/validation";
-import { chromaticRateHelp, decayAmountHelp, decayExpRateHelp, decayRateHelp, polarNotesHelp, thresholdHelp } from "../utilities/help";
+import {
+  chromaticRateHelp,
+  decayAmountHelp,
+  decayExpRateHelp,
+  decayRateHelp,
+  polarNotesHelp,
+  polychordMaxCopiesHelp,
+  polychordMinCopiesHelp,
+  polychordNotesHelp,
+  polychordRotationHelp,
+  thresholdHelp,
+} from "../utilities/help";
 
 async function render(busy = false): Promise<string> {
   const app = createSSRApp(SettingsForm, { busy, file: null, sampleRate: 44100 });
@@ -75,9 +86,9 @@ describe("the smoothing window field", () => {
 });
 
 describe("the image type controls", () => {
-  it("offer Contour, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay, Rhythm Circles and Chromatic Wireframe in a dropdown that starts at Contour, with a label and an info button", async () => {
+  it("offer Contour, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay, Rhythm Circles, Chromatic Wireframe and Polychord in a dropdown that starts at Contour, with a label and an info button", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Contour", "Decay", "Decay Exp", "Polar Chords", "Energy graphs", "Chromatic Decay", "Rhythm Circles", "Chromatic Wireframe"]);
+    expect(options(html, "image-type")).toEqual(["Contour", "Decay", "Decay Exp", "Polar Chords", "Energy graphs", "Chromatic Decay", "Rhythm Circles", "Chromatic Wireframe", "Polychord"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="contour"[^>]*selected/);
     for (const removed of ["tiles", "blended", "circles", "circles_paint", "concentric"]) expect(select![1]).not.toContain(`<option value="${removed}"`);
@@ -354,7 +365,7 @@ describe("the groups of the chosen image type (Story 2)", () => {
 
 
   it("keeps the groups of the types in one list, shown by the group model", () => {
-    expect(formSource).toContain('TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"]');
+    expect(formSource).toContain('TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"]');
     for (const removed of ["circleUnit", "circleRadius", "circleResize", "circleMemory", "circleNotes", "blendWidth"]) expect(formSource, removed).not.toContain(removed);
   });
 
@@ -875,7 +886,7 @@ describe("the page for Chromatic Decay (feature 035)", () => {
     expect(formSource).toContain("validateChromaticRate(chromaticRate.value)");
     expect(formSource).toMatch(/!decayRateError\.value &&\s+!chromaticRateError\.value &&/); // an invalid rate blocks Create frames
     expect(formSource).toContain('(inTypeGroup("chromatic-decay-rate") && !!chromaticRateError.value)');
-    expect(formSource).toContain('"decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe"]');
+    expect(formSource).toContain('"decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"]');
   });
 });
 
@@ -973,5 +984,97 @@ describe("the page for Chromatic Wireframe (feature 039)", () => {
 
   it("sends the rate of Chromatic Decay as decay_rate for its type (the same value as Chromatic Decay)", () => {
     expect(formSource).toContain("decayRate: isChromaticType(imageType.value) ? chromaticRate.value : decayRate.value");
+  });
+});
+
+describe("the page for Polychord (feature 042)", () => {
+  it("shows Analysis, Colormap, Image type, Polychord (the four settings), Local peaks and Data smoothing, in this order", async () => {
+    const groups = groupsOf(await renderType("polychord"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+      ["polychord", "Polychord", ["polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance"]],
+      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
+    ]);
+  });
+
+  it("has the four sliders with their limits, defaults, readouts and help", async () => {
+    const html = await renderType("polychord");
+    const tag = (id: string) => html.match(new RegExp(`<input id="${id}"[^>]*>`))?.[0] ?? "";
+    for (const [id, min, max, value] of [
+      ["polychord-notes", "5", "8", "6"],
+      ["polychord-min-copies", "1", "12", "3"],
+      ["polychord-max-copies", "1", "12", "12"],
+      ["polychord-rotation", "-360", "360", "15"],
+    ]) {
+      expect(tag(id), id).toContain('type="range"');
+      expect(tag(id), id).toContain(`min="${min}"`);
+      expect(tag(id), id).toContain(`max="${max}"`);
+      expect(tag(id), id).toContain('step="1"');
+      expect(tag(id), id).toContain(`value="${value}"`);
+    }
+    expect(html).toMatch(/<label[^>]*for="polychord-notes"[^>]*>Number of notes<\/label>/);
+    expect(html).toMatch(/<label[^>]*for="polychord-min-copies"[^>]*>Copies \(minimum\)<\/label>/);
+    expect(html).toMatch(/<label[^>]*for="polychord-max-copies"[^>]*>Copies \(maximum\)<\/label>/);
+    expect(html).toMatch(/<label[^>]*for="polychord-rotation"[^>]*>Rotation<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="polychord-notes"[^>]*>6 notes<\/output>/);
+    expect(html).toMatch(/<output[^>]*for="polychord-min-copies"[^>]*>3 copies<\/output>/);
+    expect(html).toMatch(/<output[^>]*for="polychord-max-copies"[^>]*>12 copies<\/output>/);
+    expect(html).toMatch(/<output[^>]*for="polychord-rotation"[^>]*>15 degrees\/s<\/output>/);
+    for (const help of [polychordNotesHelp, polychordMinCopiesHelp, polychordMaxCopiesHelp, polychordRotationHelp]) expect(html).toContain(help);
+  });
+
+  it("has the controls in the order notes, minimum, maximum, rotation, then the Local peaks", async () => {
+    const html = await renderType("polychord");
+    const at = (id: string) => html.indexOf(`id="${id}"`);
+    expect(at("polychord-notes")).toBeLessThan(at("polychord-min-copies"));
+    expect(at("polychord-min-copies")).toBeLessThan(at("polychord-max-copies"));
+    expect(at("polychord-max-copies")).toBeLessThan(at("polychord-rotation"));
+    expect(html.indexOf('for="peak-distance"')).toBeGreaterThan(at("polychord-rotation"));
+  });
+
+  it("has none of the controls of the other types and no Note layout or Image smoothing", async () => {
+    const html = await renderType("polychord");
+    for (const id of ["threshold", "chromatic-decay-rate", "decay-rate", "decay-low", "note-layout", "polar-notes", "beat-coloring", "notes", "resolution", "interpolate", "gaussian", "wave-count"]) {
+      expect(html, id).not.toContain(`id="${id}"`);
+    }
+    for (const group of ["image-smoothing", "local-peaks", "note-layout", "chromatic-decay"]) expect(html).not.toContain(`data-group="${group}"`);
+  });
+
+  it("is not shown for the other types", async () => {
+    for (const type of ["contour", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles", "chromatic-wireframe"]) {
+      const html = await renderType(type);
+      expect(html, type).not.toContain('id="polychord-notes"');
+      expect(html, type).not.toContain('data-group="polychord"');
+    }
+  });
+
+  it("keeps the four values, checks them, blocks Create frames on a wrong one, and sends them", () => {
+    for (const piece of [
+      "const polychordNotes = ref<number>(DEFAULT_POLYCHORD_NOTES)",
+      "const polychordMinCopies = ref<number>(DEFAULT_POLYCHORD_MIN_COPIES)",
+      "const polychordMaxCopies = ref<number>(DEFAULT_POLYCHORD_MAX_COPIES)",
+      "const polychordRotation = ref<number>(DEFAULT_POLYCHORD_ROTATION)",
+      "validatePolychordNotes(polychordNotes.value)",
+      "validatePolychordMinCopies(polychordMinCopies.value)",
+      "validatePolychordMaxCopies(polychordMaxCopies.value, polychordMinCopies.value)",
+      "validatePolychordRotation(polychordRotation.value)",
+      "!polychordNotesError.value",
+      "!polychordMinCopiesError.value",
+      "!polychordMaxCopiesError.value",
+      "!polychordRotationError.value",
+      'inTypeGroup("polychord-notes") && !!polychordNotesError.value',
+      'inTypeGroup("polychord-min-copies") && !!polychordMinCopiesError.value',
+      'inTypeGroup("polychord-max-copies") && !!polychordMaxCopiesError.value',
+      'inTypeGroup("polychord-rotation") && !!polychordRotationError.value',
+      "polychordNotes: polychordNotes.value",
+      "polychordMinCopies: polychordMinCopies.value",
+      "polychordMaxCopies: polychordMaxCopies.value",
+      "polychordRotation: polychordRotation.value",
+    ]) {
+      expect(formSource, piece).toContain(piece);
+    }
   });
 });

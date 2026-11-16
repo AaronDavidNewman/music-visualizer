@@ -16,10 +16,11 @@ const EXPECTED: Record<string, string[]> = {
   "chromatic-decay": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "peak-distance", "smoothing-window", "smoothing"],
   "rhythm-circles": [...COMMON_TOP, "peak-distance"], // the two Local peaks settings and nothing else: the data is not smoothed
   "chromatic-wireframe": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "peak-distance", "smoothing-window", "smoothing"], // the controls of Chromatic Decay (feature 039)
+  polychord: [...COMMON_TOP, "polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation", "peak-distance", "smoothing-window", "smoothing"], // feature 042
 };
 
 describe("the groups", () => {
-  it("are the fourteen groups of the data model, with their titles and controls in order", () => {
+  it("are the fifteen groups of the data model, with their titles and controls in order", () => {
     expect(GROUPS.map((g) => [g.id, g.title, [...g.controls]])).toEqual([
       ["analysis", "Analysis", ["window-size", "frame-rate", "window-spacing"]],
       ["colormap", "Colormap", ["colormap"]],
@@ -30,6 +31,7 @@ describe("the groups", () => {
       ["polar-chords", "Polar chords", ["polar-notes"]],
       ["chromatic-decay", "Chromatic Decay", ["threshold", "chromatic-decay-rate"]],
       ["chromatic-wireframe", "Chromatic Wireframe", ["threshold", "chromatic-decay-rate"]],
+      ["polychord", "Polychord", ["polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
@@ -53,7 +55,7 @@ describe("the groups shown for each image type", () => {
     if (type !== "energy-graphs" && type !== "rhythm-circles") want.push(type); // Energy graphs and Rhythm Circles have no group of their own
     if (type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("note-layout");
     if (type === "contour") want.push("local-peaks");
-    if (type === "decay" || type === "decay-exp" || type === "polar-chords" || type === "chromatic-decay" || type === "chromatic-wireframe" || type === "rhythm-circles") want.push("concentric-peaks");
+    if (type === "decay" || type === "decay-exp" || type === "polar-chords" || type === "chromatic-decay" || type === "chromatic-wireframe" || type === "rhythm-circles" || type === "polychord") want.push("concentric-peaks");
     if (type !== "energy-graphs" && type !== "rhythm-circles") want.push("data-smoothing"); // Energy graphs and Rhythm Circles do not smooth the data
     if (type === "contour") want.push("image-smoothing");
     expect(groupsFor(type)).toEqual(want);
@@ -427,5 +429,30 @@ describe("the groups of Chromatic Wireframe (feature 039)", () => {
     for (const type of TYPES.filter((t) => t !== "chromatic-wireframe")) expect(groupsFor(type), type).not.toContain("chromatic-wireframe");
     expect(groupsFor("chromatic-decay")).toEqual(["analysis", "colormap", "image-type", "chromatic-decay", "concentric-peaks", "data-smoothing"]);
     expect(groupsFor("rhythm-circles")).toEqual(["analysis", "colormap", "image-type", "concentric-peaks"]);
+  });
+});
+
+describe("the groups of Polychord (feature 042)", () => {
+  it("are Analysis, Colormap, Image type, Polychord, Local peaks (no checkbox) and Data smoothing, in this order", () => {
+    expect(groupsFor("polychord")).toEqual(["analysis", "colormap", "image-type", "polychord", "concentric-peaks", "data-smoothing"]);
+  });
+
+  it("has the title Polychord and the four controls, in two rows of two", () => {
+    expect(groupTitle("polychord")).toBe("Polychord");
+    expect([...controlsIn("polychord")]).toEqual(["polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation"]);
+    expect(rowsOf(controlsIn("polychord").length)).toEqual([2, 2]);
+  });
+
+  it("puts each control in a group, and none of the controls of other types", () => {
+    for (const control of ["polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation"]) expect(groupOf(control, "polychord"), control).toBe("polychord");
+    expect(groupOf("peak-distance", "polychord")).toBe("concentric-peaks");
+    expect(groupOf("smoothing", "polychord")).toBe("data-smoothing");
+    for (const control of ["threshold", "chromatic-decay-rate", "decay-rate", "note-layout", "polar-notes", "beat-coloring", "notes", "resolution", "wave-count"]) {
+      expect(groupOf(control, "polychord"), control).toBeUndefined();
+    }
+  });
+
+  it("is in the groups of no other type", () => {
+    for (const type of TYPES.filter((t) => t !== "polychord")) expect(groupsFor(type), type).not.toContain("polychord");
   });
 });

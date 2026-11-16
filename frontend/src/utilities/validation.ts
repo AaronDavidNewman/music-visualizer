@@ -87,8 +87,8 @@ export function validateSmoothingWindow(value: string | number): string | null {
 /**
  * The kinds of picture: Contour (the notes drawn as a filled contour map, the default), Decay (a circle for each of the 84 notes, each a disc that keeps points and fades into its
  * neighbours), Decay Exp (Decay with the points gained and lost along an exponential curve), Polar Chords (the loudest notes clockwise and the chord of the frame
- * counterclockwise as bars of a polar bar graph), Energy graphs, Chromatic Decay, Rhythm Circles and Chromatic Wireframe. (Tiles, Blended tiles, Circles, Circles paint
- * and Concentric were removed in feature 040.)
+ * counterclockwise as bars of a polar bar graph), Energy graphs, Chromatic Decay, Rhythm Circles, Chromatic Wireframe and Polychord (feature 042: the loudest notes as a rosette
+ * of links that bend by the circle of fifths). (Tiles, Blended tiles, Circles, Circles paint and Concentric were removed in feature 040.)
  */
 export const IMAGE_TYPES = [
   { value: "contour", label: "Contour" },
@@ -99,6 +99,7 @@ export const IMAGE_TYPES = [
   { value: "chromatic-decay", label: "Chromatic Decay" },
   { value: "rhythm-circles", label: "Rhythm Circles" },
   { value: "chromatic-wireframe", label: "Chromatic Wireframe" },
+  { value: "polychord", label: "Polychord" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "contour";
 
@@ -260,9 +261,21 @@ export function isRhythmType(imageType: string): boolean {
   return imageType === "rhythm-circles";
 }
 
-/** Whether Minimum distance is used: always by Decay, Decay Exp, Polar Chords, Chromatic Decay (the beat colors, charges or lengthens them) and Rhythm Circles (the peaks turn its rings), by Contour with the Beat coloring box on, never by the others. */
+/** Whether the picture is Polychord (feature 042): the loudest notes of a frame as a rosette of links that bend by the circle of fifths; the beat sets the number of copies and the tempo the color. */
+export function isPolychordType(imageType: string): boolean {
+  return imageType === "polychord";
+}
+
+/** Whether Minimum distance is used: always by Decay, Decay Exp, Polar Chords, Chromatic Decay (the beat colors, charges or lengthens them), Rhythm Circles (the peaks turn its rings) and Polychord (the beat sets the copies, the tempo the color), by Contour with the Beat coloring box on, never by the others. */
 export function peakSettingsShown(imageType: string, beatColoring: boolean): boolean {
-  return isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || isRhythmType(imageType) || (beatColoringApplies(imageType) && beatColoring);
+  return (
+    isRingsType(imageType) ||
+    isPolarType(imageType) ||
+    isChromaticType(imageType) ||
+    isRhythmType(imageType) ||
+    isPolychordType(imageType) ||
+    (beatColoringApplies(imageType) && beatColoring)
+  );
 }
 
 /** Notes shown by Polar Chords (feature 032): how many of the loudest notes of a frame get a bar, from 5 to 8. */
@@ -279,6 +292,64 @@ export function validatePolarNotes(value: string | number): string | null {
 /** The readout beside the slider and the summary item: "5 notes". */
 export function formatPolarNotes(value: number): string {
   return `${value} notes`;
+}
+
+/** Number of notes of Polychord (feature 042): the links in one figure, a whole number from 5 to 8. */
+export const POLYCHORD_NOTES_RANGE = { min: 5, max: 8, step: 1 } as const;
+export const DEFAULT_POLYCHORD_NOTES = 6;
+
+/** The copies of the figure of Polychord: a whole number from 1 to 12 (12 copies of 30 degrees make a full turn); the minimum at the bottom of the beat, the maximum at the top of a peak. */
+export const POLYCHORD_COPIES_RANGE = { min: 1, max: 12, step: 1 } as const;
+export const DEFAULT_POLYCHORD_MIN_COPIES = 3;
+export const DEFAULT_POLYCHORD_MAX_COPIES = 12;
+
+/** The rotation of Polychord: degrees a second, from -360 to 360 (negative turns the other way, 0 holds still). */
+export const POLYCHORD_ROTATION_RANGE = { min: -360, max: 360, step: 1 } as const;
+export const DEFAULT_POLYCHORD_ROTATION = 15;
+
+const polychordNotesMessage = `The number of notes must be a whole number from ${POLYCHORD_NOTES_RANGE.min} to ${POLYCHORD_NOTES_RANGE.max}.`;
+const polychordMinCopiesMessage = `The minimum number of copies must be a whole number from ${POLYCHORD_COPIES_RANGE.min} to ${POLYCHORD_COPIES_RANGE.max}.`;
+const polychordMaxCopiesMessage = `The maximum number of copies must be a whole number from ${POLYCHORD_COPIES_RANGE.min} to ${POLYCHORD_COPIES_RANGE.max}.`;
+const polychordCopiesOrderMessage = "The maximum number of copies must not be less than the minimum.";
+const polychordRotationMessage = `The rotation must be a number from ${POLYCHORD_ROTATION_RANGE.min} to ${POLYCHORD_ROTATION_RANGE.max} degrees a second.`;
+
+/** Returns an error message, or null when Number of notes is a whole number from 5 to 8. */
+export function validatePolychordNotes(value: string | number): string | null {
+  return validateWhole(value, POLYCHORD_NOTES_RANGE.min, POLYCHORD_NOTES_RANGE.max, polychordNotesMessage);
+}
+
+/** Returns an error message, or null when Copies (minimum) is a whole number from 1 to 12. */
+export function validatePolychordMinCopies(value: string | number): string | null {
+  return validateWhole(value, POLYCHORD_COPIES_RANGE.min, POLYCHORD_COPIES_RANGE.max, polychordMinCopiesMessage);
+}
+
+/** Returns an error message, or null when Copies (maximum) is a whole number from 1 to 12 and not less than Copies (minimum), ``minimum`` (a minimum that is not valid is not compared: its own control says so). */
+export function validatePolychordMaxCopies(value: string | number, minimum: string | number): string | null {
+  const own = validateWhole(value, POLYCHORD_COPIES_RANGE.min, POLYCHORD_COPIES_RANGE.max, polychordMaxCopiesMessage);
+  if (own) return own;
+  if (validatePolychordMinCopies(minimum)) return null;
+  return parseNumber(value) < parseNumber(minimum) ? polychordCopiesOrderMessage : null;
+}
+
+/** Returns an error message, or null when Rotation is a number from -360 to 360. */
+export function validatePolychordRotation(value: string | number): string | null {
+  const n = parseNumber(value);
+  return Number.isFinite(n) && n >= POLYCHORD_ROTATION_RANGE.min && n <= POLYCHORD_ROTATION_RANGE.max ? null : polychordRotationMessage;
+}
+
+/** The readout beside the slider and the summary item: "6 notes". */
+export function formatPolychordNotes(value: number): string {
+  return `${value} notes`;
+}
+
+/** The readout of a number of copies: "1 copy", "12 copies". */
+export function formatPolychordCopies(value: number): string {
+  return value === 1 ? "1 copy" : `${value} copies`;
+}
+
+/** The readout of the rotation: "15 degrees/s", "-30 degrees/s", "Still" at 0. */
+export function formatPolychordRotation(value: number): string {
+  return value === 0 ? "Still" : `${Number(value.toFixed(2))} degrees/s`;
 }
 
 /**

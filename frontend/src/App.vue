@@ -14,7 +14,11 @@ import {
   decayRateApplies,
   isChromaticType,
   formatPolarNotes,
+  formatPolychordCopies,
+  formatPolychordNotes,
+  formatPolychordRotation,
   isPolarType,
+  isPolychordType,
   formatWaveCount,
   formatBeatColoring,
   formatGaussian,
@@ -89,6 +93,9 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li v-if="result.image_type === 'decay'">High saturation decay: {{ formatDecayAmount(result.decay_high) }}</li>
             <li v-if="result.image_type === 'decay'">Saturated decay: {{ formatDecayAmount(result.decay_saturated) }}</li>
             <li v-if="isPolarType(result.image_type)">Notes shown: {{ formatPolarNotes(result.polar_notes) }}</li>
+            <li v-if="isPolychordType(result.image_type)">Number of notes: {{ formatPolychordNotes(result.polychord_notes) }}</li>
+            <li v-if="isPolychordType(result.image_type)">Copies: {{ formatPolychordCopies(result.polychord_min_copies) }} to {{ formatPolychordCopies(result.polychord_max_copies) }}</li>
+            <li v-if="isPolychordType(result.image_type)">Rotation: {{ formatPolychordRotation(result.polychord_rotation) }}</li>
             <li v-if="noteLayoutApplies(result.image_type)">Note layout: {{ noteLayoutLabel(result.note_layout) }}</li>
             <li v-if="beatColoringApplies(result.image_type)">Beat coloring: {{ formatBeatColoring(result.beat_coloring) }}</li>
             <li v-if="peakSettingsShown(result.image_type, result.beat_coloring)">Minimum distance: {{ formatPeakDistance(result.peak_distance) }}</li>

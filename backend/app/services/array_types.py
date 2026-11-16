@@ -442,6 +442,65 @@ ScreenCoordinates = npt.NDArray[np.float64]
 #   Made by: ``chromatic_wireframe.line_colors``.
 LineColors = npt.NDArray[np.uint8]
 
+# --- Polychord --------------------------------------------------------------------------------------------------------
+
+# LoudLetters: the letters of the loudest notes of each frame.
+#   Shape: ``(frames, count)``: one row for each frame; one column for each of the loudest notes, loudest first
+#          (``count`` is the Number of notes setting, 5 to 8).
+#   Meaning: the letter (the chromatic tone without its octave) of the note, 0 for A up to 11 for G#, as in
+#            ``chromatic_decay``; -1 where fewer than ``count`` notes sound in the frame.
+#   Made by: ``polychord.loudest_letters``.
+LoudLetters = npt.NDArray[np.intp]
+
+# LinkTurns: how much each link of a figure turns from the link before it.
+#   Shape: ``(frames, count)``: one row for each frame; one column for each link of the figure, the first at the center.
+#   Meaning: the turn in degrees, clockwise positive: 0 for the first link, then 30 for each step of a fifth between the
+#            letter of the link and the letter of the link before it (from -150 to +180); 0 for a missing link.
+#   Made by: ``polychord.link_turns``.
+LinkTurns = npt.NDArray[np.float64]
+
+# CopyCounts: how many copies of the figure each frame has.
+#   Shape: ``(frames,)``: one entry for each frame.
+#   Meaning: a whole number from the minimum to the maximum number of copies: the maximum at the top of the beat, the
+#            minimum at its bottom.
+#   Made by: ``polychord.copy_counts``.
+CopyCounts = npt.NDArray[np.intp]
+
+# FrameTempos: the current tempo at the middle of each frame.
+#   Shape: ``(frames,)``: one entry for each frame.
+#   Meaning: the tempo in beats per minute that the tempo finder has after the latest local peak, from 60 to 156 (120
+#            before the first peak and with no peak).
+#   Made by: ``polychord.frame_tempos``.
+FrameTempos = npt.NDArray[np.float64]
+
+# StartAngles: where the figure of each frame starts.
+#   Shape: ``(frames,)``: one entry for each frame.
+#   Meaning: the angle in degrees, clockwise from straight up, of the first link of the first copy: the rotation in
+#            degrees per second times the time of the frame in seconds.
+#   Made by: ``polychord.start_angles``.
+StartAngles = npt.NDArray[np.float64]
+
+# FigureColors: the color of the links of each frame.
+#   Shape: ``(frames, 3)``: one row for each frame; red, green, blue.
+#   Meaning: the row of the colormap at the tempo's place between 60 and 156 beats per minute (0 to 255 each channel):
+#            the first color for the slowest tempo, the last for the fastest; one color for every link of a frame.
+#   Made by: ``polychord.tempo_colors``.
+FigureColors = npt.NDArray[np.uint8]
+
+# LinkSegments: the pieces of line drawn in one picture.
+#   Shape: ``(segments, 2, 2)``: one entry for each piece; its two end points; the x and y of each point.
+#   Meaning: positions in pixels from the left and from the top of the picture; the pieces of every copy of the figure,
+#            copy 0 first, each link cut into the same number of consecutive pieces.
+#   Made by: ``polychord.figure_segments``.
+LinkSegments = npt.NDArray[np.float64]
+
+# LinkWidths: how wide each piece of line of a picture is.
+#   Shape: ``(segments,)``: one entry for each piece of ``LinkSegments``.
+#   Meaning: the width in pixels of the piece, at least 1; it falls along the figure from the center outward, so a link
+#            ends as wide as the next one starts.
+#   Made by: ``polychord.figure_segments``.
+LinkWidths = npt.NDArray[np.float64]
+
 # --- Polar Chords -----------------------------------------------------------------------------------------------------
 
 # BarArcs: the arc of the circle that each note bar is in, in each frame.
@@ -586,5 +645,5 @@ ColorTable = npt.NDArray[np.uint8]
 #          the application are 400 rows by 600 columns).
 #   Meaning: the color of each pixel, each channel from 0 to 255.
 #   Made by: the drawing of each image type (``contour``, ``decay``, ``polar_chords``, ``energy_graphs``,
-#            ``chromatic_decay``, ``chromatic_wireframe``, ``rhythm_circles``).
+#            ``chromatic_decay``, ``chromatic_wireframe``, ``rhythm_circles``, ``polychord``).
 Pictures = npt.NDArray[np.uint8]

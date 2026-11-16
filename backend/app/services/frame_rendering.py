@@ -11,7 +11,7 @@ below 84 builds the picture from only the notes with the most energy in the file
 neighbors with Pillow (see ``frame_interpolation``). A threshold can hide faint notes: a note below it is 0 (see
 ``hidden_below``). The other image types draw circles, bars, a histogram, rings or lines from the note values or from
 the measurements of the whole file (``decay``, ``decay_exp``, ``polar_chords``, ``energy_graphs``, ``chromatic_decay``,
-``rhythm_circles``, ``chromatic_wireframe``).
+``rhythm_circles``, ``chromatic_wireframe``, ``polychord``).
 
 These are the shared steps AVERAGE, SMOOTH and DRAW of the pipeline overview in ``image_types``; the job does steps 1 to
 3 and calls ``write_frames()`` for the rest.
@@ -34,7 +34,9 @@ Order of operations:
            smoothed values, then draw them (``decay``, ``decay_exp``, ``chromatic_decay``, ``chromatic_wireframe``);
          * ``polar-chords``: ``polar_chords.polar_bars()``, then ``write_polar_frames()``; ``energy-graphs`` and
            ``rhythm-circles``: draw from the measurements the job made (``energy``, ``rhythm``), which must have one
-           frame for each row;
+           frame for each row; ``polychord``: draw from the smoothed values, the beat and the tempos the job measured
+           (``polychord``, which must have one tempo for each row) with the four settings
+           (``polychord.write_polychord_frames()``);
          * ``contour``: keep the 84 drawn notes and spread the ``note_count`` loudest over them
            (``note_selection.spread_notes()``) - make the grid finer (``resolution.interpolate_grid()``) - hide the
            faint values (``hidden_below()``) - draw the drawn frames (``contour.write_contour_frames()``) - blur them
@@ -56,6 +58,7 @@ from .chromatic_decay import CHROMATIC_TYPES, check_chromatic_rate, circle_point
 from .chromatic_wireframe import write_wireframe_frames
 from .decay_exp import circle_points as decay_exp_points
 from .energy_graphs import EnergyGraphData, write_energy_frames
+from .polychord import DEFAULT_POLYCHORD_SETTINGS, PolychordData, PolychordSettings, check_polychord_settings, write_polychord_frames
 from .rhythm_circles import RhythmData, write_rhythm_frames
 from .polar_chords import DEFAULT_POLAR_NOTES, check_polar_notes, polar_bars, write_polar_frames
 from .contour import write_contour_frames
@@ -249,6 +252,8 @@ def write_frames(
     polar_notes: int = DEFAULT_POLAR_NOTES,
     energy: EnergyGraphData | None = None,
     rhythm: RhythmData | None = None,
+    polychord: PolychordData | None = None,
+    polychord_settings: PolychordSettings = DEFAULT_POLYCHORD_SETTINGS,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -260,7 +265,8 @@ def write_frames(
     note below it is 0 in that frame (``hidden_below``), whatever the colormap is.
 
     ``image_type`` is ``contour`` (the default, see below), ``decay``, ``decay-exp``, ``polar-chords``,
-    ``energy-graphs``, ``chromatic-decay``, ``rhythm-circles`` or ``chromatic-wireframe`` (see ``image_types``).
+    ``energy-graphs``, ``chromatic-decay``, ``rhythm-circles``, ``chromatic-wireframe`` or ``polychord`` (see
+    ``image_types``).
 
     ``image_type="contour"`` draws the grid of values (the 84 drawn notes, or the finer interpolated grid; the values
     the threshold hides are 0) as a filled contour map in the ``colormap``, with matplotlib (see ``contour``): the
@@ -335,6 +341,15 @@ def write_frames(
     the first for every line without a beat). Smoothing, the colormap, the threshold and ``beat`` apply;
     ``note_layout``, ``decay_amounts`` and every other setting are checked and ignored.
 
+    ``image_type="polychord"`` draws the loudest notes of each smoothed frame as a chain of tapering links that bends by
+    the circle of fifths, repeated as copies turned 30 degrees, from ``polychord`` (a ``polychord.PolychordData``: the
+    tempo of every frame and the frame rate; required for this type, ignored by the others, and it must have one tempo
+    for each row of ``frames``) and ``polychord_settings`` (a ``polychord.PolychordSettings``: the number of notes, the
+    minimum and maximum number of copies and the rotation; checked for every image type, used by this one only; see
+    ``polychord``). The number of copies follows ``beat`` (the minimum for every frame without one) and every link of a
+    frame has one color from its tempo. Smoothing, the colormap and ``beat`` apply; the threshold, ``note_layout``,
+    ``decay_amounts`` and every other setting are checked and ignored.
+
     ``image_type="rhythm-circles"`` draws four concentric notched rings turned by the current tempo found from the local
     peaks, the tempo of the latest local peak and the rates of change of both (see ``rhythm_circles``), from ``rhythm``,
     the angles of every frame made by ``rhythm_circles.rhythm_angles`` (required for this type, ignored by the others;
@@ -377,6 +392,7 @@ def write_frames(
     decay_amounts = check_decay_amounts(decay_amounts)
     wave_count = check_wave_count(wave_count)
     polar_notes = check_polar_notes(polar_notes)
+    polychord_settings = check_polychord_settings(polychord_settings)
     if beat is not None:
         # checked for every image type, used by contour, decay, decay-exp, polar-chords, chromatic-decay and
         # chromatic-wireframe
@@ -415,6 +431,15 @@ def write_frames(
         if energy.frame_count != len(frames):
             raise ValueError(f"The energy data has {energy.frame_count} frames but {len(frames)} were given.")
         write_energy_frames(energy, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
+        return
+    # the loudest notes as a rosette of tapering links, from the smoothed values, ``beat`` and the tempos in
+    # ``polychord`` (the rest of the settings above are checked and not used)
+    if image_type == "polychord":
+        if polychord is None:
+            raise ValueError("Polychord needs the polychord data.")
+        if polychord.tempos.shape != (len(frames),):
+            raise ValueError(f"The polychord data has {polychord.tempos.size} tempos but {len(frames)} frames were given.")
+        write_polychord_frames(smoothed, beat, polychord.tempos, polychord_settings, polychord.frame_rate, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
     # four notched rings turned by ``rhythm`` (the rest of the settings above are checked and not used)
     if image_type == "rhythm-circles":

@@ -96,8 +96,8 @@ def expected_turns(peaks, job):
 
 
 def test_rhythm_circles_is_the_seventh_image_type_and_the_message_lists_all_eight():
-    assert IMAGE_TYPES[6] == "rhythm-circles" and len(IMAGE_TYPES) == 8
-    assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe.")
+    assert IMAGE_TYPES[6] == "rhythm-circles" and len(IMAGE_TYPES) == 9
+    assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.")
 
 
 @pytest.mark.parametrize("name", ["rhythm_circles", "rhythmcircles", "Rhythm-Circles", "rhythm-circles ", "rhythm", "rhythm-", "RHYTHM-CIRCLES", "rhythm-circle", ""])

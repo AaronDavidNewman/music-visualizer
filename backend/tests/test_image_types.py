@@ -7,8 +7,8 @@ from app.services.image_types import DEFAULT_IMAGE_TYPE, IMAGE_TYPES, check_imag
 from app.services.note_grid import GRID_COLUMNS, GRID_ROWS, NOTES, RINGS, _check_values, full_radius, tile_edges
 
 
-def test_the_kinds_of_picture_are_the_eight_that_are_left_and_the_default_is_the_contour():
-    assert IMAGE_TYPES == ("contour", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles", "chromatic-wireframe")
+def test_the_kinds_of_picture_are_the_nine_that_are_left_and_the_default_is_the_contour():
+    assert IMAGE_TYPES == ("contour", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles", "chromatic-wireframe", "polychord")
     assert DEFAULT_IMAGE_TYPE == "contour" and DEFAULT_IMAGE_TYPE in IMAGE_TYPES
 
 

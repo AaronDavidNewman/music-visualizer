@@ -16,7 +16,8 @@ Order of operations:
     5. Analyze and apply the noise floor - ``note_analysis.analyze_channels()`` then ``noise_floor.floor_analysis()`` -
        ``NoteStrengths`` ``(windows, 88)``.
     6. Measure, only for the image types that use it - ``local_peaks.measure_local_peaks()`` with ``frame_positions()``
-       (the beat: ``BeatPositions`` ``(frames,)``) or ``rhythm_circles.rhythm_angles()`` (``CircleAngles``
+       (the beat: ``BeatPositions`` ``(frames,)``), for Polychord also ``polychord.frame_tempos()`` (``FrameTempos``
+       ``(frames,)``, from the same measurement) or ``rhythm_circles.rhythm_angles()`` (``CircleAngles``
        ``(frames, 4)``).
     7. Average the windows into frames and draw them - ``frame_rendering.average_frames()`` then
        ``frame_rendering.write_frames()`` (for Energy Graphs ``energy_graphs.frame_energy()`` is made in the same call,
@@ -69,6 +70,23 @@ from ..services.decay import (
 )
 from ..services.note_layout import DEFAULT_NOTE_LAYOUT, check_note_layout
 from ..services.polar_chords import DEFAULT_POLAR_NOTES, NOTES_MESSAGE as POLAR_NOTES_MESSAGE, check_polar_notes
+from ..services.polychord import (
+    DEFAULT_MAX_COPIES,
+    DEFAULT_MIN_COPIES,
+    DEFAULT_NOTES as DEFAULT_POLYCHORD_NOTES,
+    DEFAULT_ROTATION,
+    MAX_COPIES_MESSAGE,
+    MIN_COPIES_MESSAGE,
+    NOTES_MESSAGE as POLYCHORD_NOTES_MESSAGE,
+    ROTATION_MESSAGE,
+    PolychordData,
+    PolychordSettings,
+    check_polychord_copies,
+    check_polychord_notes,
+    check_polychord_rotation,
+    check_polychord_settings,
+    frame_tempos,
+)
 from ..services.local_peaks import (
     DEFAULT_MIN_DISTANCE,
     DEFAULT_PROMINENCE,
@@ -274,6 +292,32 @@ def _parse_polar_notes(text: str | None, sent: bool) -> int:
         raise HTTPException(status_code=400, detail=POLAR_NOTES_MESSAGE) from None
 
 
+def _parse_polychord_settings(notes: str | None, min_copies: str | None, max_copies: str | None, rotation: str | None, sent: set[str]) -> PolychordSettings:
+    """The four settings of Polychord. A setting that is not sent takes its default; anything sent must be allowed (the
+    number of notes a whole number 5..8, each number of copies a whole number 1..12, the maximum not under the minimum,
+    the rotation a number from -360 to 360), or the answer is a 400 with the message of that setting."""
+    try:
+        notes_value = check_polychord_notes(float(notes or "")) if notes is not None or "polychord_notes" in sent else DEFAULT_POLYCHORD_NOTES
+    except ValueError:
+        raise HTTPException(status_code=400, detail=POLYCHORD_NOTES_MESSAGE) from None
+    try:
+        min_value = check_polychord_copies(float(min_copies or ""), "minimum") if min_copies is not None or "polychord_min_copies" in sent else DEFAULT_MIN_COPIES
+    except ValueError:
+        raise HTTPException(status_code=400, detail=MIN_COPIES_MESSAGE) from None
+    try:
+        max_value = check_polychord_copies(float(max_copies or ""), "maximum") if max_copies is not None or "polychord_max_copies" in sent else DEFAULT_MAX_COPIES
+    except ValueError:
+        raise HTTPException(status_code=400, detail=MAX_COPIES_MESSAGE) from None
+    try:
+        rotation_value = check_polychord_rotation(float(rotation or "")) if rotation is not None or "polychord_rotation" in sent else DEFAULT_ROTATION
+    except ValueError:
+        raise HTTPException(status_code=400, detail=ROTATION_MESSAGE) from None
+    try:
+        return check_polychord_settings(PolychordSettings(notes_value, min_value, max_value, rotation_value))
+    except ValueError as error:  # the maximum under the minimum
+        raise HTTPException(status_code=400, detail=str(error)) from None
+
+
 def _parse_wave_count(text: str | None, sent: bool) -> int:
     """The requested number of waves of the contour's beat wave. Not sent means the default; anything sent must be a
     whole number 2..10."""
@@ -414,6 +458,10 @@ def create_job(
     decay_rate: str | None = Form(None),
     wave_count: str | None = Form(None),
     polar_notes: str | None = Form(None),
+    polychord_notes: str | None = Form(None),
+    polychord_min_copies: str | None = Form(None),
+    polychord_max_copies: str | None = Form(None),
+    polychord_rotation: str | None = Form(None),
     decay_low: str | None = Form(None),
     decay_medium: str | None = Form(None),
     decay_high: str | None = Form(None),
@@ -438,6 +486,7 @@ def create_job(
     decay_rate_value = _parse_decay_rate(decay_rate, "decay_rate" in sent, image_type_value)
     wave_count_value = _parse_wave_count(wave_count, "wave_count" in sent)
     polar_notes_value = _parse_polar_notes(polar_notes, "polar_notes" in sent)
+    polychord_settings_value = _parse_polychord_settings(polychord_notes, polychord_min_copies, polychord_max_copies, polychord_rotation, sent)
     decay_amounts_value = tuple(
         _parse_decay_amount(text, name in sent, index)
         for index, (name, text) in enumerate(
@@ -488,9 +537,15 @@ def create_job(
         # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local
         # peaks measurement. Decay, Decay Exp, Polar Chords, Chromatic Decay and Chromatic Wireframe are always colored
         # by it; contour (its beat wave) only with the beat coloring box on; the other pictures and the box off never
-        # measure it
+        # measure it. Polychord (feature 042) takes both the beat (the number of copies) and the current tempo (the
+        # color) from one measurement of the local peaks
         beat = None
-        if image_type_value in ("decay", "decay-exp", "polar-chords", *CHROMATIC_TYPES) or (beat_coloring_value and image_type_value == "contour"):
+        polychord = None
+        if image_type_value == "polychord":
+            peaks = measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE)
+            beat = peaks.frame_positions(fps, frames)
+            polychord = PolychordData(frame_tempos(peaks, fps, frames), fps)
+        elif image_type_value in ("decay", "decay-exp", "polar-chords", *CHROMATIC_TYPES) or (beat_coloring_value and image_type_value == "contour"):
             beat = measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE).frame_positions(fps, frames)
         # Rhythm Circles (features 038 and 040) turns its rings with the local peaks themselves (and the current tempo
         # found from them), not with the beat: one measurement, with the minimum distance of the request. The prominence
@@ -523,6 +578,8 @@ def create_job(
             decay_amounts=decay_amounts_value,
             energy=frame_energy(result, fps, frames) if image_type_value == "energy-graphs" else None,
             rhythm=rhythm,
+            polychord=polychord,
+            polychord_settings=polychord_settings_value,
         )
         # The video made from these frames later (feature 029) needs the frame rate, and the frames do not hold it.
         (frames_dir / "render.json").write_text(json.dumps({"frame_rate": fps}), encoding="utf-8")
@@ -560,6 +617,10 @@ def create_job(
         "decay_rate": decay_rate_value,
         "wave_count": wave_count_value,
         "polar_notes": polar_notes_value,
+        "polychord_notes": polychord_settings_value.notes,
+        "polychord_min_copies": polychord_settings_value.min_copies,
+        "polychord_max_copies": polychord_settings_value.max_copies,
+        "polychord_rotation": polychord_settings_value.rotation,
         "decay_low": decay_amounts_value[0],
         "decay_medium": decay_amounts_value[1],
         "decay_high": decay_amounts_value[2],

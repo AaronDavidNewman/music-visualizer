@@ -19,6 +19,10 @@ const SETTINGS: JobSettings = {
   noteLayout: "spiral",
   decayRate: 3,
   polarNotes: 6,
+  polychordNotes: 7,
+  polychordMinCopies: 2,
+  polychordMaxCopies: 9,
+  polychordRotation: -22.5,
   waveCount: 7,
   decayLow: 1.5,
   decayMedium: 2,
@@ -61,6 +65,10 @@ describe("the request that submitJob sends", () => {
       note_layout: "spiral",
       decay_rate: "3",
       polar_notes: "6",
+      polychord_notes: "7",
+      polychord_min_copies: "2",
+      polychord_max_copies: "9",
+      polychord_rotation: "-22.5",
       wave_count: "7",
       decay_low: "1.5",
       decay_medium: "2",
@@ -249,5 +257,21 @@ describe("the request for Chromatic Wireframe (feature 039)", () => {
     expect(wireframe.image_type).toBe("chromatic-wireframe");
     expect(wireframe.decay_rate).toBe("6");
     expect(Object.keys(wireframe).sort()).toEqual(Object.keys(decay).sort());
+  });
+});
+
+describe("the request for Polychord (feature 042)", () => {
+  it("sends the image type and the four settings as text, with the same fields as any other type", async () => {
+    const polychord = await posted({ ...SETTINGS, imageType: "polychord", polychordNotes: 8, polychordMinCopies: 1, polychordMaxCopies: 12, polychordRotation: 0 });
+    const decay = await posted({ ...SETTINGS, imageType: "decay-exp" });
+    expect(polychord.image_type).toBe("polychord");
+    expect([polychord.polychord_notes, polychord.polychord_min_copies, polychord.polychord_max_copies, polychord.polychord_rotation]).toEqual(["8", "1", "12", "0"]);
+    expect(Object.keys(polychord).sort()).toEqual(Object.keys(decay).sort());
+  });
+
+  it("sends the four settings with every other type too (the server checks and ignores them)", async () => {
+    const fields = await posted({ ...SETTINGS, imageType: "contour" });
+    expect(fields.polychord_notes).toBe("7");
+    expect(fields.polychord_rotation).toBe("-22.5");
   });
 });

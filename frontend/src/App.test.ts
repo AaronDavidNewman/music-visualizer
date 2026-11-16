@@ -222,3 +222,18 @@ describe("the result summary for Rhythm Circles (feature 038)", () => {
     expect(line("Beat coloring:")).toContain("beatColoringApplies(result.image_type)");
   });
 });
+
+describe("the result summary for Polychord (feature 042)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows the number of notes, the copies and the rotation for Polychord only", () => {
+    expect(line("Number of notes:")).toContain("isPolychordType(result.image_type)");
+    expect(line("Number of notes:")).toContain("formatPolychordNotes(result.polychord_notes)");
+    expect(line("Copies:")).toContain("isPolychordType(result.image_type)");
+    expect(line("Copies:")).toContain("formatPolychordCopies(result.polychord_min_copies)");
+    expect(line("Copies:")).toContain("formatPolychordCopies(result.polychord_max_copies)");
+    expect(line("Rotation:")).toContain("isPolychordType(result.image_type)");
+    expect(line("Rotation:")).toContain("formatPolychordRotation(result.polychord_rotation)");
+  });
+});
