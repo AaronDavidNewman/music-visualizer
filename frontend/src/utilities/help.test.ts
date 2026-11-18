@@ -428,8 +428,8 @@ describe("the Threshold help and the decay rate help name Chromatic Wireframe (f
 });
 
 describe("the Polychord help (feature 042)", () => {
-  it("explains the number of notes: 5 to 8, default 6, the loudest notes, a link each, 30 degrees per fifth", () => {
-    for (const piece of ["5 to 8", "default 6", "Only used by Polychord", "loudest", "30 degrees"]) expect(polychordNotesHelp).toContain(piece);
+  it("explains the number of notes: 5 to 8, default 6, the loudest notes, a link each, 22.5 degrees per fifth", () => {
+    for (const piece of ["5 to 8", "default 6", "Only used by Polychord", "loudest", "22.5 degrees"]) expect(polychordNotesHelp).toContain(piece);
   });
 
   it("explains the copies: 1 to 12, the defaults 3 and 12, the beat, and that the maximum cannot be less than the minimum", () => {

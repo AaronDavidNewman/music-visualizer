@@ -118,7 +118,7 @@ A value that is not allowed is **refused with a message that says which setting 
 - **FR-001**: The system MUST offer a new image type, **Polychord** (`polychord`), chosen the same way as the other types, producing one picture per frame on a **black** background (the pictures have no transparency; black is the background).
 - **FR-002**: In each frame the system MUST take the **loudest notes** of the frame, as many as the **Number of notes** setting, in order from the loudest, each reduced to its letter, with ties broken the same way in every run; if fewer notes than that are sounding, only those are used, and a frame with no sound MUST be a black picture.
 - **FR-003**: The first link of a figure MUST start at the **center** of the picture, for the loudest note; every next link MUST start at the end of the previous link.
-- **FR-004**: The direction of every link after the first MUST be the previous link's direction turned by **30 degrees for every step of a fifth** from the previous link's letter to its own, taking the shorter way round the circle of twelve letters: a fifth up +30, a fourth up (a fifth down) -30, the same letter 0, a tritone 180; the full table of the twelve intervals is part of the acceptance scenarios and tests.
+- **FR-004**: The direction of every link after the first MUST be the previous link's direction turned by **22.5 degrees for every step of a fifth** (revised from 30, so that the 12 steps make 270 degrees) from the previous link's letter to its own, taking the shorter way round the circle of twelve letters: a fifth up +22.5, a fourth up (a fifth down) -22.5, the same letter 0, a tritone 135; the full table of the twelve intervals is part of the acceptance scenarios and tests.
 - **FR-005**: The figure MUST be a chain of links drawn as **line segments of one collection** (the user's instruction: matplotlib's `LineCollection`), each link **narrower at its end than at its start**, with the **end width of a link equal to the start width of the next**, so that the figure thins from the center outward without steps.
 - **FR-006**: After the links of a figure the system MUST draw the **same figure again, turned a further 30 degrees from the previous copy, around the same center**, so that the picture holds `c` copies, copy `k` being turned `30 x k` degrees from copy 0.
 - **FR-007**: The number of copies `c` MUST be the **Copies (maximum)** at the top of the local peak and the **Copies (minimum)** at the lowest point of the beat, in proportion between (rounded to a whole number); before the first local peak is found it MUST be the Copies (minimum).
@@ -135,7 +135,7 @@ A value that is not allowed is **refused with a message that says which setting 
 - **Link**: one straight piece of a figure, for one of the loudest notes of a frame: a start point, a direction, a length and a start and an end width.
 - **Figure (chord figure)**: the chain of links of one frame, the first from the center for the loudest note; it has as many links as the number of notes (or fewer, if fewer notes sound).
 - **Copy**: the figure turned a multiple of 30 degrees around the center; the picture holds between Copies (minimum) and Copies (maximum) of them.
-- **Turn**: the change of direction from one link to the next, 30 degrees for every step of a fifth between their letters, from -150 to +180 degrees.
+- **Turn**: the change of direction from one link to the next, 22.5 degrees for every step of a fifth between their letters (revised from 30: see the revision note at the end), from -112.5 to +135 degrees.
 - **Starting angle**: the direction of the first link of copy 0, which moves with the Rotation setting and the time of the frame.
 - **Beat position**: the place of the frame in the local energy peak, 1 at a peak and 0 at the lowest point, which sets the number of copies.
 - **Current tempo**: the tempo finder's tempo for the frame, 60 to 156 beats a minute, which sets the color.
@@ -144,7 +144,7 @@ A value that is not allowed is **refused with a message that says which setting 
 
 ### Measurable Outcomes
 
-- **SC-001**: For all 12 intervals between two letters, the turn between the second and the first link is the one the table of Story 1 gives (-150 to +180 degrees in steps of 30), in 100 % of the checked cases.
+- **SC-001**: For all 12 intervals between two letters, the turn between the second and the first link is the one the table of Story 1 gives, with 22.5 degrees for a step instead of 30 (-112.5 to +135 degrees in steps of 22.5), in 100 % of the checked cases.
 - **SC-002**: In a picture, every link starts exactly where the previous one ends and is exactly as wide at its start as the previous one is at its end, in 100 % of the checked figures.
 - **SC-003**: On a file with a regular beat, frames at the top of a peak have the maximum number of copies and frames at the lowest point have the minimum, in at least 95 % of the checked beats.
 - **SC-004**: With a rotation `r` and a frame rate `f`, the starting angle of consecutive frames differs by `r / f` degrees (to within a hundredth of a degree), for any `r` from -360 to 360.
@@ -157,7 +157,7 @@ A value that is not allowed is **refused with a message that says which setting 
 
 - **Notes and letters**: "the notes" are the loudest notes of the frame as the other types measure them (the same selection that Decay uses for its five loudest notes, here as many as the Number of notes setting), reduced to their letter for the circle of fifths. Two of the loudest notes can therefore be the same letter, which is what makes "the same chromatic note is straight" possible.
 - **The turn is measured from the previous link's letter**, not from the loudest note, for every link after the second (the user described only the second; extending it note by note is the natural chain). The first link's own direction is the starting angle, and the loudest note's letter does not set an absolute direction.
-- **The tritone** turns by 180 degrees (backwards) whichever way it is counted; the other intervals take the shorter way round the circle, so the turns lie from -150 to +180 degrees.
+- **The tritone** turns by 135 degrees (backwards, but not all the way) whichever way it is counted; the other intervals take the shorter way round the circle, so the turns lie from -112.5 to +135 degrees.
 - **"Min and max number of segments" is the number of copies of the figure** (see the top of this document), 1 to 12 (12 copies of 30 degrees make a full turn; more would lie exactly over earlier copies). The defaults (3 to 12) are mine.
 - **Number of notes** 6, **Rotation** 15 degrees a second, and the widths (the first link starts at about 1/60 of the picture's height and the last ends at about a fifth of that) are mine; the user did not give them.
 - **"Where in the current peak"** is the local peak position of features 036 and 039 (1 at a peak, 0 at the lowest point), so that the top of the beat is the most copies. The mapping is proportional and rounded; the user did not give another curve.
@@ -167,3 +167,17 @@ A value that is not allowed is **refused with a message that says which setting 
 - **LineCollection**: the user asked for it; it is the drawing means for the links, and is a plan-time decision rather than something the picture shows. The taper (one width at each end of a link) is drawn by cutting each link into short pieces whose widths step down.
 - **Scope**: only the new image type, its four settings and their page controls. No other type changes. The documentation standard of feature 041 (types on every function, arrays documented, an `Order of operations:` list in the module, the new type's block in the pipeline overview of `image_types.py`) applies to the new code.
 - **Dependencies**: the loudest notes of a frame (the analysis and the data smoothing already done for every type), the local peaks and the tempo finder (features 023, 036, 040), the colormaps (feature 014) and the movie feature (feature 029), and the Chromatic Decay circle of fifths (feature 035).
+
+## Revision note (2026-11-16)
+
+After seeing frames, the user asked for three changes; the story text above keeps the first wording, the numbers in
+Functional Requirements, Entities and Success Criteria are the current ones:
+
+- **Links 40 percent longer** (the figures used only about half of the area).
+- **Turns limited to 270 degrees**: 22.5 degrees for every step of a fifth instead of 30, so the 12 steps make 270 and
+  not 360 (the figure looked squished because the angles were so sharp). I read "limit the angles for each turn to be
+  270" as the circle of fifths mapped onto 270 degrees, which keeps the order of the turns and their proportions
+  (a tritone is 135 instead of 180). The copies are still 30 degrees apart.
+- **Every link squeezed to 2/3 of its width and 1/2 of its height**, because of the aspect ratio of the pictures (3:2):
+  the figure, and with it every copy, is an ellipse 4/3 as wide as it is high that follows the shape of the picture. I
+  applied it to every link of every copy (the first included), after the copies are turned.

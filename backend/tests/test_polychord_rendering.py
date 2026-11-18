@@ -49,10 +49,13 @@ def test_the_first_link_starts_at_the_center_of_the_picture():
     assert picture[HEIGHT // 2 - 3 : HEIGHT // 2 + 3, WIDTH // 2 - 3 : WIDTH // 2 + 3].sum() > 0
 
 
-def test_a_figure_of_straight_links_runs_off_the_picture_and_is_cut_at_its_edge():
-    picture = figure_picture([C] * 8, start=0.0, copies=12, notes=8)  # twelve straight arms, 40 percent too long
+def test_a_figure_of_straight_links_is_an_ellipse_four_thirds_as_wide_as_it_is_high_inside_the_picture():
+    picture = figure_picture([C] * 8, start=0.0, copies=12, notes=8)  # twelve straight arms
     lit = np.argwhere(picture.sum(axis=2) > 0)
-    assert lit[:, 0].min() == 0 and lit[:, 0].max() == HEIGHT - 1  # cut off at the top and the bottom
+    high = lit[:, 0].max() - lit[:, 0].min() + 1
+    wide = lit[:, 1].max() - lit[:, 1].min() + 1
+    assert 1.25 < wide / high < 1.42  # 2/3 across over 1/2 down
+    assert lit[:, 0].min() > 0 and lit[:, 0].max() < HEIGHT - 1 and lit[:, 1].min() > 0 and lit[:, 1].max() < WIDTH - 1
 
 
 def test_every_lit_pixel_is_the_color_of_the_frame_or_that_color_blended_with_black():

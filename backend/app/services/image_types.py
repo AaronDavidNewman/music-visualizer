@@ -119,7 +119,7 @@ Pipeline overview:
       DRAW:
         1. ``polychord.loudest_letters()`` - ``LoudLetters`` ``(frames, count)``: the letter of each of the loudest
            notes of each smoothed frame, loudest first, -1 where fewer sound.
-        2. ``polychord.link_turns()`` - ``LinkTurns`` ``(frames, count)``: 30 degrees for every step of a fifth from the
+        2. ``polychord.link_turns()`` - ``LinkTurns`` ``(frames, count)``: 22.5 degrees for every step of a fifth from the
            previous link's letter.
         3. ``polychord.copy_counts()`` (which uses ``chromatic_decay.beat_distances()``) - ``CopyCounts`` ``(frames,)``:
            from the minimum number of copies at the bottom of the beat to the maximum at its top.

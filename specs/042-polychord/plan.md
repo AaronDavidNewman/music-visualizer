@@ -18,8 +18,8 @@ How it is done (research Decisions 1 to 12):
   `figure_segments`) and the drawing (`_frame`, `write_polychord_frames`). It **imports and does not change**
   `chromatic_decay.ring_position` (the order of the letters on the circle of fifths), `chromatic_decay.beat_distances` (the
   stretched beat), `tempo_finder` (the tempo) and `colormaps.lookup_table`.
-- **The turn** is `30 x ((pos(next) - pos(previous) + 5) mod 12 - 5)` degrees from the previous link's letter: a fifth +30,
-  a fourth -30, the same letter 0, the tritone 180. The first link points along the **starting angle**
+- **The turn** is `22.5 x ((pos(next) - pos(previous) + 5) mod 12 - 5)` degrees from the previous link's letter (30 in the first
+  version; the user limited the 12 steps to 270 degrees): a fifth +22.5, a fourth -22.5, the same letter 0, the tritone 135. The first link points along the **starting angle**
   `rotation x t / frame_rate`; copy `k` adds `30 k`.
 - **The drawing** is one `matplotlib` `LineCollection` for the whole frame on a `Figure` (no `pyplot`): each link is cut
   into 6 pieces whose widths step down, so the end width of a link is the start width of the next; round caps hide the

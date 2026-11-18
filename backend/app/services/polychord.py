@@ -4,10 +4,13 @@ starts at the center and bends by the circle of fifths, repeated as copies turne
 **The figure.** In each frame the loudest notes (as many as the *Number of notes* setting, 5 to 8) are taken, loudest
 first, each reduced to its letter (its chromatic tone, whatever its octave). Each note is one **link**, a straight piece
 of line. The first link starts at the center of the picture and points along the **starting angle**; every next link
-starts where the previous one ended, and its direction is the previous link's direction **turned by 30 degrees for every
-step of a fifth** from the previous link's letter to its own (``link_turns``): a fifth up is +30, a fourth up is -30,
-the same letter is 0 (straight on), and the tritone is 180 (backwards). Angles are in degrees, clockwise from straight
-up, as the ring of fifths of ``chromatic_decay`` is laid out. A link is thick where it starts and thinner where it ends,
+starts where the previous one ended, and its direction is the previous link's direction **turned by 22.5 degrees for
+every step of a fifth** from the previous link's letter to its own (``link_turns``), so the 12 steps of the circle of
+fifths make 270 degrees, not 360, and the turns are not so sharp: a fifth up is +22.5, a fourth up is -22.5, the same
+letter is 0 (straight on), and the tritone is 135 (backwards, but not all the way). Angles are in degrees, clockwise
+from straight up, as the ring of fifths of ``chromatic_decay`` is laid out. The pictures are wider than they are high,
+so every link is then squeezed to 2/3 of its width and 1/2 of its height (``X_SCALE`` and ``Y_SCALE``): a figure is an
+ellipse that follows the shape of the picture. A link is thick where it starts and thinner where it ends,
 and it ends as wide as the next link starts, so the figure thins from the center outward (``figure_segments``: each link
 is cut into a few short pieces whose widths step down, because one ``LineCollection`` gives one width to each piece).
 
@@ -32,8 +35,8 @@ Order of operations:
        ``FrameTempos`` ``(frames,)`` (from ``frame_tempos()``), and a picture big enough for a figure.
     2. Take the loudest notes of each frame as letters - ``loudest_letters()`` - ``LoudLetters`` ``(frames, count)``:
        the letter of each of the ``count`` loudest of the first 84 notes, loudest first, -1 where fewer sound.
-    3. Work out the turn of each link - ``link_turns()`` - ``LinkTurns`` ``(frames, count)``: 30 degrees for every step
-       of a fifth from the previous link's letter (0 for the first link).
+    3. Work out the turn of each link - ``link_turns()`` - ``LinkTurns`` ``(frames, count)``: 22.5 degrees for every
+       step of a fifth from the previous link's letter (0 for the first link).
     4. Work out how many copies each frame has - ``copy_counts()`` (with ``chromatic_decay.beat_distances()``) -
        ``CopyCounts`` ``(frames,)``: from the minimum at the bottom of the beat to the maximum at its top.
     5. Work out where each frame's figure starts - ``start_angles()`` - ``StartAngles`` ``(frames,)``: the rotation
@@ -78,7 +81,7 @@ from .tempo_finder import HIGH_LIMIT, LOW_LIMIT, START_TEMPO, find_tempo
 
 NOTE_COLUMNS = 84  # the notes of the 12-letter, 7-octave grid: the first 84 of the 88 columns of the note values
 MARGIN = 10  # pixels kept back from the nearer edge of the picture when the length of a link is worked out
-LENGTH_FACTOR = 1.4  # links are this much longer than the room: a figure of straight links would leave the picture
+LENGTH_FACTOR = 1.7  # links are this much longer than the room, as a figure bends at almost every link
 PIECES_PER_LINK = 6  # a link is cut into this many pieces, each with its own width, so that the width steps down in it
 START_WIDTH_DIVISOR = 60  # the width at the center is the picture's height over this (6.7 pixels on a 400 high picture)
 END_WIDTH_SHARE = 0.2  # the width at the end of the last link, as a share of the width at the center
@@ -100,7 +103,9 @@ DEFAULT_MIN_COPIES = 3
 DEFAULT_MAX_COPIES = 12
 DEFAULT_ROTATION = 15.0
 COPY_TURN = 30.0  # degrees between one copy of the figure and the next
-STEP_TURN = 30.0  # degrees of turn for every step of a fifth between the letters of two links
+STEP_TURN = 22.5  # degrees of turn for every step of a fifth between the letters of two links: 12 steps are 270 degrees
+X_SCALE = 2 / 3  # every link is this share of its width in the picture: the pictures are wider than they are high
+Y_SCALE = 1 / 2  # and this share of its height
 
 NOTES_MESSAGE = f"The number of notes must be a whole number from {MIN_NOTES} to {MAX_NOTES}."
 MIN_COPIES_MESSAGE = f"The minimum number of copies must be a whole number from {MIN_COPIES} to {MAX_COPIES}."
@@ -247,11 +252,11 @@ def loudest_letters(values: ArrayLike, count: int) -> LoudLetters:
 def link_turns(letters: ArrayLike) -> LinkTurns:
     """How much every link turns from the link before it, in degrees, clockwise positive: ``(frames, count)``.
 
-    The first link has no turn (it points along the starting angle). A later link turns by 30 degrees for every step of
-    a fifth from the previous link's letter to its own, the shorter way round the circle of the 12 letters, so from
-    -150 to +180: a fifth up is +30, a fourth up (a fifth down) -30, the same letter 0 (straight on), and the tritone
-    180 (backwards). The turn is measured from the previous link's letter, whatever the loudest note was. A missing
-    link (-1) has no turn, and the links after it have none either.
+    The first link has no turn (it points along the starting angle). A later link turns by 22.5 degrees for every
+    step of a fifth from the previous link's letter to its own, the shorter way round the circle of the 12 letters, so
+    from -112.5 to +135: a fifth up is +22.5, a fourth up (a fifth down) -22.5, the same letter 0 (straight on), and
+    the tritone 135 (backwards, but not all the way). The turn is measured from the previous link's letter, whatever
+    the loudest note was. A missing link (-1) has no turn, and the links after it have none either.
 
     Arrays:
         ``letters``: ``ArrayLike`` ``(frames, count)`` - the letter of each link of each frame (``LoudLetters``), -1 for
@@ -402,9 +407,10 @@ def link_length(width: int, height: int, notes: int) -> float:
     the margin and half the widest stroke, over the number of notes of the setting.
 
     A figure bends at almost every link, so with links as long as the room allows it fills only about half of the
-    picture. With the factor, a figure of links that would all be straight on reaches 1.4 times as far as the picture
-    does, and the edge of the picture cuts it off. The setting, not the number of notes that sound, divides the room,
-    so a link keeps its size from frame to frame. A picture where a link would be under one pixel long is refused.
+    picture; the factor makes up for that. This is the length before the squeeze of ``X_SCALE`` and ``Y_SCALE``: a link
+    in the picture is 2/3 of it across and 1/2 of it down. The setting, not the number of notes that sound, divides
+    the room, so a link keeps its size from frame to frame. A picture where a link would be under one pixel long is
+    refused.
     """
     width, height = _check_size(width, height)
     notes = check_polychord_notes(notes)
@@ -421,7 +427,7 @@ def figure_segments(
 
     The links are those of the letters that are not -1 (``n`` of them). Link ``i`` points at the angle
     ``start_angle + 30 k + the sum of the turns up to i`` (``k`` is the copy, 0 to ``copies - 1``; degrees clockwise
-    from straight up, the screen's y pointing down) and runs ``link_length()`` from the end of the link before it; the
+    from straight up, the screen's y pointing down) and runs ``link_length()`` from the end of the link before it, squeezed to ``X_SCALE`` of its width and ``Y_SCALE`` of its height; the
     first starts at the center of the picture. Each link is cut into ``PIECES_PER_LINK`` equal pieces, each as wide as
     the figure is at the middle of the piece (``figure_width()``, along the ``n`` links), so the widths fall without a
     step where two links meet. The pieces of copy 0 come first.
@@ -453,7 +459,7 @@ def figure_segments(
         return np.zeros((0, 2, 2)), np.zeros(0)
     angles = start_angle + np.cumsum(turns[:links])[None, :] + COPY_TURN * np.arange(copies)[:, None]  # (copies, links)
     radians = np.radians(angles)
-    steps = length * np.stack([np.sin(radians), -np.cos(radians)], axis=-1)  # (copies, links, 2)
+    steps = length * np.stack([np.sin(radians) * X_SCALE, -np.cos(radians) * Y_SCALE], axis=-1)  # (copies, links, 2)
     starts = np.array([width / 2, height / 2]) + np.concatenate([np.zeros((copies, 1, 2)), np.cumsum(steps, axis=1)[:, :-1]], axis=1)
     fractions = np.arange(PIECES_PER_LINK + 1) / PIECES_PER_LINK
     points = starts[:, :, None, :] + steps[:, :, None, :] * fractions[None, None, :, None]  # (copies, links, 7, 2)

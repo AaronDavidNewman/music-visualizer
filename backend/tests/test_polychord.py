@@ -159,7 +159,9 @@ def test_nan_or_negative_note_values_are_refused():
 # --- the turns ------------------------------------------------------------------------------------------------------
 
 # from C, the interval to each letter, in order of the circle of fifths: C G D A E B F# C# G# D# A# F
-AFTER_C = [(C, 0), (G, 30), (D, 60), (A, 90), (E, 120), (B, 150), (F_SHARP, 180), (C_SHARP, -150), (G_SHARP, -120), (D_SHARP, -90), (A_SHARP, -60), (F, -30)]
+STEP = 22.5  # degrees for a step of a fifth: the 12 steps of the circle make 270 degrees
+X_SCALE, Y_SCALE = 2 / 3, 1 / 2  # a link in the picture is this share of its width and of its height
+AFTER_C = [(letter, STEP * steps) for letter, steps in ((C, 0), (G, 1), (D, 2), (A, 3), (E, 4), (B, 5), (F_SHARP, 6), (C_SHARP, -5), (G_SHARP, -4), (D_SHARP, -3), (A_SHARP, -2), (F, -1))]
 
 
 def oracle_turn(previous: int, letter: int) -> int:
@@ -168,7 +170,7 @@ def oracle_turn(previous: int, letter: int) -> int:
     fifths = (7 * ((letter - previous) % 12)) % 12
     if fifths > 6:
         fifths -= 12
-    return 30 * fifths
+    return STEP * fifths
 
 
 @pytest.mark.parametrize("letter, degrees", AFTER_C)
@@ -178,27 +180,32 @@ def test_the_twelve_intervals_from_c_turn_as_the_user_described(letter, degrees)
     assert turns[0, 1] == degrees
 
 
-def test_a_fifth_up_is_plus_30_a_fourth_up_minus_30_the_same_letter_straight_and_the_tritone_backwards():
-    assert pc.link_turns(np.array([[C, G, -1, -1, -1]]))[0, 1] == 30
-    assert pc.link_turns(np.array([[C, F, -1, -1, -1]]))[0, 1] == -30
+def test_a_fifth_up_is_plus_22_5_a_fourth_up_minus_22_5_the_same_letter_straight_and_the_tritone_135():
+    assert pc.link_turns(np.array([[C, G, -1, -1, -1]]))[0, 1] == 22.5
+    assert pc.link_turns(np.array([[C, F, -1, -1, -1]]))[0, 1] == -22.5
     assert pc.link_turns(np.array([[C, C, -1, -1, -1]]))[0, 1] == 0
-    assert pc.link_turns(np.array([[C, F_SHARP, -1, -1, -1]]))[0, 1] == 180
-    assert pc.link_turns(np.array([[F_SHARP, C, -1, -1, -1]]))[0, 1] == 180
+    assert pc.link_turns(np.array([[C, F_SHARP, -1, -1, -1]]))[0, 1] == 135
+    assert pc.link_turns(np.array([[F_SHARP, C, -1, -1, -1]]))[0, 1] == 135
 
 
-def test_every_pair_of_letters_turns_by_the_oracle_and_between_minus_150_and_180():
+def test_the_twelve_steps_of_the_circle_of_fifths_make_270_degrees_not_360():
+    assert pc.STEP_TURN == 22.5
+    assert 12 * pc.STEP_TURN == 270
+
+
+def test_every_pair_of_letters_turns_by_the_oracle_and_between_minus_112_5_and_135():
     for previous in range(12):
         for letter in range(12):
             turn = pc.link_turns(np.array([[previous, letter, -1, -1, -1]]))[0, 1]
             assert turn == oracle_turn(previous, letter)
-            assert -150 <= turn <= 180
+            assert -112.5 <= turn <= 135
 
 
 def test_a_turn_is_measured_from_the_previous_link_not_from_the_loudest():
     turns = pc.link_turns(np.array([[C, G, D, A, E, B]]))[0]
-    assert list(turns) == [0, 30, 30, 30, 30, 30]  # each a fifth above the one before
+    assert list(turns) == [0, 22.5, 22.5, 22.5, 22.5, 22.5]  # each a fifth above the one before
     turns = pc.link_turns(np.array([[C, G, C, F, F_SHARP, -1]]))[0]
-    assert list(turns) == [0, 30, -30, -30, oracle_turn(F, F_SHARP), 0]
+    assert list(turns) == [0, 22.5, -22.5, -22.5, oracle_turn(F, F_SHARP), 0]
 
 
 def test_a_missing_letter_turns_nothing_and_the_frames_are_independent():
@@ -206,7 +213,7 @@ def test_a_missing_letter_turns_nothing_and_the_frames_are_independent():
     turns = pc.link_turns(letters)
     assert turns.shape == (3, 5)
     assert turns.dtype == np.float64
-    assert list(turns[0]) == [0, 60, 0, 0, 0]
+    assert list(turns[0]) == [0, 45, 0, 0, 0]
     assert list(turns[1]) == [0, 0, 0, 0, 0]
     assert list(turns[2]) == [0, 0, 0, 0, 0]
 
@@ -259,7 +266,7 @@ def test_the_links_follow_the_oracle_walk_with_the_turns_added_to_the_direction(
         if index:
             angle += oracle_turn(letters[index - 1], letter)
         dx, dy = unit(angle)
-        x, y = x + length * dx, y + length * dy
+        x, y = x + length * dx * X_SCALE, y + length * dy * Y_SCALE
         expected_ends.append((x, y))
     segments, _ = figure(letters, 35.0, 1, 600, 400, notes)
     for index, end in enumerate(expected_ends):
@@ -267,18 +274,30 @@ def test_the_links_follow_the_oracle_walk_with_the_turns_added_to_the_direction(
         assert last_piece == pytest.approx(end, abs=1e-6)
 
 
-def test_every_link_has_the_same_length_and_is_cut_into_equal_pieces_in_a_straight_line():
+def test_every_link_is_the_length_squeezed_to_two_thirds_across_and_a_half_down_and_cut_into_equal_pieces():
     notes = 8
     length = pc.link_length(600, 400, notes)
-    segments, _ = figure([C, D, E, F, G, A, B, C_SHARP], 0.0, 1, 600, 400, notes)
+    letters = [C, D, E, F, G, A, B, C_SHARP]
+    segments, _ = figure(letters, 0.0, 1, 600, 400, notes)
+    angle = 0.0
     for link in range(notes):
+        if link:
+            angle += oracle_turn(letters[link - 1], letters[link])
+        dx, dy = unit(angle)
+        expected = np.array([length * dx * X_SCALE, length * dy * Y_SCALE])
         pieces = segments[link * pc.PIECES_PER_LINK:(link + 1) * pc.PIECES_PER_LINK]
         total = pieces[-1, 1] - pieces[0, 0]
-        assert math.hypot(*total) == pytest.approx(length)
+        assert total == pytest.approx(expected, abs=1e-9)
         for piece in pieces:
-            assert math.hypot(*(piece[1] - piece[0])) == pytest.approx(length / pc.PIECES_PER_LINK)
-            direction = (piece[1] - piece[0]) / np.linalg.norm(piece[1] - piece[0])
-            assert direction == pytest.approx(total / np.linalg.norm(total))
+            assert piece[1] - piece[0] == pytest.approx(expected / pc.PIECES_PER_LINK, abs=1e-9)  # equal, in a line
+
+
+def test_a_link_straight_across_is_two_thirds_as_long_as_one_straight_up_down_is_half():
+    length = pc.link_length(600, 400, 6)
+    across, _ = figure([C] * 6, 90.0, 1, 600, 400, 6)
+    up, _ = figure([C] * 6, 0.0, 1, 600, 400, 6)
+    assert across[-1, 1] - across[0, 0] == pytest.approx([6 * length * 2 / 3, 0.0], abs=1e-9)
+    assert up[-1, 1] - up[0, 0] == pytest.approx([0.0, -6 * length / 2], abs=1e-9)
 
 
 def test_the_width_falls_in_a_straight_line_along_the_figure_so_no_link_ends_wider_than_the_next_starts():
@@ -314,8 +333,8 @@ def test_copies_follow_copy_zero_each_turned_a_further_30_degrees_about_the_cent
     for copy in range(5):
         theta = math.radians(30 * copy)
         rotation = np.array([[math.cos(theta), -math.sin(theta)], [math.sin(theta), math.cos(theta)]])
-        centered = base - np.array([300.0, 200.0])
-        expected = centered @ rotation.T + np.array([300.0, 200.0])  # y is down, so this is clockwise on screen
+        centered = (base - np.array([300.0, 200.0])) / np.array([X_SCALE, Y_SCALE])  # undo the squeeze, turn, squeeze again
+        expected = (centered @ rotation.T) * np.array([X_SCALE, Y_SCALE]) + np.array([300.0, 200.0])  # y down: clockwise
         assert many[copy * len(base):(copy + 1) * len(base)] == pytest.approx(expected, abs=1e-6)
         assert many_widths[copy * len(base):(copy + 1) * len(base)] == pytest.approx(base_widths)
 
@@ -327,7 +346,7 @@ def test_no_letters_gives_no_pieces():
 
 
 def reach(width: int, height: int) -> float:
-    """The farthest a figure of notes straight links gets from the center: the room, 1.4 times over."""
+    """The farthest a figure of notes straight links gets from the center before the squeeze: the room, 1.4 times."""
     return 1.4 * (min(width, height) / 2 - pc.MARGIN - pc.start_width(height) / 2)
 
 
@@ -341,18 +360,18 @@ def test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reach
         segments, _ = figure(letters, float(rng.uniform(-720, 720)), int(rng.integers(1, 13)), width, height, notes)
         if not len(segments):
             continue
-        distances = np.hypot(*(segments.reshape(-1, 2) - np.array([width / 2, height / 2])).T)
-        assert distances.max() <= reach(width, height) * count / notes + 1e-6
+        offsets = (segments.reshape(-1, 2) - np.array([width / 2, height / 2])) / np.array([X_SCALE, Y_SCALE])  # unsqueezed
+        assert np.hypot(offsets[:, 0], offsets[:, 1]).max() <= reach(width, height) * count / notes + 1e-6
 
 
-def test_the_longest_figure_going_straight_on_reaches_forty_percent_past_the_room_and_leaves_the_picture():
+def test_the_longest_figure_going_straight_on_reaches_the_room_forty_percent_over_squeezed_and_stays_inside():
     notes = 8
     segments, _ = figure([C] * notes, 90.0, 1, 600, 400, notes)  # straight to the right
-    assert segments[-1, 1, 0] - 300.0 == pytest.approx(reach(600, 400))
+    assert segments[-1, 1, 0] - 300.0 == pytest.approx(reach(600, 400) * 2 / 3)
     assert segments[-1, 1, 1] == pytest.approx(200.0)
-    segments, _ = figure([C] * notes, 0.0, 1, 600, 400, notes)  # straight up: the shorter side decides
-    assert 200.0 - segments[-1, 1, 1] == pytest.approx(reach(600, 400))
-    assert segments[-1, 1, 1] < 0  # above the picture
+    segments, _ = figure([C] * notes, 0.0, 1, 600, 400, notes)  # straight up
+    assert 200.0 - segments[-1, 1, 1] == pytest.approx(reach(600, 400) / 2)
+    assert 0 < segments[-1, 1, 1]  # and still in the picture
 
 
 def test_a_link_is_forty_percent_longer_than_the_room_over_the_notes_allowed():

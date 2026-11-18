@@ -55,7 +55,7 @@ this type (`ValueError` when missing or when its tempos do not have one value fo
 
 600 x 400 RGB PNG (`frame_000000.png` and up), background **black** (`(0, 0, 0)`), drawn by one matplotlib `LineCollection`.
 Per spec: the first link starts at the center for the loudest note; every later link starts at the end of the previous one
-and turns by 30 degrees for every step of a fifth between the letters (same letter straight on, tritone backwards); links
+and turns by 22.5 degrees for every step of a fifth between the letters (same letter straight on, tritone 135 degrees backwards; each link squeezed to 2/3 across and 1/2 down); links
 are thinner at their end than at their start and each link starts as wide as the previous one ends; the figure is drawn
 `copies` times, each turned 30 degrees further, `copies` going from the minimum at the bottom of the beat to the maximum at
 the top; the first copy starts at `rotation x t / frame_rate` degrees; every link of a frame has one color from the tempo

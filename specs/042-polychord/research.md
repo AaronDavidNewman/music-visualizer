@@ -28,8 +28,8 @@ Every item below was a question the plan had to answer; none is left open. "Prob
 - **Decision**: with `ring_position(letter)` of `chromatic_decay` (C = 0, then G, D, A, E, B, F#, C#, G#, D#, A#, F: one
   step is a fifth up), the signed step from the previous link's letter `a` to this link's letter `b` is
   `((pos(b) - pos(a) + 5) mod 12) - 5`, from **-5 to +6**; the turn is `30 x step` degrees, clockwise positive. The same
-  letter is step 0 (straight on), a fifth up C to G is +1 (+30), a fourth up C to F is -1 (-30), a whole tone C to D is +2
-  (+60), C to A is +3 (+90), C to Eb is -3 (-90), and the tritone C to F# is **+6, 180 degrees** (the one step that has the
+  letter is step 0 (straight on), a fifth up C to G is +1 (+22.5), a fourth up C to F is -1 (-22.5), a whole tone C to D is +2
+  (+45), C to A is +3 (+67.5), C to Eb is -3 (-67.5), and the tritone C to F# is **+6, 135 degrees** (the one step that has the
   same size either way). The first link has no turn: its direction is the starting angle.
 - **Rationale**: it is exactly the user's table (a 4th or 5th away is -30 or +30, the same letter is straight, a tritone
   goes backwards), made for every interval by one formula. Reusing `ring_position` keeps the order of the letters the same
