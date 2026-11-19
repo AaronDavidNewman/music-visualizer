@@ -2,8 +2,9 @@
 
 Frame ``f`` covers ``[f / frame_rate, (f + 1) / frame_rate)`` seconds. It is the mean of the windows that start inside
 that period, or, if none does, the most recent window that started before the period (which is the window covering its
-start when windows are consecutive). The note values of a frame (one row of 88) are smoothed over the earlier frames
-(see ``smooth_frames``) and drawn as the chosen image type (see ``image_types``). ``contour`` draws the 12 x 7 grid of
+start when windows are consecutive). The note values of a frame (one row of 88) are drawn as the chosen image type (see
+``image_types``); this averaging is the only smoothing of the note data (feature 043: the frequency buffers are always 60 ms
+apart, so the frame rate alone decides how many of them each frame averages). ``contour`` draws the 12 x 7 grid of
 the 84 notes (one row for each octave, one column for each note name) as a filled contour map (see ``contour``); a
 higher resolution (1 to 5) first interpolates the grid to 12 r x 7 r values (see ``resolution``), and a number of notes
 below 84 builds the picture from only the notes with the most energy in the file, spread over the whole grid (see
@@ -13,8 +14,8 @@ neighbors with Pillow (see ``frame_interpolation``). A threshold can hide faint 
 the measurements of the whole file (``decay``, ``decay_exp``, ``polar_chords``, ``energy_graphs``, ``chromatic_decay``,
 ``rhythm_circles``, ``chromatic_wireframe``, ``polychord``).
 
-These are the shared steps AVERAGE, SMOOTH and DRAW of the pipeline overview in ``image_types``; the job does steps 1 to
-3 and calls ``write_frames()`` for the rest.
+These are the shared steps AVERAGE and DRAW of the pipeline overview in ``image_types``; the job does steps 1 to 3 and
+calls ``write_frames()`` for the rest.
 
 Order of operations:
     1. Count the frames - ``frame_count()`` - the duration times the frame rate, rounded up: a whole number.
@@ -22,19 +23,18 @@ Order of operations:
        ``WindowRanges`` ``(frames,)``: ``first``, ``stop`` and ``earlier``.
     3. Average the windows into frames - ``average_frames()`` - ``NoteStrengths`` ``(frames, 88)``: the mean of the
        windows a frame owns (or the last earlier window).
-    4. Check every setting before anything is written - ``write_frames()`` - colormap, threshold, smoothing window,
-       image type, resolution, note count, interpolate, gaussian, note layout, decay rate and amounts, wave count, polar
-       notes, and ``beat`` (``BeatPositions`` ``(frames,)`` or ``None``).
-    5. Smooth over the earlier frames - ``smooth_frames()`` - ``NoteStrengths`` ``(frames, 88)``: each frame is the
-       weighted average of itself and the frames before it.
-    6. Find the largest smoothed value of the whole file - ``write_frames()`` - the ``peak`` that the threshold and the
+    4. Check every setting before anything is written - ``write_frames()`` - colormap, threshold, image type, resolution,
+       note count, interpolate, gaussian, note layout, decay rate and amounts, wave count, polar notes, extra notes
+       (k, 0 to the number of notes of the picture) and ``beat`` (``BeatPositions`` ``(frames,)`` or ``None``).
+    5. Find the largest note value of the whole file - ``write_frames()`` - the ``peak`` that the threshold and the
        colors are measured against.
-    7. Draw, by image type (each type's own steps are in its module and in the overview of ``image_types``):
+    6. Draw, by image type (each type's own steps are in its module and in the overview of ``image_types``):
          * ``decay``, ``decay-exp``, ``chromatic-decay``, ``chromatic-wireframe``: simulate the circles' points from the
-           smoothed values, then draw them (``decay``, ``decay_exp``, ``chromatic_decay``, ``chromatic_wireframe``);
-         * ``polar-chords``: ``polar_chords.polar_bars()``, then ``write_polar_frames()``; ``energy-graphs`` and
+           note values (the five loudest notes or letters are the held ones, ``held_notes.hold_loudest()``, inside the
+           gains), then draw them (``decay``, ``decay_exp``, ``chromatic_decay``, ``chromatic_wireframe``);
+         * ``polar-chords``: ``polar_chords.polar_bars()`` (its loudest notes are the held ones), then ``write_polar_frames()``; ``energy-graphs`` and
            ``rhythm-circles``: draw from the measurements the job made (``energy``, ``rhythm``), which must have one
-           frame for each row; ``polychord``: draw from the smoothed values, the beat and the tempos the job measured
+           frame for each row; ``polychord``: draw from the note values, the beat and the tempos the job measured
            (``polychord``, which must have one tempo for each row) with the four settings
            (``polychord.write_polychord_frames()``);
          * ``contour``: keep the 84 drawn notes and spread the ``note_count`` loudest over them
@@ -61,6 +61,7 @@ from .energy_graphs import EnergyGraphData, write_energy_frames
 from .polychord import DEFAULT_POLYCHORD_SETTINGS, PolychordData, PolychordSettings, check_polychord_settings, write_polychord_frames
 from .rhythm_circles import RhythmData, write_rhythm_frames
 from .polar_chords import DEFAULT_POLAR_NOTES, check_polar_notes, polar_bars, write_polar_frames
+from .held_notes import check_extra_notes, notes_of
 from .contour import write_contour_frames
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
 from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
@@ -76,17 +77,7 @@ SHOWN_NOTES = GRID_COLUMNS * GRID_ROWS  # notes 0..83 are drawn; the four highes
 IMAGE_WIDTH = 600
 IMAGE_HEIGHT = 400
 
-# Smoothing mixes each frame with the earlier frames of a window (0 = none). The smoothing is the weight of each earlier
-# frame against a weight of 1 for the current one; the window is how many earlier frames are looked at. Fixed ranges;
-# 0 and 1 are the defaults.
-MIN_SMOOTHING = 0.0
-MAX_SMOOTHING = 0.8
-DEFAULT_SMOOTHING = 0.0
-MIN_SMOOTHING_WINDOW = 1
-MAX_SMOOTHING_WINDOW = 20
-DEFAULT_SMOOTHING_WINDOW = 1
-
-# The threshold hides faint notes: a drawn note whose smoothed value in a frame is below this percentage of the largest
+# The threshold hides faint notes: a drawn note whose value in a frame is below this percentage of the largest
 # note value in the whole file is 0. 0 is off (the default); the page's slider ends at 10.
 MIN_THRESHOLD = 0
 MAX_THRESHOLD = 10
@@ -152,58 +143,6 @@ def average_frames(result: AnalysisResult, frame_rate: float, frames: int) -> No
     out[has_windows] = (running[stop[has_windows]] - running[first[has_windows]]) / counts[has_windows, None]
     return np.maximum(out, 0.0)
 
-def _check_smoothing_window(window: object) -> int:
-    if (
-        isinstance(window, bool)
-        or not isinstance(window, numbers.Integral)
-        or not MIN_SMOOTHING_WINDOW <= window <= MAX_SMOOTHING_WINDOW
-    ):
-        raise ValueError(
-            f"The smoothing window must be a whole number from {MIN_SMOOTHING_WINDOW} to {MAX_SMOOTHING_WINDOW}."
-        )
-    return int(window)
-
-def smooth_frames(
-    frames: NoteStrengths, smoothing: float = DEFAULT_SMOOTHING, window: int = DEFAULT_SMOOTHING_WINDOW
-) -> NoteStrengths:
-    """A weighted average of every note over the current frame and the ``window`` frames before it.
-
-    ``frames`` has one row per frame and one column per note. With ``s`` the smoothing and ``w`` the window, row ``t``
-    becomes ``( A[t] + s*A[t-1] + ... + s*A[t-k] ) / ( 1 + s*k )`` where ``A`` are the *unsmoothed* rows and
-    ``k = min(t, w)`` is the number of earlier rows that exist. The weights are divided by their sum, so a constant
-    value stays constant and the first row is left as it is. Only the row itself and earlier rows are used, never later
-    ones, and never earlier smoothed results, so a value is forgotten exactly ``w`` rows after it last occurred. Each
-    note uses only its own history. ``smoothing`` is a number from 0.0 to 0.8 and ``window`` a whole number from 1 to
-    20; smoothing 0 returns the values unchanged for every window. The input is never modified.
-
-    Arrays:
-        ``frames``: ``NoteStrengths`` ``(frames, notes)`` - the unsmoothed strength of each note in each frame
-            (``notes`` is 88 for the job; any number of columns works,
-        and so does a shape with more trailing axes, each position using only its own history).
-
-    Returns:
-        ``NoteStrengths`` the shape of ``frames`` - a new float64 array: each row is the weighted average of itself and
-        the ``window`` rows before it.
-    """
-    if (
-        isinstance(smoothing, bool)
-        or not isinstance(smoothing, numbers.Real)
-        or not math.isfinite(smoothing)
-        or not MIN_SMOOTHING <= smoothing <= MAX_SMOOTHING
-    ):
-        raise ValueError(f"The smoothing must be a number from {MIN_SMOOTHING} to {MAX_SMOOTHING}.")
-    window = _check_smoothing_window(window)
-    out = np.array(frames, dtype=np.float64, copy=True)
-    if smoothing == 0 or out.shape[0] < 2:
-        return out
-    s = float(smoothing)
-    total = out.copy()
-    for j in range(1, min(window, out.shape[0] - 1) + 1):
-        total[j:] += s * out[:-j]
-    earlier = np.minimum(np.arange(out.shape[0]), window)
-    total /= (1.0 + s * earlier).reshape((-1,) + (1,) * (out.ndim - 1))
-    return total
-
 def _check_threshold(threshold: object) -> float:
     if (
         isinstance(threshold, bool)
@@ -232,12 +171,24 @@ def hidden_below(values: ArrayLike, peak: float, threshold: float = DEFAULT_THRE
     return np.asarray(values, dtype=np.float64) < threshold / 100.0 * float(peak)
 
 
+def _check_extra_notes(value: object, image_type: str, polar_notes: int, polychord_settings: PolychordSettings) -> int:
+    """The Extra notes setting k for ``write_frames``: 0 (off) or a whole number from 1 to the number of notes of the picture.
+
+    The number of notes n is 5 for ``decay``, ``decay-exp``, ``chromatic-decay`` and ``chromatic-wireframe``, ``polar_notes`` for ``polar-chords`` and the notes of
+    ``polychord_settings`` for ``polychord``; a picture that does not take the n loudest notes accepts 0 to 8 and ignores it.
+
+    Returns:
+        The number as an ``int``.
+    """
+    if isinstance(value, numbers.Real) and not isinstance(value, bool) and value == 0:
+        return 0
+    return check_extra_notes(value, notes_of(image_type, polar_notes, polychord_settings.notes))
+
+
 def write_frames(
     frames: NoteStrengths,
     directory: Path,
     colormap: str = DEFAULT_COLORMAP,
-    smoothing: float = DEFAULT_SMOOTHING,
-    smoothing_window: int = DEFAULT_SMOOTHING_WINDOW,
     threshold: float = DEFAULT_THRESHOLD,
     image_type: str = DEFAULT_IMAGE_TYPE,
     resolution: int = DEFAULT_RESOLUTION,
@@ -254,14 +205,14 @@ def write_frames(
     rhythm: RhythmData | None = None,
     polychord: PolychordData | None = None,
     polychord_settings: PolychordSettings = DEFAULT_POLYCHORD_SETTINGS,
+    extra_notes: int = 0,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
-    ``smoothing`` (0.0 to 0.8, default none) and ``smoothing_window`` (a whole number from 1 to 20, default 1) smooth
-    the note values over the frames: a frame is the weighted average of itself and the ``smoothing_window`` frames
-    before it, each of those with the weight ``smoothing`` (see ``smooth_frames``). Smoothing 0 changes nothing.
+    ``frames`` are drawn as they are: there is no smoothing between the averaging of the frequency buffers into frames
+    (``average_frames``) and the drawing.
 
-    ``threshold`` (0 to 10, default 0 = off) is a percentage of the largest note value in the file (after smoothing): a
+    ``threshold`` (0 to 10, default 0 = off) is a percentage of the largest note value in the file: a
     note below it is 0 in that frame (``hidden_below``), whatever the colormap is.
 
     ``image_type`` is ``contour`` (the default, see below), ``decay``, ``decay-exp``, ``polar-chords``,
@@ -270,20 +221,19 @@ def write_frames(
 
     ``image_type="contour"`` draws the grid of values (the 84 drawn notes, or the finer interpolated grid; the values
     the threshold hides are 0) as a filled contour map in the ``colormap``, with matplotlib (see ``contour``): the
-    contour levels are chosen by matplotlib, and the color scale is *linear* from 0 to the largest smoothed value in the
+    contour levels are chosen by matplotlib, and the color scale is *linear* from 0 to the largest note value in the
     whole file.
 
     ``resolution`` (a whole number from 1 to 5, default 1) makes the grid that every frame is drawn from finer: the 7 x
-    12 grid of the smoothed values of the drawn notes is interpolated to 7r x 12r values (``interpolate_grid``:
-    ``np.linspace`` positions and ``np.interp``, corners kept, no value outside the original range) *after* the
-    smoothing, and the threshold and the colors are worked out on those values. The picture keeps its size; the scale of
+    12 grid of the note values of the drawn notes is interpolated to 7r x 12r values (``interpolate_grid``:
+    ``np.linspace`` positions and ``np.interp``, corners kept, no value outside the original range), and the threshold and the colors are worked out on those values. The picture keeps its size; the scale of
     the colors and the threshold's reference are the largest value of the whole file before the interpolation. Frames of
     the original grid (1) are written exactly as without the setting.
 
     ``note_count`` (a whole number from 12 to 84, default 84 = all drawn notes) builds the picture from only the
-    ``note_count`` notes with the most energy, the energy of a note being the sum of its smoothed values over the whole
+    ``note_count`` notes with the most energy, the energy of a note being the sum of its values over the whole
     file, so the same notes are used in every frame. Their values are spread over the 84 values of the original grid
-    (``spread_notes``: ``np.linspace`` positions and ``np.interp``, in order of pitch) *after* the smoothing and before
+    (``spread_notes``: ``np.linspace`` positions and ``np.interp``, in order of pitch) before
     the resolution step, the threshold and the colors, which work on the spread values as they do on the note values.
     The scale of the colors and the threshold's reference are still the largest value of the whole file over all 88
     notes, so the same strength has the same color at every number of notes. With 84 notes nothing changes.
@@ -291,7 +241,7 @@ def write_frames(
     ``interpolate`` (a whole number from 1 to 5, default 1 = every frame drawn) draws only every n-th frame, the frames
     ``0, n, 2n, ...`` (counting from 0) and always the last one, exactly as they are drawn at 1; the other frames are
     made from their two nearest drawn frames with the Pillow library (see ``frame_interpolation``): ``Image.blend``
-    mixes them with the weight of the frame's position in its gap. The smoothing, the notes, the resolution, the
+    mixes them with the weight of the frame's position in its gap. The notes, the resolution, the
     threshold and the colors are worked out for all frames as before; only the drawing is skipped. The number of frames,
     their names and the size do not change, and at 1 nothing changes. ``resolution``, ``note_count``, ``interpolate``
     and ``gaussian`` describe the grid of ``contour`` and are accepted and ignored by the other image types.
@@ -310,21 +260,21 @@ def write_frames(
     from ``beat``, every ``decay_rate`` frames (a number from 0.25 to 4 in steps of 0.25, default 1; below 1 several
     steps a frame) each circle gives points to each neighbour at the rate of its saturation level (``decay_amounts``:
     four numbers from 0.5 to 3, the points given to each neighbour per frame by a low, medium, high and saturated
-    circle; default 0.5, 1, 2, 3); the points set the size (full from 24) and the color (the last from 32). Smoothing,
-    the colormap, ``beat`` and ``note_layout`` apply; every other setting is checked and ignored. ``decay_rate`` and
+    circle; default 0.5, 1, 2, 3); the points set the size (full from 24) and the color (the last from 32). The
+    colormap, ``beat`` and ``note_layout`` apply; every other setting is checked and ignored. ``decay_rate`` and
     ``decay_amounts`` are checked for every image type and have no effect on the others.
 
     ``image_type="decay-exp"`` is ``decay`` with two amounts changed (see ``decay_exp``): a note that would gain ``g``
     points gains ``g * exp(-g / 8)``, and a circle with ``p`` points gives each neighbour ``sin(pi / 2 * p / 64) ** 2``
-    per frame instead of the amount of its saturation level. ``decay_rate``, ``beat``, ``note_layout``, smoothing and
+    per frame instead of the amount of its saturation level. ``decay_rate``, ``beat``, ``note_layout`` and
     the colormap apply; ``decay_amounts`` and every other setting are checked and ignored.
 
     ``image_type="chromatic-decay"`` is ``decay-exp`` for the 12 chromatic tones only (see ``chromatic_decay``): 12
     circles on a ring in circle-of-fifths order, charged by the loudest octave of each letter, whose points decay to the
     letters 5 and 7 above. ``decay_rate`` is for this type a **whole number from 1 to 10** (frames between decay steps;
-    anything else is refused with ``ValueError``); ``beat``, smoothing and the colormap apply; ``note_layout``,
+    anything else is refused with ``ValueError``); ``beat`` and the colormap apply; ``note_layout``,
     ``decay_amounts`` and every other setting are checked and ignored; ``threshold`` (0 to 10, 0 off) applies as a
-    percent of the largest smoothed note value of the whole file: a note strictly below it is 0 before the letters are
+    percent of the largest note value of the whole file: a note strictly below it is 0 before the letters are
     charged (feature 037). With a ``beat`` the middle of the ring of letters also has a target of 12 concentric rings,
     140 pixels across, that shows the distance from the local peak of the current frame and of the frames before it
     (feature 036); without one there is no target.
@@ -338,16 +288,16 @@ def write_frames(
     decay rate, whole number 1 to 10, and threshold) as a ridge plot in three dimensions (see ``chromatic_wireframe``):
     one line across the 12 letters for each frame, the newest in front and the earlier frames behind it as far as there
     is room, every line in the colormap color of its frame's place in the ``beat`` (the last color at the top of a peak;
-    the first for every line without a beat). Smoothing, the colormap, the threshold and ``beat`` apply;
+    the first for every line without a beat). The colormap, the threshold and ``beat`` apply;
     ``note_layout``, ``decay_amounts`` and every other setting are checked and ignored.
 
-    ``image_type="polychord"`` draws the loudest notes of each smoothed frame as a chain of tapering links that bends by
+    ``image_type="polychord"`` draws the loudest notes of each frame as a chain of tapering links that bends by
     the circle of fifths, repeated as copies turned 30 degrees, from ``polychord`` (a ``polychord.PolychordData``: the
     tempo of every frame and the frame rate; required for this type, ignored by the others, and it must have one tempo
     for each row of ``frames``) and ``polychord_settings`` (a ``polychord.PolychordSettings``: the number of notes, the
     minimum and maximum number of copies and the rotation; checked for every image type, used by this one only; see
     ``polychord``). The number of copies follows ``beat`` (the minimum for every frame without one) and every link of a
-    frame has one color from its tempo. Smoothing, the colormap and ``beat`` apply; the threshold, ``note_layout``,
+    frame has one color from its tempo. The colormap and ``beat`` apply; the threshold, ``note_layout``,
     ``decay_amounts`` and every other setting are checked and ignored.
 
     ``image_type="rhythm-circles"`` draws four concentric notched rings turned by the current tempo found from the local
@@ -361,7 +311,7 @@ def write_frames(
     clockwise from the top, one arc of 84 for each note (in the order of the cells of ``note_layout``: ``rows`` is the
     order of pitch), and the chord that ``chords.measure_chords`` records for the frame as one bar counterclockwise, one
     arc of 84 for each of the 12 root letters and 7 chord types (the types of a letter together, the letters from A).
-    Every bar reaches out to ``0.5 + 0.5 * beat`` of the full radius. Smoothing, the colormap, ``beat`` and
+    Every bar reaches out to ``0.5 + 0.5 * beat`` of the full radius. The colormap, ``beat`` and
     ``note_layout`` apply; every other setting is checked and ignored.
 
     ``wave_count`` (a whole number from 2 to 10, default 4) is the number of waves of the **beat wave** of ``contour``
@@ -370,17 +320,22 @@ def write_frames(
     the grid; a frame at beat 0 (and every frame with ``beat=None``) is the plain contour. It is checked for every image
     type and has no effect on the others.
 
+    ``extra_notes`` (feature 044; 0, the default, to the number of notes of the picture: 5, ``polar_notes`` or the notes of
+    ``polychord_settings``; 0 to 8 for the other types, which ignore it) is the Extra notes setting k of the pictures that take the
+    n loudest notes (``decay``, ``decay-exp``, ``polar-chords``, ``chromatic-decay``, ``chromatic-wireframe``, ``polychord``): a note
+    that was among the n loudest in the frame before keeps its place while it is among the loudest n + k (see ``held_notes``). With 0 the
+    n loudest notes are chosen as before. A job passes 1 to n (2 when the request does not say).
+
     Every argument is checked before anything is written.
 
     Arrays:
         ``frames``: ``NoteStrengths`` ``(frames, 88)`` - the strength of each of the 88 notes in each frame, averaged
-            from the analysis windows and not yet smoothed.
+            from the frequency buffers (the analysis windows), drawn as they are.
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of the middle of each frame in the local
             energy peak, from 0 (bottom) to 1 (top); ``None`` for none.
     """
     colormap = check_colormap(colormap)
     _check_threshold(threshold)
-    _check_smoothing_window(smoothing_window)
     image_type = check_image_type(image_type)
     resolution = check_resolution(resolution)
     note_count = check_note_count(note_count)
@@ -393,34 +348,34 @@ def write_frames(
     wave_count = check_wave_count(wave_count)
     polar_notes = check_polar_notes(polar_notes)
     polychord_settings = check_polychord_settings(polychord_settings)
+    extra_notes = _check_extra_notes(extra_notes, image_type, polar_notes, polychord_settings)
     if beat is not None:
         # checked for every image type, used by contour, decay, decay-exp, polar-chords, chromatic-decay and
         # chromatic-wireframe
         beat = check_beat(beat, len(frames))
-    smoothed = smooth_frames(frames, smoothing, smoothing_window)
-    peak = float(smoothed.max()) if smoothed.size else 0.0
+    peak = float(frames.max()) if frames.size else 0.0
     # 84 discs that keep points from frame to frame; the grid settings above are checked and not used
     if image_type == "decay":
-        points = circle_points(smoothed, beat, note_layout, decay_rate, decay_amounts)
+        points = circle_points(frames, beat, note_layout, decay_rate, decay_amounts, extra_notes)
         write_decay_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
     # the same discs with the points gained and lost along an exponential curve; decay_amounts is checked and not used
     if image_type == "decay-exp":
-        points = decay_exp_points(smoothed, beat, note_layout, decay_rate)
+        points = decay_exp_points(frames, beat, note_layout, decay_rate, extra_notes)
         write_decay_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
     # the 12 letters on a ring, decaying to the letters 5 and 7 above; note_layout and decay_amounts are checked and not
     # used
     if image_type == "chromatic-decay":
         # a note under the threshold of the whole file is 0 before the letters are charged
-        points = chromatic_points(smoothed, beat, decay_rate, threshold)
+        points = chromatic_points(frames, beat, decay_rate, threshold, extra_notes)
         # the beat also fills the target in the middle
         write_chromatic_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, beat=beat)
         return
     # the same points as chromatic-decay, drawn as a line for each frame in three dimensions; note_layout and
     # decay_amounts are checked and not used
     if image_type == "chromatic-wireframe":
-        points = chromatic_points(smoothed, beat, decay_rate, threshold)
+        points = chromatic_points(frames, beat, decay_rate, threshold, extra_notes)
         # the beat decides the color of every line
         write_wireframe_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, beat=beat)
         return
@@ -432,14 +387,14 @@ def write_frames(
             raise ValueError(f"The energy data has {energy.frame_count} frames but {len(frames)} were given.")
         write_energy_frames(energy, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
-    # the loudest notes as a rosette of tapering links, from the smoothed values, ``beat`` and the tempos in
+    # the loudest notes as a rosette of tapering links, from the note values, ``beat`` and the tempos in
     # ``polychord`` (the rest of the settings above are checked and not used)
     if image_type == "polychord":
         if polychord is None:
             raise ValueError("Polychord needs the polychord data.")
         if polychord.tempos.shape != (len(frames),):
             raise ValueError(f"The polychord data has {polychord.tempos.size} tempos but {len(frames)} frames were given.")
-        write_polychord_frames(smoothed, beat, polychord.tempos, polychord_settings, polychord.frame_rate, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
+        write_polychord_frames(frames, beat, polychord.tempos, polychord_settings, polychord.frame_rate, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, extra_notes)
         return
     # four notched rings turned by ``rhythm`` (the rest of the settings above are checked and not used)
     if image_type == "rhythm-circles":
@@ -452,10 +407,10 @@ def write_frames(
     # a polar bar graph: the loudest notes clockwise, the chord counterclockwise; the grid settings above are checked
     # and not used
     if image_type == "polar-chords":
-        write_polar_frames(polar_bars(smoothed, beat, polar_notes, note_layout), colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
+        write_polar_frames(polar_bars(frames, beat, polar_notes, note_layout, extra_notes), colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT)
         return
     columns, rows = GRID_COLUMNS * resolution, GRID_ROWS * resolution  # the contour: the last image type
-    shown = spread_notes(smoothed[:, :SHOWN_NOTES], note_count)  # (the contour always has the rows layout)
+    shown = spread_notes(frames[:, :SHOWN_NOTES], note_count)  # (the contour always has the rows layout)
     values = interpolate_grid(shown, GRID_COLUMNS, GRID_ROWS, resolution)
     hidden = hidden_below(values, peak, threshold)
     frames_to_draw = key_frames(values.shape[0], interpolate)

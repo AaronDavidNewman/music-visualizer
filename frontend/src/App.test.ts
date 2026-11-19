@@ -33,6 +33,24 @@ describe("the result summary", () => {
   });
 
 
+  it("shows no Smoothing, Smoothing window or Window spacing line and no notice that the spacing was raised (feature 043)", () => {
+    for (const text of ["Smoothing:", "Smoothing window", "Window spacing", "smoothing_window", "window_spacing", "spacing_raised"]) {
+      expect(summary, text).not.toContain(text);
+    }
+    expect(appSource).not.toContain("spacing_raised");
+    expect(appSource).not.toContain("raised to");
+    expect(appSource).not.toContain("notice-box");
+  });
+
+  it("still shows the frame rate, the window size, the step and the number of windows", () => {
+    for (const text of ["Window size:", "Frame rate:", "Frames:", "Step:", "Windows analyzed:"]) expect(summary, text).toContain(text);
+  });
+
+  it("does not read the sample rate of the file any more: it was only needed for the default window spacing", () => {
+    expect(appSource).not.toMatch(/fileSampleRate|sample-rate|DEFAULT_SAMPLE_RATE/);
+    expect(pickerSource).not.toMatch(/sampleRate|readSampleRate|update:sampleRate/);
+  });
+
   it("shows the Gaussian smoothing with the readout Off or its number", () => {
     const line = summary.split("\n").find((l) => l.includes("Gaussian smoothing:")) ?? "";
     expect(line).toContain("formatGaussian(result.gaussian)");
@@ -235,5 +253,15 @@ describe("the result summary for Polychord (feature 042)", () => {
     expect(line("Copies:")).toContain("formatPolychordCopies(result.polychord_max_copies)");
     expect(line("Rotation:")).toContain("isPolychordType(result.image_type)");
     expect(line("Rotation:")).toContain("formatPolychordRotation(result.polychord_rotation)");
+  });
+});
+
+describe("the result summary: Extra notes (feature 044)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+
+  it("shows Extra notes (k) for the pictures that use it only", () => {
+    const line = summary.split("\n").find((l) => l.includes("Extra notes (k):")) ?? "";
+    expect(line).toContain("usesHeldNotes(result.image_type)");
+    expect(line).toContain("formatExtraNotes(result.extra_notes)");
   });
 });

@@ -7,11 +7,9 @@ each filling an arc of the circle, measured from straight up:
   in cell ``a`` (``note_layout``): with ``rows``, the default, the piano note ``a`` itself (0 is A1), in order of pitch;
   with ``spiral`` the note that the spiral puts in that cell (middle C, note 27, is in cell 29). The ``count`` loudest
   notes of a frame (``count`` is the setting *Notes shown*, 5 to 8) get a bar; a note with no strength never does, ties
-  go to the lower note (not the lower arc). **A bar follows its note one arc a frame**: every volume (the loudest, the
-  second loudest, ...) keeps its own bar, and when the note of a volume changes from one frame to the next, its bar
-  moves one arc (2 pi / 84) the shorter way round the circle toward the arc of the new note, instead of jumping there,
-  which makes the animation smoother (``follow_arcs``). The first frame, and a bar that comes back after a frame without
-  a note for its volume, are in the arc of their note. The color is that of the note the bar is following;
+  go to the lower note (not the lower arc). **A bar jumps to its note**: when the loudest notes change from one frame
+  to the next, the bar of a new note is in the arc of that note at once (it does not move toward it by angle; feature
+  032 revised 2026-11-18). Every bar is in the arc of its note in every frame, and the color is that of its note;
 * **the chords**, **counterclockwise**, 84 equal arcs (the same width as a note's), one for each of the 12 letters (a
   letter is a note without its octave, with its accidental; 0 is A, like the first note, A1) and each of the 7 chord
   types of ``POLAR_CHORD_TYPES``: arc ``7 * letter + type``, so the 7 types of the first letter come first, then the 7
@@ -24,34 +22,33 @@ energy peak (0 to 1; 0 without a beat). The notes are colored from the middle of
 start (the loudest), the chord from the middle to its end, by the square root of the strength as a share of the largest
 value of the file; the chord is drawn over the notes.
 
-The bars of all frames are worked out first (``polar_bars``, small arrays, testable on their own); the bars follow their
-notes from frame to frame, so the bars of a frame depend on the frames before it. Drawing is then independent for every
-frame: the arcs of every pixel are worked out once (and kept for the frame size), so that a frame only touches the
+The bars of all frames are worked out first (``polar_bars``, small arrays, testable on their own). Drawing is then
+independent for every frame: the arcs of every pixel are worked out once (and kept for the frame size), so that a frame only touches the
 pixels of its bars.
 
-This module knows nothing about the note analysis, the audio or the beat measurement: the smoothed note values, the beat
+This module knows nothing about the note analysis, the audio or the beat measurement: the note values, the beat
 positions and the size are passed in.
 
 Order of operations:
     1. Check the settings and the values - ``polar_bars()`` with ``check_polar_notes()``, ``check_note_layout()`` and
        ``_check_values()`` - ``NoteStrengths`` ``(frames, 84 or more)``; find the largest value of the whole file (all
        columns), which sets the scale of the colors.
-    2. Find the arc each loudest note is heading for - ``_targets()`` (and ``note_targets()``) - rank the 84 notes of
-       each frame (ties to the lower note), keep the ``count`` loudest, give each the arc of its cell in the note
-       layout: ``BarArcs`` ``(frames, count)`` and ``BarStrengths`` ``(frames, count)`` (the square root of the strength
+    2. Find the arc each loudest note is heading for - ``_targets()`` (and ``note_targets()``) - choose the ``count``
+       loudest notes of each frame, a note that was among them in the frame before keeping its place while it is within the
+       loudest ``count + extra`` (``held_notes.hold_loudest()``, ``LoudestIndices`` ``(frames, count)``; ties to the lower
+       note), give each the arc of its cell in the note layout: ``BarArcs`` ``(frames, count)`` and ``BarStrengths`` ``(frames, count)`` (the square root of the strength
        over the largest value).
-    3. Let each bar follow its note one arc a frame - ``follow_arcs()`` - ``BarArcs`` ``(frames, count)``: the arcs the
-       bars are really in.
-    4. Hide a bar that is in the arc of a louder volume - ``polar_bars()`` - the arc becomes -1 and the strength 0.
-    5. Find the chord of each frame - ``chords.measure_chords()`` with ``POLAR_CHORD_TYPES`` - and its root letter from
+    3. Put each bar in the arc of its note - ``polar_bars()`` - ``BarArcs`` ``(frames, count)``: the arcs of step 2 are the
+       arcs the bars are in (no movement from frame to frame).
+    4. Find the chord of each frame - ``chords.measure_chords()`` with ``POLAR_CHORD_TYPES`` - and its root letter from
        its lowest note and inversion: ``ChordPlaces`` ``(frames,)`` (``7 * root + type``, or -1) and its
        ``BarStrengths`` ``(frames,)``.
-    6. Set the length of the bars - ``polar_bars()`` - ``BarLengths`` ``(frames,)``: ``0.5 + 0.5 * beat``; everything is
+    5. Set the length of the bars - ``polar_bars()`` - ``BarLengths`` ``(frames,)``: ``0.5 + 0.5 * beat``; everything is
        returned as a ``PolarBars``.
-    7. (Drawing, ``write_polar_frames()``) check the bars - ``_check_bars()`` - and make what never changes between
+    6. (Drawing, ``write_polar_frames()``) check the bars - ``_check_bars()`` - and make what never changes between
        frames, once for the picture size - ``_geometry()``: for each of the 84 note arcs and 84 chord arcs the pixels,
        their weights and their distances from the center.
-    8. Draw each frame on its own (a few threads) - ``_frame()`` with ``_layer()`` - the note bars over the background,
+    7. Draw each frame on its own (a few threads) - ``_frame()`` with ``_layer()`` - the note bars over the background,
        then the chord bar over them, each pixel blended by how much of it a bar covers: ``Pictures``
        ``(height, width, 3)``, saved as ``frame_<index>.png``.
 """
@@ -87,6 +84,7 @@ from .array_types import (
 )
 from .chords import check_chord_type, measure_chords
 from .colormaps import COLORMAP_STEPS, MIDDLE_COLOR_ROW, check_beat, check_colormap, lookup_table
+from .held_notes import hold_loudest
 from .frame_saving import SAVE_WORKERS
 from .note_layout import DEFAULT_NOTE_LAYOUT, check_note_layout, note_order
 
@@ -152,13 +150,13 @@ class PolarBars:
     """The bars of every frame of a file.
 
     ``note_slots`` (``int16``, ``(frames, count)``): the arc each note bar is drawn in, loudest first, -1 where fewer
-    notes sound (or where the bar is covered by the bar of a louder note in the same arc). ``note_shares`` (``float64``,
+    notes sound. ``note_shares`` (``float64``,
     same shape): the strength share of each, 0 where there is none. ``chord_place`` (``int16``, ``(frames,)``): the
     place of the chord bar, ``7 * root letter + the number of its type`` from 0 to 83, -1 for none; ``chord_share``
     (``float64``): its strength share. ``length`` (``float64``, ``(frames,)``): ``0.5 + 0.5 * position``.
 
     Attributes:
-        ``note_slots``: ``BarArcs`` ``(frames, count)`` - the arc (0 to 83) each note bar is drawn in, loudest volume
+        ``note_slots``: ``BarArcs`` ``(frames, count)`` - the arc (0 to 83) each note bar is drawn in (the arc of its note), loudest
             first; -1 where there is no bar.
         ``note_shares``: ``BarStrengths`` ``(frames, count)`` - the square root of each bar's strength over the largest
             value of the file (0 to 1); 0 where there is no bar.
@@ -201,20 +199,21 @@ def _check_values(values: ArrayLike) -> NoteStrengths:
     return array
 
 
-def _targets(values: NoteStrengths, peak: float, count: int, note_layout: str) -> tuple[BarArcs, BarStrengths]:
-    """The arc of the note of each of the ``count`` loudest volumes of every frame (-1 for none) and the strength share
+def _targets(values: NoteStrengths, peak: float, count: int, note_layout: str, extra: int = 0) -> tuple[BarArcs, BarStrengths]:
+    """The arc of the note of each of the ``count`` loudest notes of every frame (-1 for none) and the strength share
     of each note.
 
     Arrays:
-        ``values``: ``NoteStrengths`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame;
+        ``values``: ``NoteStrengths`` ``(frames, 84 or more)`` - the strength of each note in each frame;
             ``peak`` is the largest value of the whole file.
+        ``extra``: the Extra notes setting k, 0 (the default: the old ``count`` loudest) to ``count`` (see ``held_notes``).
 
     Returns:
         A tuple of ``BarArcs`` ``(frames, count)`` (the arc of each loudest note, -1 where fewer notes sound) and
         ``BarStrengths`` ``(frames, count)`` (the square root of the strength over ``peak``, 0 where there is none).
     """
     drawn = values[:, :ARCS]
-    order = np.argsort(-drawn, axis=1, kind="stable")[:, :count]  # equal strengths: the lower note first
+    order = hold_loudest(drawn, count, extra)  # LoudestIndices (frames, count): the held notes, loudest first (equal strengths: the lower note first)
     top = np.take_along_axis(drawn, order, axis=1)
     sounding = top > 0
     # the layout names the note of each cell; the arc of a note is its cell
@@ -224,95 +223,57 @@ def _targets(values: NoteStrengths, peak: float, count: int, note_layout: str) -
     return targets, np.where(sounding, shares, 0.0)
 
 
-def note_targets(smoothed: ArrayLike, count: int = DEFAULT_POLAR_NOTES, note_layout: str = DEFAULT_NOTE_LAYOUT) -> tuple[BarArcs, BarStrengths]:
+def note_targets(strengths: ArrayLike, count: int = DEFAULT_POLAR_NOTES, note_layout: str = DEFAULT_NOTE_LAYOUT, extra: int = 0) -> tuple[BarArcs, BarStrengths]:
     """The arc of the note of each of the ``count`` loudest volumes of every frame and its strength share:
     ``(arcs, shares)``, arrays of shape ``(frames, count)``, loudest first, ``-1`` and ``0`` where fewer notes sound.
-    These are the arcs the bars are heading for; ``polar_bars`` moves the bars toward them. The input is not changed.
+    These are the arcs the bars are in (a bar jumps to its note). The input is not changed.
 
     Arrays:
-        ``smoothed``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame.
+        ``strengths``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame.
+        ``extra``: the Extra notes setting k, 0 (the default: the old ``count`` loudest) to ``count`` (see ``held_notes``).
 
     Returns:
-        A tuple of ``BarArcs`` ``(frames, count)`` (the arc each loudest note heads for) and ``BarStrengths``
+        A tuple of ``BarArcs`` ``(frames, count)`` (the arc of each loudest note) and ``BarStrengths``
         ``(frames, count)`` (its strength share).
     """
     count = check_polar_notes(count)
     note_layout = check_note_layout(note_layout)
-    values = _check_values(smoothed)
+    values = _check_values(strengths)
     peak = float(values.max()) if values.size else 0.0
-    return _targets(values, peak, count, note_layout)
+    return _targets(values, peak, count, note_layout, extra)
 
 
-def follow_arcs(targets: ArrayLike) -> BarArcs:
-    """Where the bars are when each follows its note one arc a frame: an ``int16`` array of the shape of ``targets``
-    (``(frames, volumes)``).
-
-    ``targets`` holds for every frame and every volume (the loudest, the second loudest, ...) the arc of its note, or -1
-    for none. The bar of a volume starts in the arc of its note. When the note of a volume changes it moves one arc (2
-    pi / 84) a frame, the shorter way round the circle (clockwise when both ways are as long), until it is in the arc of
-    the note, where it stays and then follows the note by one arc. A volume with no note (-1) has no bar and loses its
-    place: when it has a note again its bar starts in the arc of that note. The input is not changed.
-
-    Arrays:
-        ``targets``: ``ArrayLike`` ``(frames, volumes)`` - the arc (0 to 83) of the note each volume is heading for in
-            each frame, -1 for none (``BarArcs``).
-
-    Returns:
-        ``BarArcs`` ``(frames, volumes)`` - the arc each bar is really in: it moves one arc a frame toward its target,
-        the shorter way round.
-    """
-    targets = np.asarray(targets)
-    if targets.ndim != 2 or targets.dtype.kind not in "iu" or (targets < -1).any() or (targets >= ARCS).any():
-        raise ValueError(f"The targets must be a (frames, volumes) array of whole numbers from -1 to {ARCS - 1}.")
-    positions = np.full(targets.shape, -1, dtype=np.int16)
-    current = np.full(targets.shape[1], -1, dtype=np.int64)
-    for frame in range(targets.shape[0]):
-        target = targets[frame].astype(np.int64)
-        has = target >= 0
-        fresh = has & (current < 0)  # no place yet: start in the arc of the note
-        current = np.where(fresh, target, current)
-        difference = (target - current) % ARCS  # the way to go clockwise
-        step = np.where(difference == 0, 0, np.where(difference <= ARCS // 2, 1, -1))
-        current = np.where(has & ~fresh, (current + step) % ARCS, current)
-        current = np.where(has, current, -1)
-        positions[frame] = current
-    return positions
-
-
-def polar_bars(smoothed: ArrayLike, beat: BeatPositions | None = None, count: int = DEFAULT_POLAR_NOTES, note_layout: str = DEFAULT_NOTE_LAYOUT) -> PolarBars:
+def polar_bars(strengths: ArrayLike, beat: BeatPositions | None = None, count: int = DEFAULT_POLAR_NOTES, note_layout: str = DEFAULT_NOTE_LAYOUT, extra: int = 0) -> PolarBars:
     """The bars of every frame of a file (see :class:`PolarBars`), worked out before any drawing.
 
-    ``smoothed`` is ``(frames, 84 or more)``, the smoothed note values in note order (the columns after the 84th are
+    ``strengths`` is ``(frames, 84 or more)``, the note values in note order (the columns after the 84th are
     never drawn but, like the colors of the other pictures, they count for the largest value that sets the scale);
     ``beat`` is ``None`` or one position from 0 to 1 for each frame; ``count`` is the number of notes shown, 5 to 8;
     ``note_layout`` (``"rows"`` or ``"spiral"``) says in which arc each note is, as it says in which cell of the grid it
-    is for the other pictures. The bars follow their notes one arc a frame (:func:`follow_arcs`); where the bars of two
-    volumes are in the same arc only the louder is shown. The input is not changed.
+    is for the other pictures. Every bar is in the arc of its note in every frame (it jumps to a new note). The input
+    is not changed.
 
     Arrays:
-        ``smoothed``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``strengths``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``).
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
+        ``extra``: the Extra notes setting k, 0 (the default: the old ``count`` loudest) to ``count``: a note that is still among
+            the loudest ``count + extra`` keeps its volume (see ``held_notes``).
 
     Returns:
         A ``PolarBars`` with one entry for each frame (see its attributes).
     """
     count = check_polar_notes(count)
     note_layout = check_note_layout(note_layout)
-    values = _check_values(smoothed)
+    values = _check_values(strengths)
     frames = values.shape[0]
     positions = np.zeros(frames) if beat is None else check_beat(beat, frames)
     peak = float(values.max()) if values.size else 0.0
 
     drawn = values[:, :ARCS]
-    targets, note_shares = _targets(values, peak, count, note_layout)
-    arcs = follow_arcs(targets)
-    covered = np.zeros(arcs.shape, dtype=bool)
-    for volume in range(1, count):  # a bar in the arc of the bar of a louder volume is hidden
-        covered[:, volume] = (arcs[:, :volume] == arcs[:, volume : volume + 1]).any(axis=1) & (arcs[:, volume] >= 0)
-    note_slots = np.where(covered, -1, arcs).astype(np.int16)
-    note_shares = np.where(covered, 0.0, note_shares)
+    targets, note_shares = _targets(values, peak, count, note_layout, extra)
+    note_slots = targets  # the bar of a note is in the arc of the note (two notes never share an arc)
 
     # the chord of every frame: the one that the chord interval measurement records for the 7 types (no limit on the
     # notes: the image type has none); its place is the number of its type, -1 for none

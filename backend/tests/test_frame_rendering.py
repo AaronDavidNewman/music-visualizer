@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from app.services.colormaps import COLORMAPS
-from app.services.frame_rendering import average_frames, frame_count, hidden_below, smooth_frames, write_frames
+from app.services.frame_rendering import average_frames, frame_count, frame_windows, hidden_below, write_frames
 from app.services.note_analysis import AnalysisResult
 
 from app.services.image_types import IMAGE_TYPES
@@ -79,11 +79,11 @@ def test_a_start_on_a_frame_boundary_belongs_to_the_later_frame():
 def test_non_integer_frame_period_never_leaves_a_frame_without_a_window():
     # 44100 Hz at 11 fps: a frame is 4009.09 samples, so rounded window starts can land just
     # before a boundary. Frames are assigned by exact position (k * step) to avoid empty frames.
+    from app.services.buffer_interval import buffer_step
     from app.services.note_analysis import window_starts
-    from app.services.window_spacing import default_spacing
 
     sample_rate, fps, window = 44100, 11, 4096
-    step = default_spacing(sample_rate, fps, window) * window
+    step = buffer_step(sample_rate)
     total = sample_rate * 30
     starts = window_starts(total, step)
     r = result_with_starts(np.arange(len(starts)), starts, sample_rate, total, step=step, window_size=window)
@@ -105,117 +105,37 @@ def test_results_without_starts_behave_as_before():
     assert out[:, 0].tolist() == [0.5, 2.5, 4.5]
 
 
-# --- note smoothing: a windowed average over frames (features 006 and 012) -------------------------------
-
-
-def reference_smooth(frames, s, w=1):
-    """Plain-Python version of the windowed average, independent of smooth_frames:
-    ( A[t] + s*A[t-1] + ... + s*A[t-k] ) / ( 1 + s*k ) with k = min(t, w), from the raw frames."""
-    out = []
-    for t in range(len(frames)):
-        k = min(t, w)
-        out.append(
-            [
-                (frames[t][n] + s * sum(frames[t - j][n] for j in range(1, k + 1))) / (1 + s * k)
-                for n in range(len(frames[t]))
-            ]
-        )
-    return out
+# --- the frames are drawn as they are: no smoothing between the averaging and the drawing (feature 043) ----------------
 
 
 def column(values, notes=88):
     return np.repeat(np.asarray(values, dtype=float)[:, None], notes, axis=1)
 
 
-def test_the_worked_example_from_the_spec():
-    out = smooth_frames(column([0, 10, 0, 0]), 0.5)  # the default window is 1: the previous frame only
-    assert out[:, 0].tolist() == pytest.approx([0, 10 / 1.5, 5 / 1.5, 0])
-    assert (out == out[:, :1]).all()  # every note smoothed the same way
+def test_the_smoothing_of_the_data_is_gone_from_the_module():
+    import app.services.frame_rendering as module
+
+    assert not hasattr(module, "smooth_frames")
+    for name in ("MIN_SMOOTHING", "MAX_SMOOTHING", "DEFAULT_SMOOTHING", "MIN_SMOOTHING_WINDOW", "MAX_SMOOTHING_WINDOW", "DEFAULT_SMOOTHING_WINDOW"):
+        assert not hasattr(module, name), name
 
 
-@pytest.mark.parametrize("smoothing", [0, 0.25, 0.5, 0.8])
-def test_the_first_frame_is_never_changed(smoothing):
-    frames = np.random.default_rng(3).random((10, 88)) * 100
-    assert np.array_equal(smooth_frames(frames, smoothing)[0], frames[0])
+@pytest.mark.parametrize("name", ["smoothing", "smoothing_window"])
+def test_write_frames_no_longer_takes_the_smoothing_arguments(tmp_path, name):
+    with pytest.raises(TypeError):
+        write_frames(column([1, 2, 3]), tmp_path / "out", **{name: 1})
+    assert not (tmp_path / "out").exists()
 
 
-@pytest.mark.parametrize("smoothing, window", [(0.0, 1), (0.1, 1), (0.3, 2), (0.5, 5), (0.8, 1), (0.8, 20)])
-def test_matches_the_formula_for_random_data(smoothing, window):
-    frames = np.random.default_rng(11).random((40, 88)) * 50
-    expected = np.array(reference_smooth(frames.tolist(), smoothing, window))
-    assert np.allclose(smooth_frames(frames, smoothing, window), expected, rtol=1e-6, atol=1e-9)
-
-
-def test_smoothing_zero_returns_equal_values_in_a_new_array():
-    frames = np.random.default_rng(5).random((6, 88))
-    out = smooth_frames(frames, 0)
-    assert np.array_equal(out, frames)
-    out[0, 0] = -1
-    assert frames[0, 0] != -1  # a copy, not the same array
-
-
-def test_the_input_is_never_modified():
-    frames = np.random.default_rng(6).random((8, 88))
-    before = frames.copy()
-    smooth_frames(frames, 0.6)
-    assert np.array_equal(frames, before)
-
-
-def test_each_note_uses_only_its_own_history():
-    rng = np.random.default_rng(8)
-    frames = rng.random((20, 88)) * 10
-    changed = frames.copy()
-    changed[:, 5] = rng.random(20) * 10  # a different note 5
-    a, b = smooth_frames(frames, 0.7), smooth_frames(changed, 0.7)
-    assert not np.allclose(a[:, 5], b[:, 5])
-    others = [k for k in range(88) if k != 5]
-    assert np.array_equal(a[:, others], b[:, others])
-
-
-def frames_until(values, smoothing, window, reached):
-    """Frames after the change at which the smoothed first note first satisfies `reached` (1 = the change frame)."""
-    out = smooth_frames(column(values, 1), smoothing, window)[:, 0]
-    change = next(i for i in range(1, len(values)) if values[i] != values[i - 1])
-    return next(i - change + 1 for i in range(change, len(values)) if reached(out[i]))
-
-
-@pytest.mark.parametrize("smoothing, window, frames", [(0.0, 5, 1), (0.5, 1, 2), (0.5, 3, 4), (0.8, 10, 11)])
-def test_a_note_that_stops_is_exactly_gone_after_the_window(smoothing, window, frames):
-    values = [100.0] * 30 + [0.0] * 40  # a long note, so the window is full when it stops
-    # the first frame whose smoothed value is exactly 0: with smoothing 0 the frame it stops, otherwise window + 1 frames on
-    assert frames_until(values, smoothing, window, lambda v: v == 0.0) == frames
-
-
-@pytest.mark.parametrize("smoothing, window, frames", [(0.0, 5, 1), (0.5, 1, 2), (0.5, 3, 4), (0.8, 10, 11)])
-def test_a_note_that_starts_reaches_its_full_value_after_the_window(smoothing, window, frames):
-    values = [0.0] * 30 + [100.0] * 40
-    assert frames_until(values, smoothing, window, lambda v: v >= 100.0 - 1e-9) == frames
-
-
-def test_short_inputs_come_back_unchanged():
-    one = np.random.default_rng(1).random((1, 88))
-    none = np.zeros((0, 88))
-    assert np.array_equal(smooth_frames(one, 0.7), one)
-    assert smooth_frames(none, 0.7).shape == (0, 88)
-
-
-def test_output_stays_between_zero_and_the_input_maximum():
-    frames = np.random.default_rng(2).random((50, 88)) * 30
-    out = smooth_frames(frames, 0.8)
-    assert out.min() >= 0
-    assert out.max() <= frames.max() + 1e-12
-
-
-@pytest.mark.parametrize("smoothing", [0.0, 0.8, 0.4])
-def test_the_limits_are_accepted(smoothing):
-    smooth_frames(column([1, 2, 3]), smoothing)
-    smooth_frames(column([1, 2, 3]), smoothing, 20)
-
-
-@pytest.mark.parametrize("smoothing", [-0.01, 0.81, 1, 5, float("nan"), float("inf"), -float("inf"), True, "0.5", None])
-def test_smoothing_outside_zero_to_point_eight_is_refused(smoothing):
-    with pytest.raises(ValueError, match="smoothing"):
-        smooth_frames(column([1, 2, 3]), smoothing)
+def test_a_note_that_stops_is_not_drawn_in_the_next_frame(tmp_path):
+    """With no smoothing a frame depends on its own values only: frame 2 of a note that sounded in frames 0 and 1 only is
+    exactly the picture of silence."""
+    values = np.zeros((4, 88))
+    values[:2, 40] = 1.0
+    values[0, 20] = 0.5  # keeps the peak of the file above 0 in the first frames only
+    write_frames(values, tmp_path / "out", image_type="contour")
+    assert (tmp_path / "out" / "frame_000002.png").read_bytes() == (tmp_path / "out" / "frame_000003.png").read_bytes()
+    assert (tmp_path / "out" / "frame_000001.png").read_bytes() != (tmp_path / "out" / "frame_000002.png").read_bytes()
 
 
 # --- the note threshold: which notes are hidden (feature 011) ------------------------------------------------
@@ -233,16 +153,9 @@ def frame_files(directory):
     return {p.name: p.read_bytes() for p in sorted(directory.glob("*.png"))}
 
 
-def test_with_smoothing_zero_every_window_writes_the_same_files(tmp_path):
-    for window in (1, 20):
-        write_frames(LEVEL_FRAMES, tmp_path / str(window), smoothing=0.0, smoothing_window=window, threshold=3)
-    write_frames(LEVEL_FRAMES, tmp_path / "none", threshold=3)
-    assert frame_files(tmp_path / "1") == frame_files(tmp_path / "20") == frame_files(tmp_path / "none")
-
-
 def test_written_files_repeat_exactly(tmp_path):
     for name in ("a", "b"):
-        write_frames(LEVEL_FRAMES, tmp_path / name, colormap=FIRST, smoothing=0.4, smoothing_window=4, threshold=2)
+        write_frames(LEVEL_FRAMES, tmp_path / name, colormap=FIRST, threshold=2)
     assert frame_files(tmp_path / "a") == frame_files(tmp_path / "b")
 
 
@@ -256,9 +169,6 @@ def test_written_files_repeat_exactly(tmp_path):
         ({"colormap": COLORMAPS[0].swapcase() + "x"}, MESSAGE),
         ({"threshold": 11}, "The threshold must be a number from 0 to 10."),
         ({"threshold": -1}, "The threshold must be a number from 0 to 10."),
-        ({"smoothing": 0.9}, "The smoothing must be a number from 0.0 to 0.8."),
-        ({"smoothing_window": 0}, "The smoothing window must be a whole number from 1 to 20."),
-        ({"smoothing_window": 21}, "The smoothing window must be a whole number from 1 to 20."),
         ({"image_type": "Tiles"}, f"The image type must be one of {', '.join(IMAGE_TYPES)}."),
     ],
 )
@@ -288,3 +198,69 @@ def test_hidden_below_hides_nothing_without_a_threshold_or_for_a_silent_file():
     assert not hidden_below(np.zeros((3, 8)), 0.0, 10).any()
     with pytest.raises(ValueError):
         hidden_below(values, 1.0, 11)
+
+
+# --- the frames average the 60 ms frequency buffers they own (feature 043, User Story 2) ----------------------------------
+
+SAMPLE_RATE = 44100
+STEP = 2646.0  # buffer_step(44100): 60 ms
+
+
+def buffers(count, rate=SAMPLE_RATE):
+    """A fabricated AnalysisResult of ``count`` buffers 60 ms apart; every note of buffer ``k`` is ``k + 1`` (so every buffer is told apart)."""
+    values = np.repeat((np.arange(count, dtype=float) + 1.0)[:, None], 88, axis=1)
+    starts = np.rint(np.arange(count) * STEP).astype(np.int64)
+    return AnalysisResult(rate, 4096, values, int(count * STEP), starts=starts, step=STEP)
+
+
+@pytest.mark.parametrize("fps", [1, 2, 5, 10])
+def test_a_frame_longer_than_the_interval_is_the_mean_of_the_buffers_that_start_in_it(fps):
+    result = buffers(100)
+    frames = frame_count(result.sample_count, SAMPLE_RATE, fps)
+    first, stop, _ = frame_windows(result, fps, frames)
+    out = average_frames(result, fps, frames)
+    for f in range(frames):
+        assert stop[f] > first[f], (fps, f)  # at 10 fps or less a frame (100 ms or more) always holds at least one 60 ms buffer
+        assert out[f, 0] == pytest.approx(np.arange(first[f], stop[f]).mean() + 1.0), (fps, f)
+    assert int((stop - first).sum()) == 100  # every buffer is counted in exactly one frame (SC-004)
+
+
+def test_a_frame_owns_about_its_period_over_60_ms_buffers_one_more_or_fewer():
+    result = buffers(100)
+    for fps, owned in ((10, {1, 2}), (5, {3, 4}), (2, {8, 9})):  # 100 ms, 200 ms and 500 ms frames
+        frames = frame_count(result.sample_count, SAMPLE_RATE, fps)
+        first, stop, _ = frame_windows(result, fps, frames)
+        assert set((stop - first)[:-1].tolist()) <= owned, fps
+
+
+@pytest.mark.parametrize("fps", [20, 24, 30, 60])
+def test_above_the_buffer_rate_a_frame_without_a_buffer_repeats_the_latest_one(fps):
+    result = buffers(60)
+    frames = frame_count(result.sample_count, SAMPLE_RATE, fps)
+    first, stop, earlier = frame_windows(result, fps, frames)
+    out = average_frames(result, fps, frames)
+    assert out.shape == (frames, 88)
+    assert (out > 0).all()  # no frame is blank for want of a buffer (FR-005)
+    assert ((stop - first) <= 1).all()  # a frame is shorter than a buffer interval
+    for f in range(frames):
+        want = result.frames[first[f]] if stop[f] > first[f] else result.frames[earlier[f]]
+        assert np.array_equal(out[f], want), (fps, f)
+    assert int((stop - first).sum()) == 60  # still every buffer exactly once
+    assert (np.diff(out[:, 0]) >= 0).all()  # time only moves forward
+
+
+@pytest.mark.parametrize("fps", [1, 3, 10, 16, 30, 60])
+def test_the_number_of_frames_is_the_duration_times_the_frame_rate_rounded_up(fps):
+    seconds = 7.3
+    samples = int(seconds * SAMPLE_RATE)
+    assert frame_count(samples, SAMPLE_RATE, fps) == int(np.ceil(seconds * fps - 1e-9))
+
+
+def test_a_lower_frame_rate_changes_more_gently_than_a_higher_one():
+    """More buffers are averaged into each frame at a low rate, so the same ramp of buffers gives smaller steps relative to its range at 10 fps than a single
+    buffer per frame gives at 60 fps: both end on the same level, the low rate with a mean of its buffers."""
+    result = buffers(100)
+    low = average_frames(result, 5, frame_count(result.sample_count, SAMPLE_RATE, 5))[:, 0]
+    high = average_frames(result, 60, frame_count(result.sample_count, SAMPLE_RATE, 60))[:, 0]
+    assert low.max() <= high.max()  # a mean never exceeds the largest value of the buffers
+    assert low.min() >= high.min()

@@ -1,0 +1,2 @@
+baseline-failures-before.txt is the 32 ids of specs/043-decouple-frame-rate/baseline-failures-after.txt (the state of the tree before the first edit of feature 044).
+baseline-failures-before-copy-run.txt is the same suite run on a copy of backend/ without the frontend folder: it has 2 more ids (test_colormaps.py, which reads frontend files by a relative path), an artifact of the copy and not a failure of the tree.

@@ -17,9 +17,6 @@ import {
   waveCountHelp,
   noteCountHelp,
   resolutionHelp,
-  smoothingHelp,
-  smoothingWindowHelp,
-  spacingHelp,
   thresholdHelp,
   windowSizeHelp,
 } from "./help";
@@ -30,16 +27,11 @@ describe("setting explanations", () => {
     expect(windowSizeHelp).toBe("Larger windows separate low notes better but blur changes over time.");
   });
 
-  it("states the frame rate range from the validation constants", () => {
-    expect(frameRateHelp).toBe(`${FRAME_RATE_RANGE.min} to ${FRAME_RATE_RANGE.max}.`);
-  });
-
-  it("explains the spacing and adds the step hint when there is one", () => {
-    const base = spacingHelp("");
-    expect(base).toBe("Distance between the starts of windows, as a multiple of the window size.");
-    expect(spacingHelp("Step between windows: 1024 samples (23.2 ms).")).toBe(
-      `${base} Step between windows: 1024 samples (23.2 ms).`,
-    );
+  it("states the frame rate range from the validation constants and says that the notes are measured every 60 ms", () => {
+    expect(frameRateHelp).toContain(`${FRAME_RATE_RANGE.min} to ${FRAME_RATE_RANGE.max}.`);
+    expect(frameRateHelp).toContain("every 60 milliseconds");
+    expect(frameRateHelp).toContain("average of the measurements");
+    expect(frameRateHelp).toContain("repeats the latest measurement");
   });
 
   it("explains the threshold: not drawn below it (the value is 0 in the contour), a share of the loudest note in the file, left end off, right end 10%", () => {
@@ -52,19 +44,6 @@ describe("setting explanations", () => {
     expect(thresholdHelp).toContain("off");
     expect(thresholdHelp).toContain("right end");
     expect(thresholdHelp).toContain("10% of the loudest note");
-  });
-
-  it("explains Smoothing as the weight of the earlier frames in the window", () => {
-    expect(smoothingHelp).toContain("0 is no smoothing");
-    expect(smoothingHelp).toContain("smoothing window");
-    expect(smoothingHelp).toContain("counts this fraction as much as the current frame");
-  });
-
-  it("explains the smoothing window: earlier frames mixed in, a stopped note gone, the range, and no effect at 0", () => {
-    expect(smoothingWindowHelp).toContain("1 to 20");
-    expect(smoothingWindowHelp).toContain("earlier frames are mixed into each frame");
-    expect(smoothingWindowHelp).toContain("gone that many frames later");
-    expect(smoothingWindowHelp).toContain("no effect while Smoothing is 0");
   });
 
   it("explains the gaussian smoothing: 0 to 5, off at 0, a 3:2 radius, which image types", () => {
@@ -265,7 +244,8 @@ describe("the Polar Chords help (feature 032)", () => {
     expect(imageTypeHelp).toContain("root letter");
     expect(imageTypeHelp).toContain("beat");
     expect(imageTypeHelp).toContain("Note layout");
-    expect(imageTypeHelp).toContain("one arc a frame");
+    expect(imageTypeHelp).toContain("jumps to the arc of the new note");
+    expect(imageTypeHelp).not.toContain("one arc a frame");
   });
 
   it("explains Notes shown: the range, the default and that the loudest notes get a bar", () => {
@@ -450,5 +430,22 @@ describe("the Polychord help (feature 042)", () => {
 
   it("names Polychord in the Local peaks help", () => {
     expect(peakDistanceHelp).toContain("Polychord");
+  });
+});
+
+import { extraNotesHelp as extraNotesHelpText, imageTypeHelp as imageTypeHelpText } from "./help";
+
+describe("the help of the Extra notes setting (feature 044)", () => {
+  it("explains held notes, k, the range, the free place and the default", () => {
+    for (const piece of ["1 to the number of notes", "Default 2", "held", "n + k", "louder new note has to wait", "free"]) expect(extraNotesHelpText).toContain(piece);
+    for (const picture of ["Polar Chords", "Polychord", "Chromatic Wireframe"]) expect(extraNotesHelpText).toContain(picture);
+  });
+
+  it("is said in the descriptions of the six pictures that take the n loudest notes", () => {
+    expect(imageTypeHelpText.match(/Extra notes/g)?.length ?? 0).toBeGreaterThanOrEqual(6);
+    expect(imageTypeHelpText).toContain("the 5 loudest notes are held notes");
+    expect(imageTypeHelpText).toContain("the notes that get a bar are held notes");
+    expect(imageTypeHelpText).toContain("the five loudest letters are held letters");
+    expect(imageTypeHelpText).toContain("the notes of the figure are held notes");
   });
 });

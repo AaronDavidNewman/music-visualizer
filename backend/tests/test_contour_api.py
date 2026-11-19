@@ -69,9 +69,9 @@ def test_the_response_has_the_usual_keys_and_nothing_extra_for_contour(client):
     job = post(client, tiny()).json()
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
-        "smoothing", "smoothing_window", "threshold", "image_type", "colormap", "resolution", "note_count", "interpolate",
-        "gaussian", "beat_coloring", "peak_distance", "note_layout", "decay_rate", "wave_count", "polar_notes", "polychord_notes", "polychord_min_copies", "polychord_max_copies", "polychord_rotation", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing",
-        "step_samples", "window_count", "spacing_raised", "frame_url_template",
+        "threshold", "image_type", "colormap", "resolution", "note_count", "interpolate",
+        "gaussian", "beat_coloring", "peak_distance", "note_layout", "decay_rate", "wave_count", "polar_notes", "polychord_notes", "polychord_min_copies", "polychord_max_copies", "polychord_rotation", "extra_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated",
+        "step_samples", "window_count", "frame_url_template",
     }  # fmt: skip
     for key in REMOVED:
         assert key not in job
@@ -163,18 +163,15 @@ def test_changing_the_colormap_changes_the_pictures_and_not_the_frame_count(clie
     assert any(frame_bytes(client, a, i) != frame_bytes(client, b, i) for i in range(a["frame_count"]))
 
 
-def test_smoothing_with_a_window_keeps_a_trace_of_a_note_after_it_stops(client):
+def test_a_note_that_stops_leaves_no_trace_in_the_frames_after_it(client):
     tone = np.concatenate([note_tone(36, 1.0), np.zeros(SR)])  # one second of sound, one of silence: 20 frames at 10 per second
     data = wav_bytes(tone, tone)
-    plain = post(client, data, smoothing="0", frame_rate="10").json()
-    smooth = post(client, data, smoothing="0.8", smoothing_window="8", frame_rate="10").json()
+    job = post(client, data, frame_rate="10").json()
     flat = lambda img: len({tuple(p) for p in img[..., :3].reshape(-1, 3).tolist()}) == 1  # noqa: E731
-    assert plain["frame_count"] == smooth["frame_count"] == 20
-    # without smoothing the picture is flat (nothing sounds) from the frame after the tone; with a window of 8 it keeps a
-    # trace for 8 more frames and then is flat again
-    assert all(flat(frame_image(client, plain, i)) for i in range(11, 20))
-    assert not any(flat(frame_image(client, smooth, i)) for i in range(0, 16))
-    assert flat(frame_image(client, smooth, 19))
+    assert job["frame_count"] == 20
+    # there is no smoothing between the frames (feature 043): the picture is flat (nothing sounds) from the frame after the tone
+    assert not any(flat(frame_image(client, job, i)) for i in range(0, 9))
+    assert all(flat(frame_image(client, job, i)) for i in range(12, 20))
 
 
 def test_a_threshold_changes_the_contour_by_hiding_a_faint_note(client):
@@ -195,7 +192,7 @@ def test_a_threshold_changes_the_contour_by_hiding_a_faint_note(client):
 def test_a_silent_file_gives_flat_frames_of_the_first_color_of_the_colormap(client, name):
     data = wav_bytes(np.zeros(SR), np.zeros(SR))
     first = lookup_table(name)[0]
-    for fields in ({}, {"threshold": "1"}, {"smoothing": "0.5", "smoothing_window": "3"}):
+    for fields in ({}, {"threshold": "1"}):
         job = post(client, data, colormap=name, **fields).json()
         for i in (0, job["frame_count"] // 2, job["frame_count"] - 1):
             assert (frame_image(client, job, i)[..., :3] == first).all(), (name, fields, i)
@@ -203,8 +200,8 @@ def test_a_silent_file_gives_flat_frames_of_the_first_color_of_the_colormap(clie
 
 def test_the_same_request_twice_gives_identical_frames(client):
     data = chord_wav(2)
-    a = post(client, data, smoothing="0.4", smoothing_window="3", threshold="3").json()
-    b = post(client, data, smoothing="0.4", smoothing_window="3", threshold="3").json()
+    a = post(client, data, threshold="3").json()
+    b = post(client, data, threshold="3").json()
     for i in range(0, a["frame_count"], 3):
         assert frame_bytes(client, a, i) == frame_bytes(client, b, i)
 

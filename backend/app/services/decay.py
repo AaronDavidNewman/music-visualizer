@@ -15,8 +15,9 @@ Every circle has **points** from 0 to 64, 0 before the first frame. The points d
   the disc is flat; as the points fall from 64 the outer rings come back to the last color first, which is what shows
   the decay.
 
-In every frame the five loudest notes (the smoothed values of the 84 drawn notes; ties go to the lower note, a note with
-value 0 does not count) **gain** 24, 20, 16, 12 and 8 points in order of loudness, plus ``8 * position`` points each,
+In every frame the five loudest notes (the values of the 84 drawn notes; ties go to the lower note, a note with
+value 0 does not count; with the *Extra notes* setting above 0 a note that is still among the loudest 5 + k keeps its place,
+see ``held_notes``) **gain** 24, 20, 16, 12 and 8 points in order of loudness, plus ``8 * position`` points each,
 with ``position`` the frame's place in the local energy peak (0 to 1, see ``local_peaks``; 0 when no beat is given).
 
 Circles give their points to the cells around them in a **decay step**, every ``decay_rate`` frames (a number from 0.25
@@ -43,14 +44,15 @@ for the frame size), and a pixel is the blend of the background and the color of
 ``clip(radius - distance + 0.5, 0, 1)``, a smooth edge one pixel wide for any radius, the edges between the rings being
 smooth in the same way.
 
-This module knows nothing about the note analysis or the audio: the smoothed note values, the beat positions and the
+This module knows nothing about the note analysis or the audio: the note values, the beat positions and the
 size are passed in.
 
 Order of operations:
     1. Check the settings - ``circle_points()`` - the note layout, the decay rate (0.25 to 4 in steps of 0.25) and the
        four decay amounts.
     2. Work out what every note gains in every frame - ``gains()`` - ``PointGains`` ``(frames, 84)``: the five loudest
-       of the 84 drawn notes gain 24, 20, 16, 12 and 8 points plus ``8 * beat``.
+       of the 84 drawn notes (the held notes: ``held_notes.hold_loudest()``, ``LoudestIndices`` ``(frames, 5)``) gain 24, 20,
+       16, 12 and 8 points plus ``8 * beat``.
     3. Put the gains in cell order - ``note_layout.arrange_notes()`` - ``GridValues`` ``(frames, 84)``, then each frame
        as a ``(7, 12)`` grid.
     4. For each frame in turn, add the gains and let the circles give points to their neighbours - ``circle_points()``
@@ -94,6 +96,7 @@ from .array_types import (
     Rgb,
 )
 from .colormaps import COLORMAP_STEPS, MIDDLE_COLOR_ROW, check_beat, check_colormap, lookup_table
+from .held_notes import hold_loudest
 from .frame_saving import SAVE_WORKERS
 from .note_grid import GRID_COLUMNS, GRID_ROWS, NOTES, RINGS, _check_values, full_radius, tile_edges
 from .note_layout import DEFAULT_NOTE_LAYOUT, arrange_notes, check_note_layout
@@ -142,27 +145,31 @@ def check_decay_rate(value: object) -> float:
     return float(value)
 
 
-def gains(values: ArrayLike, beat: BeatPositions | None = None) -> PointGains:
+def gains(values: ArrayLike, beat: BeatPositions | None = None, extra: int = 0) -> PointGains:
     """The points every note gains in every frame, in note order: a float64 array of shape ``(frames, 84)``.
 
     The five notes with the highest value of a frame (ties to the lower note; a note with value 0 does not count) get
-    24, 20, 16, 12 and 8 points in that order plus ``8 * position``; every other note gets 0. ``beat`` is ``None``
+    24, 20, 16, 12 and 8 points in that order plus ``8 * position``; every other note gets 0. With ``extra`` above 0 the five
+    are the held notes (a note that is still among the loudest ``5 + extra`` keeps its place, see ``held_notes``); with 0 they
+    are the five loudest. ``beat`` is ``None``
     (position 0) or one position from 0 to 1 for each frame. The input is not changed.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``); only the first 84 notes are drawn.
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
+        ``extra``: the Extra notes setting k, 0 (the default: the old five loudest) to 5: a note that was among the five of the frame before stays among them while it is within the
+            loudest ``5 + extra`` (see ``held_notes``).
 
     Returns:
         ``PointGains`` ``(frames, 84)`` - the points each of the 84 notes gains in each frame, in note order: 0 for all
-        but the five loudest notes.
+        but the five loudest notes (the held notes).
     """
     shown = _check_values(values)[:, :NOTES]
     frames = shown.shape[0]
     positions = np.zeros(frames) if beat is None else check_beat(beat, frames)
-    order = np.argsort(-shown, axis=1, kind="stable")[:, : len(GAINS)]
+    order = hold_loudest(shown, len(GAINS), extra)  # LoudestIndices (frames, 5): the held notes, loudest first
     ranked = np.take_along_axis(shown, order, axis=1)
     gained = np.asarray(GAINS, dtype=np.float64)[None, :] + BEAT_BONUS * positions[:, None]
     gained = np.where(ranked > 0, gained, 0.0)
@@ -287,11 +294,12 @@ def circle_points(
     note_layout: str = DEFAULT_NOTE_LAYOUT,
     decay_rate: float = DEFAULT_DECAY_RATE,
     decay_amounts: tuple[float, float, float, float] = DEFAULT_DECAY_AMOUNTS,
+    extra: int = 0,
 ) -> CirclePoints:
     """The points of the 84 circles after every frame: a float64 array of shape ``(frames, 84)``, in cell order (row by
     row).
 
-    ``values`` is ``(frames, 84 or more)``, the smoothed note values in note order; ``beat`` is ``None`` or one position
+    ``values`` is ``(frames, 84 or more)``, the note values in note order; ``beat`` is ``None`` or one position
     from 0 to 1 for each frame; ``note_layout`` says which note is in which cell; ``decay_rate`` is the number of frames
     between decay steps (0.25 to 4 in steps of 0.25), each of which moves that many frames' worth of decay, each circle
     at the rate of its saturation level (``decay_amounts``: the four per-neighbour amounts, low, medium, high,
@@ -300,10 +308,12 @@ def circle_points(
     and is recorded.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``), in note order.
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
+        ``extra``: the Extra notes setting k, 0 (the default: the old five loudest) to 5: a note that was among the five of the frame before stays among them while it is within the
+            loudest ``5 + extra`` (see ``held_notes``).
 
     Returns:
         ``CirclePoints`` ``(frames, 84)`` - the points (0 to 64) of each of the 84 circles after each frame, in cell
@@ -312,7 +322,7 @@ def circle_points(
     note_layout = check_note_layout(note_layout)
     decay_rate = check_decay_rate(decay_rate)
     decay_amounts = check_decay_amounts(decay_amounts)
-    gained = arrange_notes(gains(values, beat), note_layout).reshape(-1, GRID_ROWS, GRID_COLUMNS)
+    gained = arrange_notes(gains(values, beat, extra), note_layout).reshape(-1, GRID_ROWS, GRID_COLUMNS)
     points = np.zeros((GRID_ROWS, GRID_COLUMNS))
     recorded = np.zeros((gained.shape[0], NOTES))
     for index in range(gained.shape[0]):

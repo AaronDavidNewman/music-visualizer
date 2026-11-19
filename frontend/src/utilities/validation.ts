@@ -2,12 +2,8 @@
 export const WINDOW_SIZES = [4096, 8192, 16384, 32768] as const;
 export const DEFAULT_WINDOW_SIZE = WINDOW_SIZES[0];
 export const FRAME_RATE_RANGE = { min: 1, max: 60 } as const;
-/** Smoothing is a running average of each note over the frames (0 = none). The slider moves in steps of 0.01. */
-export const SMOOTHING_RANGE = { min: 0, max: 0.8, step: 0.01 } as const;
-export const DEFAULT_SMOOTHING = SMOOTHING_RANGE.min;
 
 const windowSizeMessage = `The window size must be one of ${WINDOW_SIZES.join(", ")}.`;
-const smoothingMessage = `The smoothing must be a number from ${SMOOTHING_RANGE.min.toFixed(1)} to ${SMOOTHING_RANGE.max.toFixed(1)}.`;
 const frameRateMessage = `The frame rate must be a number from ${FRAME_RATE_RANGE.min} to ${FRAME_RATE_RANGE.max}.`;
 
 function parseNumber(value: string | number): number {
@@ -36,18 +32,6 @@ export function validateFile(file: { name: string } | null): string | null {
     : "The file must be a .wav file.";
 }
 
-/** Returns an error message, or null when the smoothing is a finite number from 0 to 0.8. */
-export function validateSmoothing(value: string | number): string | null {
-  const n = parseNumber(value);
-  const ok = Number.isFinite(n) && n >= SMOOTHING_RANGE.min && n <= SMOOTHING_RANGE.max;
-  return ok ? null : smoothingMessage;
-}
-
-/** The smoothing as text with two decimals, such as "0.30" (no floating-point noise). */
-export function formatSmoothing(value: number): string {
-  return value.toFixed(2);
-}
-
 /** The threshold hides faint notes: a note below this percentage of the file's loudest note value is drawn black. 0 is off. The slider moves in steps of 1. */
 export const THRESHOLD_RANGE = { min: 0, max: 10, step: 1 } as const;
 export const DEFAULT_THRESHOLD = THRESHOLD_RANGE.min;
@@ -69,19 +53,6 @@ export function formatThreshold(value: number): string {
 /** The result summary item: "Off" or the percentage such as "30%". */
 export function formatThresholdSummary(value: number): string {
   return value === 0 ? "Off" : `${Number(value.toFixed(2))}%`;
-}
-
-/** Smoothing window: how many earlier frames are mixed into each frame (a whole number). */
-export const SMOOTHING_WINDOW_RANGE = { min: 1, max: 20 } as const;
-export const DEFAULT_SMOOTHING_WINDOW = SMOOTHING_WINDOW_RANGE.min;
-
-const smoothingWindowMessage = `The smoothing window must be a whole number from ${SMOOTHING_WINDOW_RANGE.min} to ${SMOOTHING_WINDOW_RANGE.max}.`;
-
-/** Returns an error message, or null when the smoothing window is a whole number from 1 to 20. */
-export function validateSmoothingWindow(value: string | number): string | null {
-  const n = parseNumber(value);
-  const ok = Number.isInteger(n) && n >= SMOOTHING_WINDOW_RANGE.min && n <= SMOOTHING_WINDOW_RANGE.max;
-  return ok ? null : smoothingWindowMessage;
 }
 
 /**
@@ -243,7 +214,7 @@ export function isPolarType(imageType: string): boolean {
   return imageType === "polar-chords";
 }
 
-/** Whether the picture is Energy graphs (feature 034): a running histogram of the notes with two data sets. It has no setting of its own and uses neither the grid settings, the layout, the beat nor the data smoothing. */
+/** Whether the picture is Energy graphs (feature 034): a running histogram of the notes with two data sets. It has no setting of its own and uses neither the grid settings, the layout nor the beat. */
 export function isEnergyType(imageType: string): boolean {
   return imageType === "energy-graphs";
 }
@@ -292,6 +263,35 @@ export function validatePolarNotes(value: string | number): string | null {
 /** The readout beside the slider and the summary item: "5 notes". */
 export function formatPolarNotes(value: number): string {
   return `${value} notes`;
+}
+
+/**
+ * Extra notes (feature 044, the user's k): how far down the ranking a note that is still sounding keeps its place among the n loudest notes of a frame: it is held while it is among the
+ * loudest n + k. A whole number from 1 to n, the number of notes of the picture (at most 8). Used by the six pictures that take the n loudest notes.
+ */
+export const EXTRA_NOTES_RANGE = { min: 1, max: 8, step: 1 } as const;
+export const DEFAULT_EXTRA_NOTES = 2;
+
+/** Whether the picture takes the n loudest notes of each frame and so has the Extra notes setting (feature 044): Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord. */
+export function usesHeldNotes(imageType: string): boolean {
+  return ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"].includes(imageType);
+}
+
+/** The number of notes n of a picture: 5, the Notes shown of Polar Chords, the Number of notes of Polychord; 8 (the most k can be) for a picture that does not use the setting. */
+export function heldNotesCount(imageType: string, polarNotes: number, polychordNotes: number): number {
+  if (imageType === "polar-chords") return polarNotes;
+  if (imageType === "polychord") return polychordNotes;
+  return usesHeldNotes(imageType) ? 5 : EXTRA_NOTES_RANGE.max;
+}
+
+/** Returns an error message, or null when Extra notes is a whole number from 1 to ``notes`` (the number of notes of the picture). */
+export function validateExtraNotes(value: string | number, notes: number): string | null {
+  return validateWhole(value, EXTRA_NOTES_RANGE.min, notes, `The extra notes must be a whole number from ${EXTRA_NOTES_RANGE.min} to ${notes}.`);
+}
+
+/** The readout beside the slider and the summary item: the number. */
+export function formatExtraNotes(value: number): string {
+  return String(value);
 }
 
 /** Number of notes of Polychord (feature 042): the links in one figure, a whole number from 5 to 8. */

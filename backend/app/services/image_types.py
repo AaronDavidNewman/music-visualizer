@@ -25,13 +25,14 @@ Pipeline overview:
     How a job makes the frames of every image type, in order (``routers/jobs.py`` ``create_job()`` and
     ``frame_rendering.write_frames()``). The first steps are the same for every type; MEASURE is done only by the types
     marked below; DRAW is each type's own. Each step names the function and the data after it (the names of the arrays
-    are in ``array_types.py``; ``windows`` are the analysis windows of the audio, ``frames`` the pictures of the
-    animation, which is 10 to 60 a second).
+    are in ``array_types.py``; ``windows`` are the frequency buffers (the analysis windows) of the audio, one every 60
+    ms whatever the frame rate, ``frames`` the pictures of the animation, which is 1 to 60 a second).
 
     READ     - ``note_analysis.read_wav()`` - two ``RawSamples`` ``(samples,)`` (left and right channel) and the
                file's sample rate.
-    ANALYZE  - ``note_analysis.analyze_channels()`` - ``NoteStrengths`` ``(windows, 88)``: the strength of each of the
-               88 notes in each analysis window.
+    ANALYZE  - ``note_analysis.analyze_channels()`` with the step of ``buffer_interval.buffer_step()`` (60 ms of the
+               file's sample rate, fixed since feature 043) - ``NoteStrengths`` ``(windows, 88)``: the strength of each of
+               the 88 notes in each analysis window.
     FLOOR    - ``noise_floor.floor_analysis()`` - ``NoteStrengths`` ``(windows, 88)``: a strength below a thousandth
                of the loudest of the file is 0.
     MEASURE  - only for some types, one of three measurements (all use the two channels of the file or the analysis,
@@ -44,10 +45,10 @@ Pipeline overview:
                * ENERGY: ``energy_graphs.frame_energy()`` - two ``EnergyTotals`` ``(frames, 84)``: the running rank
                  points and quasi-decibel values of each note. Made in the same call as AVERAGE, right after it.
     AVERAGE  - ``frame_rendering.average_frames()`` - ``NoteStrengths`` ``(frames, 88)``: the mean of the windows each
-               frame owns.
-    SMOOTH   - ``frame_rendering.smooth_frames()`` - ``NoteStrengths`` ``(frames, 88)``: each frame mixed with the
-               frames before it. Done for every type; Energy Graphs and Rhythm Circles draw from their measurement and
-               do not use these values.
+               frame owns (the windows that start in its period; the latest earlier window when none does). This is
+               the only smoothing of the note data: the frame rate decides how many windows each frame averages, and
+               the frames are not blended with each other. Energy Graphs and Rhythm Circles draw from their
+               measurement and do not use these values.
     DRAW     - the type's own stages (below) - ``Pictures`` ``(height, width, 3)`` for each frame, 400 rows by 600
                columns.
     SAVE     - each picture is written as ``frame_<index>.png`` (a few threads, ``frame_saving.SAVE_WORKERS``) and
@@ -68,25 +69,26 @@ Pipeline overview:
         6. ``gaussian.blur_frames()`` (Gaussian smoothing) - the drawn frames blurred.
         7. ``frame_interpolation.write_interpolated_frames()`` - the in-between frames made from their drawn
            neighbours.
-    decay - MEASURE: BEAT. Settings that apply: Decay rate, the four decay amounts, Note layout.
+    decay - MEASURE: BEAT. Settings that apply: Decay rate, the four decay amounts, Note layout, Extra notes (k).
       DRAW:
         1. ``decay.circle_points()`` - ``CirclePoints`` ``(frames, 84)``: it first asks ``decay.gains()`` for
-           ``PointGains`` ``(frames, 84)`` (the five loudest notes of each frame gain 24, 20, 16, 12 and 8 points plus
-           the beat bonus) and ``note_layout.arrange_notes()`` (Note layout) to put them in cell order, then for each
+           ``PointGains`` ``(frames, 84)`` (the five loudest notes of each frame, chosen by ``held_notes.hold_loudest()``:
+           ``LoudestIndices`` ``(frames, 5)``, a note that was among them in the frame before keeping its place while it
+           is among the loudest 5 + k, gain 24, 20, 16, 12 and 8 points plus the beat bonus) and ``note_layout.arrange_notes()`` (Note layout) to put them in cell order, then for each
            frame adds the gains and calls ``decay.decay_step()`` as often as the decay rate says.
         2. ``decay.write_decay_frames()`` - ``decay._geometry()`` once, then ``decay._frame()`` for each frame:
            ``Pictures``.
-    decay-exp - MEASURE: BEAT. Settings that apply: Decay rate, Note layout (the decay amounts are not used).
+    decay-exp - MEASURE: BEAT. Settings that apply: Decay rate, Note layout, Extra notes (k) (the decay amounts are not used).
       DRAW: as decay, with 1. ``decay_exp.circle_points()`` (which runs ``decay_exp._simulate()``: the gains of
-            ``decay.gains()`` each cut to ``g * exp(-g / taper)``, then ``decay_exp.decay_exp_step()``, in which a
+            ``decay.gains()``, with its held notes, each cut to ``g * exp(-g / taper)``, then ``decay_exp.decay_exp_step()``, in which a
             circle gives ``sin(pi / 2 * p / 64) ** 2`` to each neighbour per frame, and at the end of each frame the
             taper of the next one from ``decay_exp.next_taper()``, moving between 8 and 12); the drawing is
             ``decay.write_decay_frames()``.
-    polar-chords - MEASURE: BEAT. Settings that apply: Notes shown, Note layout.
+    polar-chords - MEASURE: BEAT. Settings that apply: Notes shown, Note layout, Extra notes (k).
       DRAW:
-        1. ``polar_chords.polar_bars()`` - the arc of each of the loudest notes (``BarArcs`` ``(frames, count)``), made
-           to follow their notes one arc a frame (``polar_chords.follow_arcs()``), the bars of a quieter volume hidden
-           when in the arc of a louder one.
+        1. ``polar_chords.polar_bars()`` - the arc of each of the loudest notes (``BarArcs`` ``(frames, count)``, the notes
+           chosen by ``held_notes.hold_loudest()``: ``LoudestIndices`` ``(frames, count)``); a bar jumps to a new note,
+           it does not move toward it.
         2. ``chords.measure_chords()`` - the chord of each frame: ``ChordPlaces`` ``(frames,)``.
         3. ``polar_chords.write_polar_frames()`` - ``polar_chords._geometry()`` once, then ``polar_chords._frame()``
            for each frame: ``Pictures``.
@@ -94,11 +96,12 @@ Pipeline overview:
       DRAW: ``energy_graphs.write_energy_frames()`` - makes the background once, turns each data set into bars with
             ``energy_graphs.softmax_shares()`` then ``energy_graphs.above_smallest()`` (``BarShares``
             ``(frames, 84)``), then ``energy_graphs._frame()`` for each frame: ``Pictures``.
-    chromatic-decay - MEASURE: BEAT. Settings that apply: Threshold, Decay rate (whole numbers 1 to 10).
+    chromatic-decay - MEASURE: BEAT. Settings that apply: Threshold, Decay rate (whole numbers 1 to 10), Extra notes (k).
       DRAW:
         1. ``chromatic_decay.circle_points()`` - ``CirclePoints`` ``(frames, 12)``:
            ``chromatic_decay.apply_threshold()``, then the gains (``chromatic_decay._raw_gains()``, which uses
-           ``chromatic_decay.letter_energies()``: ``LetterEnergies`` ``(frames, 12)``), then for each frame the cut
+           ``chromatic_decay.letter_energies()``: ``LetterEnergies`` ``(frames, 12)``, and chooses the five loudest
+           letters with ``held_notes.hold_loudest()``: ``LoudestIndices`` ``(frames, 5)``), then for each frame the cut
            gains and ``chromatic_decay.chromatic_step()``.
         2. ``chromatic_decay.write_chromatic_frames()`` - the target of the beat (``ring_levels()``,
            ``ring_colors_of()``), then ``chromatic_decay._frame()`` for each frame: the 12 circles on a ring in
@@ -107,7 +110,7 @@ Pipeline overview:
       DRAW: ``rhythm_circles.write_rhythm_frames()`` - ``rhythm_circles.ring_colors_rows()`` and
             ``rhythm_circles._geometry()`` once, then ``rhythm_circles._frame()`` for each frame: four rings with a
             notch turned by ``CircleAngles``: ``Pictures``.
-    chromatic-wireframe - MEASURE: BEAT. Settings that apply: Threshold, Decay rate (whole numbers 1 to 10).
+    chromatic-wireframe - MEASURE: BEAT. Settings that apply: Threshold, Decay rate (whole numbers 1 to 10), Extra notes (k).
       DRAW:
         1. ``chromatic_decay.circle_points()`` - as chromatic-decay: ``CirclePoints`` ``(frames, 12)``.
         2. ``chromatic_wireframe.write_wireframe_frames()`` - ``chromatic_wireframe.line_colors()`` (``LineColors``
@@ -115,10 +118,11 @@ Pipeline overview:
            and ``line_angles()``: ``LineHeights`` ``(frames, n)``), then ``chromatic_wireframe._frame()`` for each
            frame: the lines of the frame and the frames before it, oldest first: ``Pictures``.
     polychord - MEASURE: BEAT and the tempo, from one measurement of the local peaks (``frame_tempos()``). Settings that
-    apply: Number of notes, Copies (minimum), Copies (maximum), Rotation.
+    apply: Number of notes, Copies (minimum), Copies (maximum), Rotation, Extra notes (k).
       DRAW:
         1. ``polychord.loudest_letters()`` - ``LoudLetters`` ``(frames, count)``: the letter of each of the loudest
-           notes of each smoothed frame, loudest first, -1 where fewer sound.
+           notes of each frame (chosen by ``held_notes.hold_loudest()``: ``LoudestIndices`` ``(frames, count)``), loudest
+           first, -1 where fewer sound.
         2. ``polychord.link_turns()`` - ``LinkTurns`` ``(frames, count)``: 22.5 degrees for every step of a fifth from the
            previous link's letter.
         3. ``polychord.copy_counts()`` (which uses ``chromatic_decay.beat_distances()``) - ``CopyCounts`` ``(frames,)``:
@@ -128,6 +132,11 @@ Pipeline overview:
         5. ``polychord.write_polychord_frames()`` - ``polychord._frame()`` for each frame, with the pieces of every copy
            from ``polychord.figure_segments()`` (``LinkSegments`` ``(segments, 2, 2)``, ``LinkWidths``
            ``(segments,)``) in one ``LineCollection``: ``Pictures``.
+
+    The six types that take the n loudest notes (decay, decay-exp, polar-chords, chromatic-decay, chromatic-wireframe and
+    polychord) choose them with ``held_notes.hold_loudest()`` (feature 044): a note that was among the n loudest of the frame
+    before keeps its place while it is among the loudest n + k and still sounds, k being the Extra notes setting (1 to n; the
+    job passes 2 when the request does not say). A louder note that is not held waits for a free place.
 
     When an image type is added or changed, its block here is changed in the same piece of work.
 

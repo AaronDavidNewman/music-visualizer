@@ -1,14 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { validateFile } from "../utilities/validation";
-import { DEFAULT_SAMPLE_RATE } from "../utilities/spacing";
-import { readSampleRate } from "../utilities/wavHeader";
 
 const props = defineProps<{ busy: boolean; file: File | null }>();
-const emit = defineEmits<{
-  "update:file": [file: File | null];
-  "update:sampleRate": [hz: number];
-}>();
+const emit = defineEmits<{ "update:file": [file: File | null] }>();
 
 function formatSize(bytes: number): string {
   return bytes >= 1024 * 1024
@@ -16,14 +11,9 @@ function formatSize(bytes: number): string {
     : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-let latestFile = 0;
-
-async function onFile(event: Event) {
+function onFile(event: Event) {
   const chosen = (event.target as HTMLInputElement).files?.[0] ?? null;
   emit("update:file", chosen);
-  const ticket = ++latestFile;
-  const rate = chosen ? await readSampleRate(chosen) : null;
-  if (ticket === latestFile) emit("update:sampleRate", rate ?? DEFAULT_SAMPLE_RATE); // ignore a stale answer
 }
 
 const fileError = computed(() => validateFile(props.file));

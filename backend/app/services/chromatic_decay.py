@@ -27,7 +27,7 @@ bonus, cut back by ``exp(-g / taper)`` with the taper that moves between 8 and 1
 The points of all frames are worked out first (``circle_points``, in letter order, small arrays, testable on their own);
 drawing is then independent for every frame, from a geometry worked out once for the frame size.
 
-This module knows nothing about the note analysis or the audio: the smoothed note values and the beat positions are
+This module knows nothing about the note analysis or the audio: the note values and the beat positions are
 passed in.
 
 Order of operations:
@@ -38,7 +38,8 @@ Order of operations:
     3. Make the 12 letters - ``letter_energies()`` (called by ``_raw_gains()``) - ``LetterEnergies`` ``(frames, 12)``:
        the largest of the 7 octaves of each letter in each frame.
     4. Work out what each letter would gain - ``_raw_gains()`` - ``PointGains`` ``(frames, 12)``: 24, 20, 16, 12 and 8
-       points for the five loudest letters plus ``8 * beat``.
+       points for the five loudest letters (the held letters: ``held_notes.hold_loudest()``, ``LoudestIndices``
+       ``(frames, 5)``) plus ``8 * beat``.
     5. For each frame in turn, take the taper (``decay_exp.taper_of()``) and add the cut gains - ``_simulate()`` - each
        gain ``g`` becomes ``g * exp(-g / taper)``; the points are held between 0 and 64.
     6. At every ``rate``-th frame let each letter give points to the letters 5 and 7 above it - ``chromatic_step()`` - a
@@ -84,6 +85,7 @@ from .array_types import (
     TargetColors,
 )
 from .colormaps import COLORMAP_STEPS, MIDDLE_COLOR_ROW, check_beat, check_colormap, lookup_table
+from .held_notes import hold_loudest
 from .frame_saving import SAVE_WORKERS
 from .note_grid import NOTES, RINGS, _check_values
 from .decay import BEAT_BONUS, GAINS, MAX_POINTS, NEGLIGIBLE, SIZE_POINTS, SMALLEST, ring_colors
@@ -103,7 +105,7 @@ MARGIN = 10  # pixels between the outermost circle of the ring and the nearer ed
 PEAK_RINGS = 12  # the concentric rings in the middle that show the beat (feature 036)
 PEAK_RADIUS = 70  # pixels on a 600 x 400 picture: the rings fill a circle 140 across
 PEAK_REFERENCE_SIZE = 400  # the smaller side of the picture that PEAK_RADIUS is for
-# the threshold is a percent of the largest smoothed note value of the file: 0 (off) to 10, as for the other image types
+# the threshold is a percent of the largest note value of the file: 0 (off) to 10, as for the other image types
 MIN_THRESHOLD = 0
 MAX_THRESHOLD = 10
 DEFAULT_THRESHOLD = 0
@@ -162,12 +164,12 @@ def receivers(letter: object) -> tuple[int, int]:
 def letter_energies(values: ArrayLike) -> LetterEnergies:
     """The energy of every letter in every frame: a float64 array ``(frames, 12)``.
 
-    ``values`` is ``(frames, 84 or more)``, the smoothed note values (the columns after the 84th are not notes of a
+    ``values`` is ``(frames, 84 or more)``, the note values (the columns after the 84th are not notes of a
     letter and are left out). Note ``j`` is the letter ``j mod 12`` of octave ``j // 12`` (7 octaves), and the energy of
     a letter is the **largest** of its octaves, not their sum. The input is not changed.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``).
 
     Returns:
@@ -178,26 +180,29 @@ def letter_energies(values: ArrayLike) -> LetterEnergies:
     return shown.reshape(shown.shape[0], NOTES // LETTERS, LETTERS).max(axis=1) if shown.shape[0] else np.zeros((0, LETTERS))
 
 
-def _raw_gains(values: ArrayLike, beat: BeatPositions | None = None) -> PointGains:
+def _raw_gains(values: ArrayLike, beat: BeatPositions | None = None, extra: int = 0) -> PointGains:
     """The points every letter would gain in every frame before the taper cuts them back: a float64 array
     ``(frames, 12)`` (the gains of ``decay.gains`` with the 12 letters in the place of the 84 notes): 24, 20, 16, 12 and
     8 plus ``8 * position`` for the five letters with the highest energy of a frame (ties to the lower letter; a letter
-    with energy 0 does not count), 0 for every other.
+    with energy 0 does not count), 0 for every other. With ``extra`` above 0 the five are the held letters (a letter that is
+    still among the loudest ``5 + extra`` keeps its place, see ``held_notes``).
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``).
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
+        ``extra``: the Extra notes setting k, 0 (the default: the old five loudest letters) to 5: a letter that was among the five of the frame before stays among them while it is
+            within the loudest ``5 + extra`` letters (see ``held_notes``).
 
     Returns:
         ``PointGains`` ``(frames, 12)`` - the points each letter would gain in each frame before the taper: 0 for all
-        but the five letters with the most energy.
+        but the five letters with the most energy (the held letters).
     """
     energy = letter_energies(values)
     frames = energy.shape[0]
     positions = np.zeros(frames) if beat is None else check_beat(beat, frames)
-    order = np.argsort(-energy, axis=1, kind="stable")[:, : len(GAINS)]  # equal energies: the lower letter first
+    order = hold_loudest(energy, len(GAINS), extra)  # LoudestIndices (frames, 5): the held letters, loudest first (equal energies: the lower letter first)
     ranked = np.take_along_axis(energy, order, axis=1)
     gained = np.asarray(GAINS, dtype=np.float64)[None, :] + BEAT_BONUS * positions[:, None]
     gained = np.where(ranked > 0, gained, 0.0)
@@ -206,7 +211,7 @@ def _raw_gains(values: ArrayLike, beat: BeatPositions | None = None) -> PointGai
     return result
 
 
-def letter_gains(values: ArrayLike, beat: BeatPositions | None = None, taper: float | ArrayLike = TAPER) -> PointGains:
+def letter_gains(values: ArrayLike, beat: BeatPositions | None = None, taper: float | ArrayLike = TAPER, extra: int = 0) -> PointGains:
     """The points every letter gains in every frame, in letter order: a float64 array ``(frames, 12)``.
 
     The five letters with the highest energy of a frame (ties to the lower letter; a letter with energy 0 does not
@@ -216,17 +221,19 @@ def letter_gains(values: ArrayLike, beat: BeatPositions | None = None, taper: fl
     default) or one for each frame. Every other letter gets 0. The input is not changed.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``).
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
         ``taper``: a number or ``FrameTapers`` ``(frames,)`` - the number above 0 in ``exp(-g / taper)`` (8 to 12 in a
             job).
+        ``extra``: the Extra notes setting k, 0 (the default: the old five loudest letters) to 5: a letter that was among the five of the frame before stays among them while it is
+            within the loudest ``5 + extra`` letters (see ``held_notes``).
 
     Returns:
         ``PointGains`` ``(frames, 12)`` - the points each letter gains in each frame after the cut.
     """
-    gained = _raw_gains(values, beat)  # the bonus is added before the taper cuts the gain back
+    gained = _raw_gains(values, beat, extra)  # the bonus is added before the taper cuts the gain back
     taper = np.asarray(taper, dtype=np.float64)
     if taper.ndim > 1 or (taper.ndim == 1 and taper.shape[0] != gained.shape[0]) or not np.isfinite(taper).all() or (taper <= 0).any():
         raise ValueError("The taper must be a number above 0, or one for each frame.")
@@ -282,7 +289,7 @@ def check_threshold(value: object) -> float:
 
 
 def apply_threshold(values: ArrayLike, threshold: float = DEFAULT_THRESHOLD) -> NoteStrengths:
-    """The smoothed note values with the faint ones set to 0: a float64 copy of ``(frames, 84 or more)`` ``values``.
+    """The note values with the faint ones set to 0: a float64 copy of ``(frames, 84 or more)`` ``values``.
 
     Every value **strictly below** ``threshold`` percent of the largest of **all** the values (every frame, every
     column: the whole file, as the Threshold of the other image types does) is 0; every other value, a value exactly at
@@ -290,7 +297,7 @@ def apply_threshold(values: ArrayLike, threshold: float = DEFAULT_THRESHOLD) -> 
     input is not changed.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame.
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame.
 
     Returns:
         ``NoteStrengths`` the shape of ``values`` - a float64 copy in which every value strictly below the threshold is
@@ -304,11 +311,11 @@ def apply_threshold(values: ArrayLike, threshold: float = DEFAULT_THRESHOLD) -> 
     return result
 
 
-def circle_points(values: ArrayLike, beat: BeatPositions | None = None, decay_rate: int = DEFAULT_RATE, threshold: float = DEFAULT_THRESHOLD) -> CirclePoints:
+def circle_points(values: ArrayLike, beat: BeatPositions | None = None, decay_rate: int = DEFAULT_RATE, threshold: float = DEFAULT_THRESHOLD, extra: int = 0) -> CirclePoints:
     """The points of the 12 circles after every frame: a float64 array ``(frames, 12)`` in letter order, each from 0 to
     64.
 
-    ``values`` is ``(frames, 84 or more)``, the smoothed note values; ``beat`` is ``None`` or one position from 0 to 1
+    ``values`` is ``(frames, 84 or more)``, the note values; ``beat`` is ``None`` or one position from 0 to 1
     for each frame; ``decay_rate`` is the number of frames between decay steps, a whole number from 1 to 10;
     ``threshold`` is a number from 0 to 10 (0, off, by default): the values strictly below that percent of the largest
     of all of ``values`` are set to 0 first (:func:`apply_threshold`), so they add nothing to their letters. Frame ``i``
@@ -318,38 +325,40 @@ def circle_points(values: ArrayLike, beat: BeatPositions | None = None, decay_ra
     points.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``).
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
+        ``extra``: the Extra notes setting k, 0 (the default: the old five loudest letters) to 5: a letter that was among the five of the frame before stays among them while it is
+            within the loudest ``5 + extra`` letters (see ``held_notes``).
 
     Returns:
         ``CirclePoints`` ``(frames, 12)`` - the points (0 to 64) of each of the 12 letters after each frame, in letter
         order.
     """
-    return _simulate(values, beat, decay_rate, threshold)[0]
+    return _simulate(values, beat, decay_rate, threshold, extra)[0]
 
 
-def circle_tapers(values: ArrayLike, beat: BeatPositions | None = None, decay_rate: int = DEFAULT_RATE, threshold: float = DEFAULT_THRESHOLD) -> FrameTapers:
+def circle_tapers(values: ArrayLike, beat: BeatPositions | None = None, decay_rate: int = DEFAULT_RATE, threshold: float = DEFAULT_THRESHOLD, extra: int = 0) -> FrameTapers:
     """The taper that every frame of :func:`circle_points` gained its points with: a float64 array ``(frames,)``, 8 for
     the first frame.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame.
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame.
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
 
     Returns:
         ``FrameTapers`` ``(frames,)`` - the taper (8 to 12) each frame's gains were cut with.
     """
-    return _simulate(values, beat, decay_rate, threshold)[1]
+    return _simulate(values, beat, decay_rate, threshold, extra)[1]
 
 
-def _simulate(values: ArrayLike, beat: BeatPositions | None, decay_rate: int, threshold: float = DEFAULT_THRESHOLD) -> tuple[CirclePoints, FrameTapers]:
+def _simulate(values: ArrayLike, beat: BeatPositions | None, decay_rate: int, threshold: float = DEFAULT_THRESHOLD, extra: int = 0) -> tuple[CirclePoints, FrameTapers]:
     """The whole simulation: the points of the 12 letters after every frame and the taper of every frame.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame.
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame.
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
 
@@ -358,7 +367,7 @@ def _simulate(values: ArrayLike, beat: BeatPositions | None, decay_rate: int, th
     """
     decay_rate = check_chromatic_rate(decay_rate)
     values = apply_threshold(values, threshold)  # the faint notes are 0 before the letters are charged
-    raw = _raw_gains(values, beat)  # the gains before the taper
+    raw = _raw_gains(values, beat, extra)  # the gains before the taper
     points = np.zeros(LETTERS)
     recorded = np.zeros((raw.shape[0], LETTERS))
     tapers = np.zeros(raw.shape[0])

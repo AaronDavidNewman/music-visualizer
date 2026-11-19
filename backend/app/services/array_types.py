@@ -45,16 +45,29 @@ Samples = npt.NDArray[np.float64]
 # --- the notes --------------------------------------------------------------------------------------------------------
 
 # NoteStrengths: the strength of each of the 88 piano notes, for each analysis window or for each frame.
-#   Shape: ``(windows, 88)`` right after the analysis, ``(frames, 88)`` once the windows are averaged into frames and
-#          after the frames are smoothed; the last axis is the note: index 0 is the note of 55 Hz and each next index is
+#   Shape: ``(windows, 88)`` right after the analysis, ``(frames, 88)`` once the windows are averaged into frames; the
+#          last axis is the note: index 0 is the note of 55 Hz and each next index is
 #          one semitone higher (index 87 is about 7040 Hz). Where only the 84 notes that are drawn are meant, the last
 #          axis is 84.
 #   Meaning: the strength of the note in that window or frame (the magnitude of the spectrum at the note's frequency,
 #            averaged over the two channels): 0 or more, never negative, in the units of the scaled samples, with no
 #            fixed upper limit (the pictures scale it to the loudest value of the file).
-#   Made by: ``note_analysis.analyze_channels`` (windows), ``frame_rendering.average_frames`` (frames),
-#            ``frame_rendering.smooth_frames`` (smoothed frames).
+#   Made by: ``note_analysis.analyze_channels`` (windows), ``frame_rendering.average_frames`` (frames; the only smoothing of the note data,
+#            since the frames are drawn as they are).
 NoteStrengths = npt.NDArray[np.float64]
+
+# LoudestIndices: the notes (or letters) that a picture counts as the loudest of each frame, one place for each.
+#   Shape: ``(frames, count)``: one row for each frame; one column for each of the ``count`` places of the selection,
+#          loudest first (``count`` is n: 5 for Decay, Decay Exp, Chromatic Decay and Chromatic Wireframe, 5 to 8 for
+#          Polar Chords and Polychord).
+#   Meaning: the index of the note at that place: 0 to 83 for a note (note 0 is 55 Hz, as in ``NoteStrengths``), 0 to 11
+#            for a letter (A is 0) in the two Chromatic pictures. A note that was in the selection of the frame before
+#            stays in it while it is among the loudest ``count + k`` of this frame and still sounds (it is *held*); a free
+#            place goes to the loudest note that is not held. When fewer than ``count`` notes sound the last places hold
+#            notes whose strength is 0, so that ``values[order] > 0`` says that a place is empty; they are never used as
+#            notes.
+#   Made by: ``held_notes.hold_loudest``.
+LoudestIndices = npt.NDArray[np.intp]
 
 # WindowRanges: for each frame, which analysis windows it owns.
 #   Shape: ``(frames,)`` (``frame_rendering.frame_windows`` returns three of them: ``first``, ``stop`` and ``earlier``).
@@ -81,7 +94,7 @@ PixelEdges = npt.NDArray[np.int64]
 # FrameGrid: the values of one frame laid out as a grid.
 #   Shape: ``(rows, columns)``: ``rows`` and ``columns`` of the grid being drawn (7 by 12 for the drawn notes, ``7 r``
 #          by ``12 r`` at resolution ``r``).
-#   Meaning: the smoothed value of the cell at each row and column, 0 or more (one frame of ``GridValues`` reshaped);
+#   Meaning: the value of the cell at each row and column, 0 or more (one frame of ``GridValues`` reshaped);
 #            for the contour the rows are flipped so that the first row of notes is drawn at the top of the picture.
 #   Made by: ``contour.write_contour_frames`` (from one row of ``GridValues``).
 FrameGrid = npt.NDArray[np.float64]
@@ -281,7 +294,8 @@ CirclePoints = npt.NDArray[np.float64]
 #   Shape: ``(frames, 84)``: one row for each frame, one column for each of the 84 drawn notes in note order (not cell
 #          order), for Decay and Decay Exp; ``(frames, 12)``, one column for each letter (A is 0), for Chromatic Decay
 #          and Chromatic Wireframe.
-#   Meaning: 0 for every note (or letter) but the five loudest of the frame; those gain 24, 20, 16, 12 and 8 points
+#   Meaning: 0 for every note (or letter) but the five loudest of the frame (the five places of ``LoudestIndices``:
+#            held notes first, see ``held_notes``); those gain 24, 20, 16, 12 and 8 points
 #            (loudest first) plus up to 8 more at the top of the beat; for Decay Exp and the chromatic types each gain
 #            ``g`` is then cut back to ``g * exp(-g / taper)``.
 #   Made by: ``decay.gains``, ``decay_exp.exp_gains``, ``chromatic_decay._raw_gains``, ``chromatic_decay.letter_gains``.
@@ -449,7 +463,7 @@ LineColors = npt.NDArray[np.uint8]
 #          (``count`` is the Number of notes setting, 5 to 8).
 #   Meaning: the letter (the chromatic tone without its octave) of the note, 0 for A up to 11 for G#, as in
 #            ``chromatic_decay``; -1 where fewer than ``count`` notes sound in the frame.
-#   Made by: ``polychord.loudest_letters``.
+#   Made by: ``polychord.loudest_letters`` (the notes come from ``held_notes.hold_loudest``).
 LoudLetters = npt.NDArray[np.intp]
 
 # LinkTurns: how much each link of a figure turns from the link before it.
@@ -507,9 +521,9 @@ LinkWidths = npt.NDArray[np.float64]
 #   Shape: ``(frames, volumes)``: one row for each frame; one column for each volume (the loudest note, the second
 #          loudest, ... up to the number of notes shown, 5 to 8).
 #   Meaning: the number of the arc (0 to 83, each 360 / 84 degrees wide, clockwise from straight up) of the bar of that
-#            volume; -1 where there is no bar.
-#   Made by: ``polar_chords.note_targets`` (the arcs the bars head for), ``polar_chords.follow_arcs`` (the arcs the bars
-#            are in).
+#            volume, the arc of its note (a bar jumps to a new note); -1 where there is no bar.
+#   Made by: ``polar_chords.note_targets`` and ``polar_chords.polar_bars`` (the arcs of the notes chosen by
+#            ``held_notes.hold_loudest``).
 BarArcs = npt.NDArray[np.int16]
 
 # BarStrengths: how strong the note or chord of each bar is.

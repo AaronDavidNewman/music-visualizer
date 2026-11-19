@@ -200,13 +200,6 @@ def test_those_settings_are_still_checked(client, fields):
     assert decay(client, tiny(), **fields).status_code == 400
 
 
-def test_the_smoothing_applies(client):
-    audio = pulse_wav(seconds=3.0)
-    plain = all_frames(client, decay(client, audio).json())
-    smooth = all_frames(client, decay(client, audio, smoothing="0.6", smoothing_window="5").json())
-    assert smooth != plain and len(smooth) == len(plain)
-
-
 def test_the_spiral_layout_applies_and_is_echoed(client):
     audio = pulse_wav(seconds=3.0)
     rows = decay(client, audio, note_layout="rows").json()

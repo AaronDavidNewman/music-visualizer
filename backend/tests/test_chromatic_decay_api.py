@@ -22,9 +22,9 @@ RATE_MESSAGE = "The decay rate must be a whole number from 1 to 10."
 OLD_RATE_MESSAGE = "The decay rate must be a number from 0.25 to 4 in steps of 0.25."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
 C4, C5 = 27, 39  # the letter C in two octaves
-WINDOW, STEP = 4096, 4410  # the window of the requests and the default spacing at 10 frames a second
-WINDOWS = 28
-SAMPLES = (WINDOWS - 1) * STEP + WINDOW  # the last window just fits: every window holds the same whole tone
+WINDOW, STEP = 4096, 4410  # the window of the requests and the length of a frame at 10 frames a second, in samples
+SAMPLES = 27 * STEP + WINDOW
+WHOLE = 26  # the last frame whose windows all lie wholly inside the file: the windows are 60 ms apart (2646 samples, feature 043), so the last ones overhang the end of the file and see the tone cut off, which lights other letters
 
 
 def chromatic(client, data=None, **fields):
@@ -42,7 +42,7 @@ def frames(client, job):
 
 
 def tone_file(note=C4):
-    """One steady tone at the centre of the spectrum position of ``note``, for exactly 28 windows."""
+    """One steady tone at the centre of the spectrum position of ``note``, of 27 frames and a window."""
     return wav_bytes(0.4 * note_tone(note, 3.0)[:SAMPLES])
 
 
@@ -192,10 +192,10 @@ def test_the_beat_is_measured_for_this_type_with_the_local_peaks_settings_and_no
 
 def test_a_steady_c_charges_the_circle_at_the_top_and_its_two_neighbours_on_the_ring_light_up(client):
     job = chromatic(client, tone_file(C4)).json()
-    assert job["window_count"] == WINDOWS
+    assert job["step_samples"] == 2646
     table = lookup_table(COLORMAP)
     first = tuple(int(v) for v in table[0])  # the color of a circle with no points
-    last = picture(client, job, job["frame_count"] - 1)
+    last = picture(client, job, WHOLE)
     top = color_at_position(last, 0)  # C
     g, f = color_at_position(last, 1), color_at_position(last, 11)  # the next ones clockwise and counterclockwise: G and F
     assert top != first
@@ -214,7 +214,7 @@ def test_the_same_note_an_octave_up_lights_the_same_circles(client):
     lit = []
     for note in (C4, C5):
         job = chromatic(client, tone_file(note)).json()
-        last = picture(client, job, job["frame_count"] - 1)
+        last = picture(client, job, WHOLE)
         lit.append([position for position in range(12) if color_at_position(last, position) != first])
     assert lit[0] == lit[1] == [0, 1, 11]  # C at the top and its two neighbours on the ring, G and F
 
@@ -271,15 +271,6 @@ def test_a_setting_of_another_type_that_is_not_allowed_is_refused_as_for_every_t
     r = chromatic(client, tiny(), polar_notes="9")
     assert r.status_code == 400 and r.json()["detail"] == "The number of notes shown must be a whole number from 5 to 8."
     assert leftovers() == []
-
-
-def test_the_data_smoothing_applies(client):
-    half = np.concatenate([0.4 * note_tone(C4, 3.0)[: SAMPLES // 2], np.zeros(SAMPLES - SAMPLES // 2)])  # a tone that stops half way
-    data = wav_bytes(half)
-    plain = frames(client, chromatic(client, data).json())
-    smoothed = frames(client, chromatic(client, data, smoothing="0.8", smoothing_window="10").json())
-    assert any(not np.array_equal(a, b) for a, b in zip(plain, smoothed))  # the smoothed tone lingers after it stops and keeps gaining
-    assert chromatic(client, data, smoothing="0.9").status_code == 400  # and its range is validated
 
 
 def test_the_colormap_decides_the_colors(client):
@@ -392,8 +383,6 @@ def test_a_real_beat_goes_through_the_whole_colormap_from_the_first_color_to_the
 
 # --- the threshold (feature 037) ----------------------------------------------------------------------------------------------
 
-from app.services.frame_rendering import smooth_frames  # noqa: E402
-
 THRESHOLD_MESSAGE = "The threshold must be a number from 0 to 10."
 E4 = 31  # the letter E
 
@@ -464,20 +453,16 @@ def test_write_frames_refuses_a_bad_threshold_before_writing(tmp_path):
     assert not (tmp_path / "out").exists()
 
 
-def test_the_data_smoothing_acts_before_the_threshold(tmp_path):
+def test_the_threshold_acts_on_the_frames_as_they_are(tmp_path):
     values = np.zeros((12, 88))
-    values[:6, C4] = 100.0  # a loud tone that stops half way; its smoothed tail lingers
+    values[:6, C4] = 100.0  # a loud tone that stops half way: nothing lingers after it, there is no smoothing between the frames (feature 043)
     values[:, E4] = 3.0
     beat = np.zeros(12)
-    write_frames(values, tmp_path / "out", colormap=COLORMAP, image_type="chromatic-decay", threshold=5, smoothing=0.8, smoothing_window=5, beat=beat)
-    smoothed = smooth_frames(values, 0.8, 5)
+    write_frames(values, tmp_path / "out", colormap=COLORMAP, image_type="chromatic-decay", threshold=5, beat=beat)
     expected = tmp_path / "expected"
-    cd.write_chromatic_frames(cd.circle_points(smoothed, beat, 1, 5), COLORMAP, expected, WIDTH, HEIGHT, beat=beat)
+    cd.write_chromatic_frames(cd.circle_points(values, beat, 1, 5), COLORMAP, expected, WIDTH, HEIGHT, beat=beat)
     for i in range(12):
         assert (tmp_path / "out" / f"frame_{i:06d}.png").read_bytes() == (expected / f"frame_{i:06d}.png").read_bytes()
-    unsmoothed = tmp_path / "unsmoothed"
-    cd.write_chromatic_frames(cd.circle_points(values, beat, 1, 5), COLORMAP, unsmoothed, WIDTH, HEIGHT, beat=beat)
-    assert (tmp_path / "out/frame_000011.png").read_bytes() != (unsmoothed / "frame_000011.png").read_bytes()  # the smoothing really changed the result
 
 
 def test_the_threshold_does_not_change_the_other_image_types_their_own_tests_say_so_and_the_response_has_the_same_fields(client):

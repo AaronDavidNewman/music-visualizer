@@ -5,14 +5,15 @@ These are the steps of ``create_job()``, the shared steps READ to SAVE of the pi
 ``services/image_types.py``.
 
 Order of operations:
-    1. Read and check every setting of the form - ``create_job()`` with the ``_parse_*`` functions - a setting that is
+    1. Read and check every setting of the form - ``create_job()`` with the ``_parse_*`` functions (``_parse_extra_notes()``
+       checks the Extra notes k against the number of notes of the picture) - a setting that is
        not sent takes its default and one that is wrong is refused (400) before the file is read.
     2. Save the upload - ``_save_upload()`` - into the audio folder, refused above the size limit.
     3. Read the file - ``note_analysis.read_wav()`` - two ``RawSamples`` ``(samples,)``; a file with no audio is
        refused.
-    4. Count the frames and the windows - ``frame_rendering.frame_count()``, ``window_spacing.default_spacing()``,
-       ``window_spacing.resolve_step()`` and ``note_analysis.window_count()`` - refused above ``max_frames`` and
-       ``max_windows``.
+    4. Count the frames and the windows - ``frame_rendering.frame_count()``, ``buffer_interval.buffer_step()`` (the fixed
+       60 ms step between the frequency buffers, whatever the frame rate) and ``note_analysis.window_count()`` - refused
+       above ``max_frames`` and ``max_windows``.
     5. Analyze and apply the noise floor - ``note_analysis.analyze_channels()`` then ``noise_floor.floor_analysis()`` -
        ``NoteStrengths`` ``(windows, 88)``.
     6. Measure, only for the image types that use it - ``local_peaks.measure_local_peaks()`` with ``frame_positions()``
@@ -40,16 +41,12 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse
 
 from ..config import settings
+from ..services.buffer_interval import buffer_step
 from ..services.colormaps import COLORMAPS, DEFAULT_COLORMAP
+from ..services.held_notes import DEFAULT_EXTRA_NOTES, MAX_EXTRA_NOTES, check_extra_notes, notes_of
 from ..services.frame_rendering import (
-    DEFAULT_SMOOTHING,
-    DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_THRESHOLD,
-    MAX_SMOOTHING,
-    MAX_SMOOTHING_WINDOW,
     MAX_THRESHOLD,
-    MIN_SMOOTHING,
-    MIN_SMOOTHING_WINDOW,
     MIN_THRESHOLD,
     average_frames,
     frame_count,
@@ -100,7 +97,6 @@ from ..services.noise_floor import floor_analysis
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
 from ..services.note_selection import DEFAULT_NOTE_COUNT, MAX_NOTE_COUNT, MIN_NOTE_COUNT
 from ..services.resolution import DEFAULT_RESOLUTION, MAX_RESOLUTION, MIN_RESOLUTION
-from ..services.window_spacing import default_spacing, resolve_step
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 log = logging.getLogger(__name__)
@@ -142,42 +138,13 @@ def _parse_frame_rate(text: str | None) -> float:
     return int(value) if value.is_integer() else value
 
 
-def _parse_window_spacing(text: str | None) -> float | None:
-    """The requested spacing, or None when the field is missing or empty."""
-    if text is None or not text.strip():
-        return None
-    message = "The window spacing must be a number greater than 0."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or value <= 0:
-        raise HTTPException(status_code=400, detail=message)
-    return value
-
-
 async def _sent_fields(request: Request) -> set[str]:
     """Names of the form fields the client actually sent.
 
-    FastAPI reports an empty form value as missing, which would make ``smoothing=`` silently use the
-    default. This tells "not sent" apart from "sent empty", so an empty smoothing can be refused.
+    FastAPI reports an empty form value as missing, which would make ``gaussian=`` silently use the
+    default. This tells "not sent" apart from "sent empty", so an empty gaussian smoothing can be refused.
     """
     return set((await request.form()).keys())
-
-
-def _parse_smoothing(text: str | None, sent: bool) -> float:
-    """The requested smoothing. Not sent means the default; anything sent must be a number 0.0..0.8."""
-    if text is None and not sent:
-        return DEFAULT_SMOOTHING
-    text = text or ""
-    message = f"The smoothing must be a number from {MIN_SMOOTHING} to {MAX_SMOOTHING}."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if not math.isfinite(value) or not MIN_SMOOTHING <= value <= MAX_SMOOTHING:
-        raise HTTPException(status_code=400, detail=message)
-    return value + 0.0  # turns -0.0 into 0.0
 
 
 def _parse_gaussian(text: str | None, sent: bool) -> float:
@@ -292,6 +259,21 @@ def _parse_polar_notes(text: str | None, sent: bool) -> int:
         raise HTTPException(status_code=400, detail=POLAR_NOTES_MESSAGE) from None
 
 
+def _parse_extra_notes(text: str | None, sent: bool, image_type: str, polar_notes: int, polychord_notes: int) -> int:
+    """The requested Extra notes (k, feature 044). Not sent means the default (2); anything sent must be a whole number 1..8, and for a picture that takes the n loudest notes
+    also at most its n (5, the Notes shown of Polar Chords or the Number of notes of Polychord); the other pictures accept 1..8 and ignore it."""
+    if text is None and not sent:
+        return DEFAULT_EXTRA_NOTES
+    try:
+        value = check_extra_notes(float(text or ""), MAX_EXTRA_NOTES)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"The extra notes must be a whole number from 1 to {MAX_EXTRA_NOTES}.") from None
+    limit = notes_of(image_type, polar_notes, polychord_notes)
+    if value > limit:
+        raise HTTPException(status_code=400, detail=f"The extra notes must be a whole number from 1 to {limit}.")
+    return value
+
+
 def _parse_polychord_settings(notes: str | None, min_copies: str | None, max_copies: str | None, rotation: str | None, sent: set[str]) -> PolychordSettings:
     """The four settings of Polychord. A setting that is not sent takes its default; anything sent must be allowed (the
     number of notes a whole number 5..8, each number of copies a whole number 1..12, the maximum not under the minimum,
@@ -380,25 +362,6 @@ def _parse_resolution(text: str | None, sent: bool) -> int:
     return int(value)
 
 
-def _parse_smoothing_window(text: str | None, sent: bool) -> int:
-    """The requested smoothing window. Not sent means the default; anything sent must be a whole number 1..20."""
-    if text is None and not sent:
-        return DEFAULT_SMOOTHING_WINDOW
-    text = text or ""
-    message = f"The smoothing window must be a whole number from {MIN_SMOOTHING_WINDOW} to {MAX_SMOOTHING_WINDOW}."
-    try:
-        value = float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=message) from None
-    if (
-        not math.isfinite(value)
-        or not value.is_integer()
-        or not MIN_SMOOTHING_WINDOW <= value <= MAX_SMOOTHING_WINDOW
-    ):
-        raise HTTPException(status_code=400, detail=message)
-    return int(value)
-
-
 def _parse_threshold(text: str | None, sent: bool) -> int | float:
     """The requested threshold. Not sent means off (0); anything sent must be a number 0..50 (percent)."""
     if text is None and not sent:
@@ -442,10 +405,7 @@ def create_job(
     file: UploadFile | None = File(None),
     window_size: str | None = Form(None),
     frame_rate: str | None = Form(None),
-    window_spacing: str | None = Form(None),
-    smoothing: str | None = Form(None),
     threshold: str | None = Form(None),
-    smoothing_window: str | None = Form(None),
     image_type: str | None = Form(None),
     colormap: str | None = Form(None),
     resolution: str | None = Form(None),
@@ -466,14 +426,12 @@ def create_job(
     decay_medium: str | None = Form(None),
     decay_high: str | None = Form(None),
     decay_saturated: str | None = Form(None),
+    extra_notes: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
     fps = _parse_frame_rate(frame_rate)
-    requested_spacing = _parse_window_spacing(window_spacing)
-    smoothing_value = _parse_smoothing(smoothing, "smoothing" in sent)
     threshold_value = _parse_threshold(threshold, "threshold" in sent)
-    window_value = _parse_smoothing_window(smoothing_window, "smoothing_window" in sent)
     image_type_value = _parse_image_type(image_type, "image_type" in sent)
     colormap_value = _parse_colormap(colormap, "colormap" in sent)
     resolution_value = _parse_resolution(resolution, "resolution" in sent)
@@ -487,6 +445,7 @@ def create_job(
     wave_count_value = _parse_wave_count(wave_count, "wave_count" in sent)
     polar_notes_value = _parse_polar_notes(polar_notes, "polar_notes" in sent)
     polychord_settings_value = _parse_polychord_settings(polychord_notes, polychord_min_copies, polychord_max_copies, polychord_rotation, sent)
+    extra_notes_value = _parse_extra_notes(extra_notes, "extra_notes" in sent, image_type_value, polar_notes_value, polychord_settings_value.notes)
     decay_amounts_value = tuple(
         _parse_decay_amount(text, name in sent, index)
         for index, (name, text) in enumerate(
@@ -518,21 +477,21 @@ def create_job(
                 ),
             )
 
-        if requested_spacing is None:  # not given: the default that gives each frame its own window
-            requested_spacing = default_spacing(file_rate, fps, window)
-        spacing, step, raised = resolve_step(requested_spacing, window)
+        # the frequency buffers are always measured every 60 ms (feature 043), whatever the frame rate: the frame rate only
+        # decides how many frames are made, and each frame averages the buffers that start in it
+        step = buffer_step(file_rate)
         windows = window_count(samples, step)
         if windows > settings.max_windows:
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"This would create {windows:,} windows; the limit is {settings.max_windows:,}. "
-                    "Use a larger window spacing."
+                    "Use a shorter file."
                 ),
             )
         # the noise floor (feature 033): a note more than 60 dB below the loudest note of the file is 0 in every window,
         # whatever the image type, so that no picture or measurement counts it as a note. It is fixed (no setting) and
-        # made once, here, before the frames are averaged and smoothed
+        # made once, here, before the frames are averaged
         result = floor_analysis(analyze_channels(left, right, file_rate, window, step=step))
         # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local
         # peaks measurement. Decay, Decay Exp, Polar Chords, Chromatic Decay and Chromatic Wireframe are always colored
@@ -553,17 +512,14 @@ def create_job(
         rhythm = None
         if image_type_value == "rhythm-circles":
             rhythm = rhythm_angles(measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE), fps, frames)
-        # write_frames smooths the note values (each frame is mixed with the earlier frames of the window) and draws
-        # them as the chosen image type; for the contour, a resolution above 1 first interpolates the grid of smoothed
-        # note values to a finer one, a number of notes below 84 first builds the picture from the notes with the most
+        # write_frames draws the frames (the averaged note values) as the chosen image type; for the contour, a resolution
+        # above 1 first interpolates the grid of note values to a finer one, a number of notes below 84 first builds the picture from the notes with the most
         # energy in the file only, and an interpolate value above 1 draws only every n-th frame and makes the others
         # from their neighbors with Pillow
         write_frames(
             average_frames(result, fps, frames),
             frames_dir,
             colormap=colormap_value,
-            smoothing=smoothing_value,
-            smoothing_window=window_value,
             threshold=threshold_value,
             image_type=image_type_value,
             resolution=resolution_value,
@@ -580,6 +536,7 @@ def create_job(
             rhythm=rhythm,
             polychord=polychord,
             polychord_settings=polychord_settings_value,
+            extra_notes=extra_notes_value,
         )
         # The video made from these frames later (feature 029) needs the frame rate, and the frames do not hold it.
         (frames_dir / "render.json").write_text(json.dumps({"frame_rate": fps}), encoding="utf-8")
@@ -602,9 +559,7 @@ def create_job(
         "window_size": window,
         "frame_rate": fps,
         "frame_count": frames,
-        "smoothing": smoothing_value,
         "threshold": threshold_value,
-        "smoothing_window": window_value,
         "image_type": image_type_value,
         "colormap": colormap_value,
         "resolution": resolution_value,
@@ -621,14 +576,13 @@ def create_job(
         "polychord_min_copies": polychord_settings_value.min_copies,
         "polychord_max_copies": polychord_settings_value.max_copies,
         "polychord_rotation": polychord_settings_value.rotation,
+        "extra_notes": extra_notes_value,
         "decay_low": decay_amounts_value[0],
         "decay_medium": decay_amounts_value[1],
         "decay_high": decay_amounts_value[2],
         "decay_saturated": decay_amounts_value[3],
-        "window_spacing": spacing,
         "step_samples": step,
         "window_count": result.window_count,
-        "spacing_raised": raised,
         "frame_url_template": f"/api/jobs/{job_id}/frames/{{index}}",
     }
 

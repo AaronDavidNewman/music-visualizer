@@ -22,24 +22,13 @@ def pngs(directory):
     return [(directory / f"frame_{i:06d}.png").read_bytes() for i in range(FRAMES)]
 
 
-def test_write_frames_smooths_the_notes_then_draws_polychord(tmp_path):
+def test_write_frames_draws_polychord_from_the_frames_as_they_are(tmp_path):
     notes = values()
     beat = np.array([0.0, 0.6, 1.0, 0.8])
     settings = pc.PolychordSettings(7, 2, 9, 40.0)
-    rendering.write_frames(notes, tmp_path / "job", colormap=DEFAULT_COLORMAP, smoothing=0.5, smoothing_window=2, image_type="polychord", beat=beat, polychord=data(), polychord_settings=settings)
-    smoothed = rendering.smooth_frames(notes, 0.5, 2)
-    pc.write_polychord_frames(smoothed, beat, data().tempos, settings, 10.0, DEFAULT_COLORMAP, tmp_path / "direct", rendering.IMAGE_WIDTH, rendering.IMAGE_HEIGHT)
+    rendering.write_frames(notes, tmp_path / "job", colormap=DEFAULT_COLORMAP, image_type="polychord", beat=beat, polychord=data(), polychord_settings=settings)
+    pc.write_polychord_frames(notes, beat, data().tempos, settings, 10.0, DEFAULT_COLORMAP, tmp_path / "direct", rendering.IMAGE_WIDTH, rendering.IMAGE_HEIGHT)
     assert pngs(tmp_path / "job") == pngs(tmp_path / "direct")
-
-
-def test_the_smoothing_changes_which_notes_are_the_loudest_and_so_the_picture(tmp_path):
-    notes = np.zeros((FRAMES, 88))
-    notes[0, [3, 10, 5, 9, 0, 7]] = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5]
-    notes[1:, 20] = 0.1  # then one quiet note
-    rendering.write_frames(notes, tmp_path / "plain", colormap=DEFAULT_COLORMAP, image_type="polychord", polychord=data())
-    rendering.write_frames(notes, tmp_path / "smooth", colormap=DEFAULT_COLORMAP, smoothing=0.8, smoothing_window=3, image_type="polychord", polychord=data())
-    assert pngs(tmp_path / "plain")[0] == pngs(tmp_path / "smooth")[0]  # the first frame has nothing before it
-    assert pngs(tmp_path / "plain")[1] != pngs(tmp_path / "smooth")[1]  # the second still carries the loud notes
 
 
 def test_the_defaults_are_the_default_settings_and_no_beat_means_the_minimum_number_of_copies(tmp_path):

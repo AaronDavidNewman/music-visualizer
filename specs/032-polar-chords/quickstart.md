@@ -23,11 +23,11 @@ Expected: all green, including `test_polar_chords.py`, `test_polar_chords_render
 2. Upload a file with a steady note and a clear pulse; choose **Polar Chords**, Notes shown 5, Create frames.
 3. Expected: one bar at the angle of the note (clockwise from the top, low notes near the top-right, high notes coming round to the top-left), 4.3° wide, whose tip goes in and out between half the radius and the full radius with the pulse, in a color from the first half of the colormap (use Cool Warm to see it: blue).
 
-## Scenario 1b: The bars follow their notes (User Story 1)
+## Scenario 1b: The bars jump to their notes (User Story 1; revised 2026-11-18)
 
 1. Use a file with a note that jumps: note 36 for a second and a half, then note 48 (twelve arcs away, an octave up). Create frames at 30 frames a second.
-2. Expected: the bar is in the arc of note 36 until the change, then it **moves one arc a frame**, 37, 38, ... 48, and stays there; it never jumps. It takes twelve frames (0.4 seconds). Its color is that of the new note from the first frame of the change.
-3. With a pitch jump of more than half the circle the bar goes round the top the shorter way. With a quick passage of different notes the bars are still on their way when the notes change again: that is the smoothing.
+2. Expected: the bar is in the arc of note 36 until the change, then it is in the arc of note 48 at once: it never passes the arcs 37 to 47. Its color is that of the new note from the first frame of the change.
+3. A pitch jump of more than half the circle is a jump too (there is no shorter way round).
 
 ## Scenario 2: The chord (User Story 2)
 

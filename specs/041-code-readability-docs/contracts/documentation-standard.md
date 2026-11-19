@@ -59,7 +59,7 @@ No data processing: <what it holds, in a sentence>.
 
 The module docstring of `image_types.py` contains, under the heading `Pipeline overview:`:
 
-1. **The shared steps** in job order, each named once with its function and the data after it (alias, shape), with the vocabulary of [data-model.md](../data-model.md): READ, ANALYZE, FLOOR, MEASURE, AVERAGE, SMOOTH, DRAW, SAVE.
+1. **The shared steps** in job order, each named once with its function and the data after it (alias, shape), with the vocabulary of [data-model.md](../data-model.md): READ, ANALYZE, FLOOR, MEASURE, AVERAGE, DRAW, SAVE.
 2. **One block per image type** (all of `IMAGE_TYPES`), in the order of `IMAGE_TYPES`: which shared steps it uses and which it skips (and why in a few words), then **its own DRAW stages in order**, each with the module and function and the data after it.
 3. A rule at the end: **when an image type is added or changed, its block is changed in the same piece of work**.
 

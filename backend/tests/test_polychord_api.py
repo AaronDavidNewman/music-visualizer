@@ -9,7 +9,6 @@ from PIL import Image
 
 import app.routers.jobs as jobs
 from app.services import polychord as pc
-from app.services.frame_rendering import smooth_frames
 from app.services.image_types import IMAGE_TYPES
 from app.services.local_peaks import DEFAULT_PROMINENCE
 
@@ -229,9 +228,8 @@ def test_the_frames_are_what_the_library_draws_from_what_the_job_gave_write_fram
     calls = spying(monkeypatch)
     job = poly(client, pulse_wav(), polychord_notes="8", polychord_min_copies="2", polychord_max_copies="10", polychord_rotation="45").json()
     (values, kwargs), = calls
-    smoothed = smooth_frames(values, kwargs["smoothing"], kwargs["smoothing_window"])
     data = kwargs["polychord"]
-    pc.write_polychord_frames(smoothed, kwargs["beat"], data.tempos, kwargs["polychord_settings"], data.frame_rate, kwargs["colormap"], tmp_path / "expected", WIDTH, HEIGHT)
+    pc.write_polychord_frames(values, kwargs["beat"], data.tempos, kwargs["polychord_settings"], data.frame_rate, kwargs["colormap"], tmp_path / "expected", WIDTH, HEIGHT)
     expected = [(tmp_path / "expected" / f"frame_{i:06d}.png").read_bytes() for i in range(job["frame_count"])]
     assert served_bytes(client, job) == expected
     assert any(picture(client, job, i).any() for i in range(job["frame_count"]))  # something was drawn

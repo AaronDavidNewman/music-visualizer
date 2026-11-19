@@ -8,12 +8,12 @@ from PIL import Image
 
 from app.services import chromatic_decay as cd
 from app.services import chromatic_wireframe as cw
-from app.services.frame_rendering import smooth_frames, write_frames
+from app.services.frame_rendering import write_frames
 from app.services.image_types import IMAGE_TYPES
 from app.services.local_peaks import measure_local_peaks
 
 from .frame_size import HEIGHT, WIDTH
-from .test_chromatic_decay_api import C4, E4, SAMPLES, WINDOWS, loud_and_faint_file, tone_file  # noqa: F401
+from .test_chromatic_decay_api import C4, E4, SAMPLES, loud_and_faint_file, tone_file  # noqa: F401
 from .test_jobs_api import client, leftovers, note_tone, wav_bytes  # noqa: F401
 from .test_peak_tile_colors_api import COLORMAP, post, pulse_wav
 from .test_resolution_api import tiny
@@ -101,13 +101,12 @@ def test_the_frames_are_png_pictures_of_the_usual_size(client):
 
 def expected_frames(tmp_path, values, kwargs, name="expected"):
     """What the library draws from the arguments the job gave ``write_frames``: the points of Chromatic Decay and the wireframe of them."""
-    smoothed = smooth_frames(values, kwargs["smoothing"], kwargs["smoothing_window"])
-    points = cd.circle_points(smoothed, kwargs["beat"], kwargs["decay_rate"], kwargs["threshold"])
+    points = cd.circle_points(values, kwargs["beat"], kwargs["decay_rate"], kwargs["threshold"])
     cw.write_wireframe_frames(points, kwargs["colormap"], tmp_path / name, WIDTH, HEIGHT, kwargs["beat"])
     return points, [(tmp_path / name / f"frame_{i:06d}.png").read_bytes() for i in range(points.shape[0])]
 
 
-@pytest.mark.parametrize("fields", [{}, {"decay_rate": "3"}, {"decay_rate": "10", "threshold": "2", "smoothing": "0.3"}])
+@pytest.mark.parametrize("fields", [{}, {"decay_rate": "3"}, {"decay_rate": "10", "threshold": "2"}])
 def test_the_job_draws_the_points_of_chromatic_decay_for_the_same_file_and_settings(client, tmp_path, monkeypatch, fields):
     calls = spying(monkeypatch)
     data = pulse_wav()
@@ -116,7 +115,7 @@ def test_the_job_draws_the_points_of_chromatic_decay_for_the_same_file_and_setti
     (values, kwargs), (values2, kwargs2) = calls
     assert kwargs["image_type"] == TYPE and kwargs2["image_type"] == "chromatic-decay"
     assert np.array_equal(values, values2)  # the same note values, beat, rate and threshold go to both
-    for key in ("beat", "decay_rate", "threshold", "smoothing", "smoothing_window", "colormap"):
+    for key in ("beat", "decay_rate", "threshold", "colormap"):
         assert np.array_equal(kwargs[key], kwargs2[key]), key
     assert kwargs["beat"] is not None  # the beat is measured for this type
     points, expected = expected_frames(tmp_path, values, kwargs)
@@ -284,13 +283,6 @@ def test_a_setting_of_another_type_that_is_not_allowed_is_refused_as_for_every_t
     r = wireframe(client, tiny(), note_layout="diagonal")
     assert r.status_code == 400
     assert leftovers() == []
-
-
-def test_the_data_smoothing_applies(client):
-    data = pulse_wav()
-    plain = served_bytes(client, wireframe(client, data).json())
-    smooth = served_bytes(client, wireframe(client, data, smoothing="0.6", smoothing_window="5").json())
-    assert plain != smooth
 
 
 def test_the_colormap_decides_the_colors(client):

@@ -94,8 +94,8 @@ def test_the_response_has_the_usual_keys_and_the_interpolate_value(client):
     job = post(client, tiny(), interpolate="2").json()
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
-        "smoothing", "smoothing_window", "threshold", "image_type", "colormap", "resolution", "note_count",
-        "interpolate", "gaussian", "beat_coloring", "peak_distance", "note_layout", "decay_rate", "wave_count", "polar_notes", "polychord_notes", "polychord_min_copies", "polychord_max_copies", "polychord_rotation", "decay_low", "decay_medium", "decay_high", "decay_saturated", "window_spacing", "step_samples", "window_count", "spacing_raised", "frame_url_template",
+        "threshold", "image_type", "colormap", "resolution", "note_count",
+        "interpolate", "gaussian", "beat_coloring", "peak_distance", "note_layout", "decay_rate", "wave_count", "polar_notes", "polychord_notes", "polychord_min_copies", "polychord_max_copies", "polychord_rotation", "extra_notes", "decay_low", "decay_medium", "decay_high", "decay_saturated", "step_samples", "window_count", "frame_url_template",
     }  # fmt: skip
     for key in REMOVED:
         assert key not in job
@@ -167,7 +167,7 @@ def test_the_frames_in_between_are_the_weighted_blends_of_their_served_neighbour
 @pytest.mark.parametrize("image_type", TYPES)
 def test_with_the_other_settings_the_drawn_frames_are_unchanged_and_the_job_works(client, image_type):
     data = changing_file()
-    options = dict(image_type=image_type, resolution="3", note_count="24", threshold="5", smoothing="0.4", smoothing_window="3")
+    options = dict(image_type=image_type, resolution="3", note_count="24", threshold="5")
     full = post(client, data, **options).json()
     part = post(client, data, interpolate="4", **options)
     assert part.status_code == 200, part.text
@@ -188,7 +188,7 @@ def test_a_silent_file_gives_flat_frames(client, image_type, name):
 @pytest.mark.parametrize("image_type", TYPES)
 def test_the_same_request_twice_gives_identical_frames(client, image_type):
     data = changing_file()
-    options = dict(interpolate="4", image_type=image_type, smoothing="0.4", smoothing_window="3")
+    options = dict(interpolate="4", image_type=image_type)
     a, b = post(client, data, **options).json(), post(client, data, **options).json()
     for i in range(0, a["frame_count"], 3):
         assert frame_bytes(client, a, i) == frame_bytes(client, b, i)
@@ -202,8 +202,7 @@ def test_ten_seconds_at_thirty_frames_per_second_with_interpolation_and_the_high
     data = wav_bytes(tone, tone)
     start = time.perf_counter()
     r = post(
-        client, data, frame_rate="30", resolution="5", interpolate="5", image_type=image_type,
-        smoothing="0.5", smoothing_window="3", threshold="5",
+        client, data, frame_rate="30", resolution="5", interpolate="5", image_type=image_type, threshold="5",
     )  # fmt: skip
     elapsed = time.perf_counter() - start
     assert r.status_code == 200, r.text

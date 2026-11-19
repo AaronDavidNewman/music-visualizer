@@ -91,8 +91,8 @@ def test_every_tile_is_black_or_exactly_the_tile_without_a_threshold(client, thr
 
 def test_the_same_request_twice_gives_identical_frames(client):
     data = wav_bytes(two_tones(1))
-    a = post_threshold(client, data, threshold="6", smoothing="0.4").json()
-    b = post_threshold(client, data, threshold="6", smoothing="0.4").json()
+    a = post_threshold(client, data, threshold="6").json()
+    b = post_threshold(client, data, threshold="6").json()
     for i in range(a["frame_count"]):
         first = client.get(a["frame_url_template"].replace("{index}", str(i))).content
         second = client.get(b["frame_url_template"].replace("{index}", str(i))).content
@@ -101,9 +101,8 @@ def test_the_same_request_twice_gives_identical_frames(client):
 
 def test_the_hidden_set_does_not_depend_on_the_colormap_and_the_rest_stays_as_it_was(client):
     data = wav_bytes(two_tones())
-    settings = dict(smoothing="0.8")
-    off = post_threshold(client, data, threshold="0", **settings).json()
-    on = post_threshold(client, data, threshold="6", **settings).json()
+    off = post_threshold(client, data, threshold="0").json()
+    on = post_threshold(client, data, threshold="6").json()
     for i in (MID_FRAME - 4, MID_FRAME, MID_FRAME + 4):
         a, b = tiles(client, off, i), tiles(client, on, i)
         black = ~b.any(axis=1)

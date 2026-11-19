@@ -43,12 +43,8 @@ def tone(freq, seconds, sample_rate=SR):
     return np.sin(2 * np.pi * freq * t)
 
 
-def post(client, data, window="4096", fps="30", name="song.wav", spacing=None, smoothing=None):
+def post(client, data, window="4096", fps="30", name="song.wav"):
     form = {"window_size": window, "frame_rate": fps}
-    if spacing is not None:
-        form["window_spacing"] = spacing
-    if smoothing is not None:
-        form["smoothing"] = smoothing
     return client.post("/api/jobs", files={"file": (name, data, "audio/wav")}, data=form)
 
 
@@ -252,103 +248,63 @@ def test_every_allowed_window_size_is_accepted(client, window):
     assert r.json()["window_size"] == int(window)
 
 
-# --- window spacing (feature 003) ---------------------------------------------
+# --- the frequency buffers: always 60 ms apart (features 003 and 043) ---------------------------------------------
 
 
-def test_quarter_spacing_sets_the_step(client):
+def test_the_step_is_60_ms_in_samples(client):
+    from app.services.note_analysis import window_count
+
     audio = tone(440, 3.0)
-    n = len(audio)
-    r = post(client, wav_bytes(audio, audio), window="8192", spacing="0.25")
+    r = post(client, wav_bytes(audio, audio))
     assert r.status_code == 200
     job = r.json()
-    assert job["window_spacing"] == 0.25
-    assert job["step_samples"] == 2048
-    assert job["spacing_raised"] is False
-    assert job["window_count"] == math.ceil(n / 2048)
+    assert job["step_samples"] == 2646  # 60 ms at 44100 Hz
+    assert job["window_count"] == window_count(len(audio), 2646.0)
+    assert job["frame_count"] == 90
 
 
-def test_spacing_one_is_consecutive_windows(client):
+@pytest.mark.parametrize("window", ["4096", "8192", "16384", "32768"])
+def test_the_window_size_does_not_change_the_step(client, window):
     audio = tone(440, 3.0)
-    job = post(client, wav_bytes(audio, audio), window="8192", spacing="1").json()
-    assert job["step_samples"] == 8192
-    assert job["window_count"] == math.ceil(len(audio) / 8192)
+    job = post(client, wav_bytes(audio, audio), window=window).json()
+    assert job["step_samples"] == 2646
+    assert job["window_size"] == int(window)
 
 
-def test_spacing_above_one_is_accepted(client):
+@pytest.mark.parametrize("fps", ["1", "10", "24", "30", "60"])
+def test_the_frame_rate_does_not_change_the_buffers(client, fps):
     audio = tone(440, 3.0)
-    r = post(client, wav_bytes(audio, audio), window="8192", spacing="2")
-    assert r.status_code == 200
-    job = r.json()
-    assert job["step_samples"] == 16384
-    assert job["window_count"] == math.ceil(len(audio) / 16384)
-    assert job["frame_count"] == 90  # still frames for the whole file
+    base = post(client, wav_bytes(audio, audio), fps="30").json()
+    job = post(client, wav_bytes(audio, audio), fps=fps).json()
+    assert job["step_samples"] == base["step_samples"] == 2646
+    assert job["window_count"] == base["window_count"]
+    assert job["frame_count"] == math.ceil(3.0 * int(fps) - 1e-9)
 
 
-def test_non_integer_step_is_reported(client):
-    audio = tone(440, 1.0)
-    job = post(client, wav_bytes(audio, audio), window="4096", spacing="0.3").json()
-    assert job["step_samples"] == pytest.approx(1228.8)
+@pytest.mark.parametrize("rate, step", [(22050, 1323), (32000, 1920), (48000, 2880), (96000, 5760)])  # the analyzer refuses a rate under 16745 Hz at the smallest window
+def test_the_step_follows_the_sample_rate_of_the_file(client, rate, step):
+    audio = tone(440, 2.0, sample_rate=rate)
+    r = post(client, wav_bytes(audio, audio, sample_rate=rate), window="4096")
+    assert r.status_code == 200, r.text
+    assert r.json()["step_samples"] == step
 
 
 def test_same_settings_give_identical_frames(client):
     audio = tone(440, 1.0)
     data = wav_bytes(audio, audio)
-    a = post(client, data, window="8192", spacing="0.25").json()
-    b = post(client, data, window="8192", spacing="0.25").json()
+    a = post(client, data, window="8192").json()
+    b = post(client, data, window="8192").json()
     for index in (0, 10, 29):
         ra = client.get(a["frame_url_template"].replace("{index}", str(index))).content
         rb = client.get(b["frame_url_template"].replace("{index}", str(index))).content
         assert ra == rb
 
 
-@pytest.mark.parametrize("spacing", [None, "", "   "])
-def test_missing_spacing_uses_the_default_44100(client, spacing):
-    audio = tone(440, 3.0)
-    job = post(client, wav_bytes(audio, audio), window="4096", fps="30", spacing=spacing).json()
-    assert job["window_spacing"] == 0.358886
-    assert job["spacing_raised"] is False
-    assert job["window_count"] >= job["frame_count"] == 90
-
-
-def test_default_spacing_depends_on_the_files_sample_rate(client):
-    audio = tone(440, 3.0, sample_rate=48000)
-    job = post(client, wav_bytes(audio, audio, sample_rate=48000), window="4096", fps="30").json()
-    assert job["window_spacing"] == 0.390625  # 1600 samples per frame / 4096
-    assert job["window_count"] >= job["frame_count"] == 90
-
-
-def test_default_changes_with_frame_rate_and_window_size(client):
-    audio = tone(440, 3.0)
-    data = wav_bytes(audio, audio)
-    assert post(client, data, fps="60").json()["window_spacing"] == 0.179443
-    assert post(client, data, window="8192", fps="60").json()["window_spacing"] == 0.089721
-
-
-def test_step_below_one_sample_is_raised_and_reported(client, monkeypatch):
-    monkeypatch.setattr(settings, "max_windows", 100000)
-    audio = tone(440, 0.3)  # 13,230 samples -> one window per sample at the 1-sample minimum
-    r = post(client, wav_bytes(audio, audio), window="4096", spacing="0.00001")
-    assert r.status_code == 200
-    job = r.json()
-    assert job["spacing_raised"] is True
-    assert job["window_spacing"] == 1 / 4096
-    assert job["step_samples"] == 1
-    assert job["window_count"] == len(audio)
-
-
-def test_exactly_one_sample_is_not_reported_as_raised(client):
-    audio = tone(440, 0.1)
-    job = post(client, wav_bytes(audio, audio), window="4096", spacing=repr(1 / 4096)).json()
-    assert job["spacing_raised"] is False
-    assert job["step_samples"] == 1
-    assert job["window_spacing"] == 1 / 4096
-
-
-@pytest.mark.parametrize("spacing", ["0", "-1", "-0.5", "abc", "nan", "inf", "-inf", "1,5"])
-def test_bad_window_spacing_is_refused(client, spacing):
-    audio = tone(440, 0.2)
-    r = post(client, wav_bytes(audio, audio), spacing=spacing)
-    assert_rejected(r, 400, "window spacing", "greater than 0")
+def test_a_file_shorter_than_the_interval_gives_one_window_and_one_frame_for_every_frame_it_covers(client):
+    audio = tone(440, 1000 / SR)  # 1000 samples: under 60 ms
+    job = post(client, wav_bytes(audio, audio), window="4096", fps="30").json()
+    assert job["window_count"] == 1
+    assert job["frame_count"] == 1
 
 
 def test_too_many_windows_is_refused_before_analysis(client, monkeypatch):
@@ -361,43 +317,37 @@ def test_too_many_windows_is_refused_before_analysis(client, monkeypatch):
     monkeypatch.setattr(settings, "max_windows", 10)
     monkeypatch.setattr(jobs, "analyze_channels", fail)
     audio = tone(440, 1.0)
-    expected = window_count(len(audio), 0.01 * 4096)
+    expected = window_count(len(audio), 2646.0)
     assert expected > 10
-    r = post(client, wav_bytes(audio, audio), window="4096", spacing="0.01")
-    assert_rejected(r, 400, f"{expected:,} windows", "limit is 10", "larger window spacing")
+    r = post(client, wav_bytes(audio, audio), window="4096")
+    assert_rejected(r, 400, f"{expected:,} windows", "limit is 10", "shorter file")
+    assert "window spacing" not in r.json()["detail"]
 
 
-def test_window_limit_does_not_apply_at_the_default_spacing(client):
+def test_the_window_limit_does_not_apply_to_an_ordinary_file(client):
     audio = tone(440, 3.0)
     job = post(client, wav_bytes(audio, audio)).json()
     assert job["window_count"] < settings.max_windows
 
 
-def test_a_huge_window_count_is_refused_quickly_without_building_windows(client):
+def test_a_huge_window_count_is_refused_quickly_without_building_windows(client, monkeypatch):
     import time
 
+    monkeypatch.setattr(settings, "max_windows", 5)
     audio = tone(440, 5.0)
     started = time.perf_counter()
-    r = post(client, wav_bytes(audio, audio), window="32768", spacing="0.00003051")
-    assert_rejected(r, 400, "windows", "limit is 60,000", "larger window spacing")
+    r = post(client, wav_bytes(audio, audio), window="32768")
+    assert_rejected(r, 400, "windows", "limit is 5", "shorter file")
     assert time.perf_counter() - started < 2
 
 
-def test_spacing_larger_than_the_file_gives_one_window(client):
+def test_recovers_after_a_window_limit_error(client, monkeypatch):
     audio = tone(440, 1.0)
-    r = post(client, wav_bytes(audio, audio), window="4096", spacing="1000")
-    assert r.status_code == 200
-    job = r.json()
-    assert job["window_count"] == 1
-    assert job["spacing_raised"] is False
-    assert job["frame_count"] == 30  # every frame uses that one window
-
-
-def test_recovers_after_a_spacing_error(client):
-    audio = tone(440, 0.2)
     data = wav_bytes(audio, audio)
-    assert post(client, data, spacing="0").status_code == 400
-    assert post(client, data, spacing="0.5").status_code == 200
+    with monkeypatch.context() as m:
+        m.setattr(settings, "max_windows", 2)
+        assert post(client, data).status_code == 400
+    assert post(client, data).status_code == 200
 
 
 # --- octave grid layout (feature 005) --------------------------------------------
@@ -427,12 +377,13 @@ def test_one_of_the_four_omitted_notes_leaves_no_visible_tile_at_full_white(clie
         assert frame_levels(client, job, index).max() < 255
 
 
-# --- note smoothing (features 006 and 012) -------------------------------------------
+# --- the note values of a frame (features 006 and 043) ------------------------------------------------------------
 
 
 def frame_values(job):
-    """The averaged note values per frame of a stored job, before smoothing and scaling, from the services (with the noise floor of feature 033: the
-    notes more than 60 dB below the loudest of the file are 0, as the job makes them)."""
+    """The averaged note values per frame of a stored job, from the services (with the noise floor of feature 033: the
+    notes more than 60 dB below the loudest of the file are 0, as the job makes them). The frames are drawn as they are
+    (feature 043 removed the smoothing)."""
     from app.services.frame_rendering import average_frames, frame_count
     from app.services.noise_floor import floor_analysis
     from app.services.note_analysis import analyze_channels, read_wav
@@ -442,26 +393,10 @@ def frame_values(job):
     return average_frames(result, job["frame_rate"], frame_count(len(left), rate, job["frame_rate"]))
 
 
-def ref_smooth(values, s, w=1):
-    """The windowed average written out by hand (not using smooth_frames):
-    ( A[t] + s*A[t-1] + ... + s*A[t-k] ) / ( 1 + s*k ), k = min(t, w), from the raw values."""
-    values = np.asarray(values, dtype=float)
-    out = np.zeros_like(values)
-    for t in range(len(values)):
-        k = min(t, w)
-        total = values[t].copy()
-        for j in range(1, k + 1):
-            total = total + s * values[t - j]
-        out[t] = total / (1 + s * k)
-    return out
-
-
-def expected_pixels(job, smoothing, window=1):
-    """The hot-table row of every tile of every frame, worked out independently of the code under test: smooth the values
-    by hand, take the share of the largest smoothed value, the square root, and round to one of 256 entries."""
+def expected_pixels(job):
+    """The hot-table row of every tile of every frame, worked out independently of the code under test: take the share of
+    the largest value, the square root, and round to one of 256 entries."""
     values = frame_values(job)
-    if smoothing:
-        values = ref_smooth(values.tolist(), smoothing, window)
     peak = values.max()
     share = values[:, :84] / peak if peak > 0 else np.zeros((len(values), 84))
     return np.rint(np.sqrt(share) * 255).astype(int)
@@ -472,78 +407,18 @@ def burst_then_silence():
     return np.concatenate([note_tone(36, 1.0), np.zeros(SR)])
 
 
-@pytest.mark.parametrize("smoothing", ["0", "0.0", "-0.0"])
-def test_zero_smoothing_gives_byte_identical_frames_to_no_field(client, smoothing):
-    audio = burst_then_silence()
-    data = wav_bytes(audio, audio)
-    plain = post(client, data).json()
-    zero = post(client, data, smoothing=smoothing).json()
-    assert zero["smoothing"] == 0.0
-    for index in (0, 29, 31, 59):
-        a = client.get(plain["frame_url_template"].replace("{index}", str(index))).content
-        b = client.get(zero["frame_url_template"].replace("{index}", str(index))).content
-        assert a == b
-
-
-def test_smoothing_does_not_change_counts_or_timing(client):
-    audio = burst_then_silence()
-    data = wav_bytes(audio, audio)
-    jobs = [post(client, data, smoothing=s).json() for s in ("0", "0.5", "0.8")]
-    keys = ("frame_count", "window_count", "step_samples", "window_spacing", "duration_seconds", "frame_rate")
-    for job in jobs[1:]:
-        assert {k: job[k] for k in keys} == {k: jobs[0][k] for k in keys}
-
-
-@pytest.mark.parametrize("smoothing", ["0", "0.8"])
-def test_a_silent_file_stays_black_at_any_smoothing(client, smoothing):
-    job = post(client, wav_bytes(np.zeros(SR), np.zeros(SR)), smoothing=smoothing).json()
+def test_a_silent_file_stays_black(client):
+    job = post(client, wav_bytes(np.zeros(SR), np.zeros(SR))).json()
     for index in (0, 15, 29):
         assert not frame_levels(client, job, index).any()
 
 
-def test_the_same_smoothing_gives_identical_frames(client):
+def test_a_note_that_stops_is_gone_in_the_frames_after_it(client):
+    """With no smoothing between the frames, a frame after the burst shows nothing of it."""
     audio = burst_then_silence()
-    data = wav_bytes(audio, audio)
-    a = post(client, data, smoothing="0.5").json()
-    b = post(client, data, smoothing="0.5").json()
-    for index in (0, 20, 31, 59):
-        ra = client.get(a["frame_url_template"].replace("{index}", str(index))).content
-        rb = client.get(b["frame_url_template"].replace("{index}", str(index))).content
-        assert ra == rb
-
-
-@pytest.mark.parametrize("smoothing, expected", [("0.8", 0.8), ("0.35", 0.35), ("0.123456", 0.123456)])
-def test_smoothing_values_in_range_are_accepted_and_reported(client, smoothing, expected):
-    audio = tone(440, 0.3)
-    r = post(client, wav_bytes(audio, audio), smoothing=smoothing)
-    assert r.status_code == 200
-    assert r.json()["smoothing"] == expected
-
-
-@pytest.mark.parametrize("smoothing", ["-0.1", "0.81", "1", "1e9", "abc", "nan", "inf", "-inf", "", "  "])
-def test_bad_smoothing_is_refused(client, smoothing):
-    audio = tone(440, 0.2)
-    r = post(client, wav_bytes(audio, audio), smoothing=smoothing)
-    assert_rejected(r, 400, "smoothing", "0.0", "0.8")
-    assert r.json()["detail"] == "The smoothing must be a number from 0.0 to 0.8."
-
-
-def test_a_refused_smoothing_never_reads_the_file(client, monkeypatch):
-    from app.routers import jobs
-
-    def fail(*args, **kwargs):
-        raise AssertionError("the file must not be read")
-
-    monkeypatch.setattr(jobs, "read_wav", fail)
-    audio = tone(440, 0.2)
-    assert_rejected(post(client, wav_bytes(audio, audio), smoothing="0.81"), 400, "smoothing")
-
-
-def test_recovers_after_a_smoothing_error(client):
-    audio = tone(440, 0.2)
-    data = wav_bytes(audio, audio)
-    assert post(client, data, smoothing="-0.1").status_code == 400
-    assert post(client, data, smoothing="0.3").status_code == 200
+    job = post(client, wav_bytes(audio, audio)).json()
+    assert frame_levels(client, job, 15).any()
+    assert not frame_levels(client, job, 59).any()
 
 
 # --- the served pictures --------------------------------------------------------------
@@ -566,8 +441,8 @@ def test_counts_and_timing_do_not_depend_on_colour(client):
     audio = two_notes()
     job = post(client, wav_bytes(audio, audio)).json()
     assert job["frame_count"] == math.ceil(job["duration_seconds"] * job["frame_rate"] - 1e-9)
-    assert job["window_count"] >= job["frame_count"]
-    assert job["step_samples"] > 0 and job["window_spacing"] > 0
+    assert job["window_count"] >= 1  # one buffer every 60 ms: fewer than the 30 frames a second of the default (feature 043)
+    assert job["step_samples"] == 2646
 
 
 def test_the_same_file_and_settings_give_byte_identical_colour_frames(client):

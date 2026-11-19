@@ -155,7 +155,7 @@ def test_two_runs_give_identical_frames(client):
 def test_the_other_settings_still_apply_with_the_wave(client):
     audio = pulse_wav(seconds=3.0)
     base = all_frames(client, contour(client, audio, beat_coloring="true").json())
-    for fields in ({"threshold": "8"}, {"note_count": "30"}, {"smoothing": "0.5", "smoothing_window": "4"}, {"resolution": "2"}):
+    for fields in ({"threshold": "8"}, {"note_count": "30"}, {"resolution": "2"}):
         r = contour(client, audio, beat_coloring="true", **fields)
         assert r.status_code == 200, (fields, r.text)
         assert all_frames(client, r.json()) != base, fields

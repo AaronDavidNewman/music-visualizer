@@ -18,9 +18,19 @@ from .test_resolution_api import tiny
 TYPE_MESSAGE = f"The image type must be one of {', '.join(IMAGE_TYPES)}."
 A3, E4 = 24, 31  # notes 24 and 31 of the 84 (A1 is 0)
 WINDOW = 4096
-STEP = 4410  # the default window spacing at 10 frames a second: a window for each frame
-WINDOWS = 28
-SAMPLES = (WINDOWS - 1) * STEP + WINDOW  # the last window just fits: every window holds a whole, identical tone (it is bin centred, so any start does)
+STEP = 2646.0  # the windows are 60 ms apart whatever the frame rate (feature 043)
+FRAME = 4410  # a frame at the 10 frames a second of ``post``, in samples
+SAMPLES = 3 * SR
+CHECKED = 20  # the frame whose bars are checked: every window it counts lies wholly inside the file, so holds a whole, identical tone (it is bin centred, so any start does)
+
+
+def windows_to(frame):
+    """How many windows a frame counts: those that start before its end (the windows start at k * STEP)."""
+    return math.ceil((frame + 1) * FRAME / STEP - 1e-9)
+
+
+WINDOWS = windows_to(CHECKED)
+assert (WINDOWS - 1) * STEP + WINDOW <= SAMPLES
 FREQUENCY, AMPLITUDE = 0, 1  # the two data sets of the histogram
 
 
@@ -39,7 +49,7 @@ def frames(client, job):
 
 
 def two_tones(second=0.2, seconds=3.0):
-    """A3 at 0.4 and E4 at ``second``, both in the centre of the spectrum position of their note, for exactly 28 windows."""
+    """A3 at 0.4 and E4 at ``second``, both in the centre of the spectrum position of their note, (3 seconds)."""
     return wav_bytes((0.4 * note_tone(A3, seconds) + second * note_tone(E4, seconds))[:SAMPLES])
 
 
@@ -58,7 +68,7 @@ def heights(image):
 
 
 def expected_heights(second):
-    """The bars of the last frame of ``two_tones(second)`` from the totals worked out by hand: 28 windows, A3 and E4 ranked 84 and 83, 1 and the ratio of decibels."""
+    """The bars of the last frame of ``two_tones(second)`` from the totals worked out by hand: ``WINDOWS`` windows, A3 and E4 ranked 84 and 83, 1 and the ratio of decibels."""
     ranks = [0.0] * 84
     ranks[A3], ranks[E4] = 84 * WINDOWS, 83 * WINDOWS
     amplitude = [0.0] * 84
@@ -107,8 +117,8 @@ def test_the_frames_are_png_pictures_of_the_usual_size(client):
 
 def test_the_last_frame_is_the_softmax_of_the_totals_of_all_windows_above_the_smallest_for_both_data_sets(client):
     job = energy(client, two_tones()).json()
-    assert job["window_count"] == WINDOWS
-    last = heights(picture(client, job, job["frame_count"] - 1))
+    assert job["window_count"] > WINDOWS
+    last = heights(picture(client, job, CHECKED))
     for got, want in zip(last, expected_heights(0.2)):
         assert max(abs(g - w) for g, w in zip(got, want)) <= 2
 
@@ -122,7 +132,7 @@ def test_the_tallest_bar_is_the_same_height_in_every_frame_with_a_sound(client):
 def test_the_amplitude_data_set_shows_what_the_rank_data_set_cannot(client):
     # E4 is always the second loudest, so its rank total is 83/84 of A3's however faint it is; its amplitude total is not
     quiet = energy(client, two_tones(second=0.04)).json()
-    last = heights(picture(client, quiet, quiet["frame_count"] - 1))
+    last = heights(picture(client, quiet, CHECKED))
     frequency_ratio = last[FREQUENCY][E4] / last[FREQUENCY][A3]
     amplitude_ratio = last[AMPLITUDE][E4] / last[AMPLITUDE][A3]
     assert amplitude_ratio < frequency_ratio - 0.03
@@ -148,7 +158,6 @@ def test_a_silent_file_or_one_shorter_than_a_window_gives_pictures_without_bars(
 
 
 SETTINGS = [
-    {"smoothing": "0.5", "smoothing_window": "5"},
     {"threshold": "5"},
     {"resolution": "3", "note_count": "20", "interpolate": "2"},
     {"note_layout": "spiral"},

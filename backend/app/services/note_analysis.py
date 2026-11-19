@@ -9,7 +9,9 @@ Order of operations:
     1. Read the file - ``read_wav()`` - two channels of ``RawSamples`` ``(samples,)`` (a mono file gives the same
        channel twice) and the file's sample rate.
     2. Choose the windows - ``window_count()``, ``window_starts()`` - ``WindowStarts`` ``(windows,)``: the nearest whole
-       sample to ``k * step`` for each window ``k``.
+       sample to ``k * step`` for each window ``k``. A job always passes the step of ``buffer_interval.buffer_step()``
+       (60 ms, feature 043), so the windows (the frequency buffers) are the same whatever the frame rate; other callers
+       may pass any step of 1 sample or more.
     3. Scale the samples - ``_to_float()`` - ``Samples`` ``(samples,)``: integer files are divided by their full scale,
        so the bit depth does not matter (done a chunk of windows at a time, so a long file never sits in memory as
        float64).

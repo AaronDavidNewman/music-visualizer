@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, reactive, ref } from "vue";
 import {
   COLORMAPS,
   DEFAULT_COLORMAP,
@@ -31,20 +31,22 @@ import {
   DEFAULT_INTERPOLATE,
   DEFAULT_NOTE_COUNT,
   DEFAULT_RESOLUTION,
-  DEFAULT_SMOOTHING,
-  DEFAULT_SMOOTHING_WINDOW,
+  DEFAULT_EXTRA_NOTES,
   DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
+  EXTRA_NOTES_RANGE,
   IMAGE_TYPES,
   GAUSSIAN_RANGE,
   INTERPOLATE_RANGE,
   NOTE_COUNT_RANGE,
   RESOLUTION_RANGE,
-  SMOOTHING_RANGE,
-  SMOOTHING_WINDOW_RANGE,
   THRESHOLD_RANGE,
   WINDOW_SIZES,
   formatBeatColoring,
+  formatExtraNotes,
+  heldNotesCount,
+  usesHeldNotes,
+  validateExtraNotes,
   formatDecayAmount,
   formatChromaticRate,
   formatDecayRate,
@@ -58,7 +60,6 @@ import {
   formatInterpolate,
   formatNoteCount,
   formatResolution,
-  formatSmoothing,
   formatThreshold,
   validatePeakDistance,
   validateDecayAmount,
@@ -81,20 +82,9 @@ import {
   validateInterpolate,
   validateNoteCount,
   validateResolution,
-  validateSmoothing,
-  validateSmoothingWindow,
   validateThreshold,
   validateWindowSize,
 } from "../utilities/validation";
-import {
-  defaultSpacing,
-  formatSpacing,
-  isBelowMinimum,
-  minimumMessage,
-  stepMilliseconds,
-  stepSamples,
-  validateSpacing,
-} from "../utilities/spacing";
 import {
   colormapHelp,
   frameRateHelp,
@@ -105,6 +95,7 @@ import {
   decayExpRateHelp,
   chromaticRateHelp,
   decayRateHelp,
+  extraNotesHelp,
   polarNotesHelp,
   polychordMaxCopiesHelp,
   polychordMinCopiesHelp,
@@ -116,9 +107,6 @@ import {
   interpolateHelp,
   noteCountHelp,
   resolutionHelp,
-  smoothingHelp,
-  smoothingWindowHelp,
-  spacingHelp,
   thresholdHelp,
   windowSizeHelp,
 } from "../utilities/help";
@@ -127,14 +115,12 @@ import SettingsGroup from "./SettingsGroup.vue";
 import { controlsIn, groupTitle, groupsFor, isOpen, setOpen, type OpenState } from "../utilities/groups";
 import type { JobSettings } from "../api";
 
-const props = defineProps<{ busy: boolean; file: File | null; sampleRate: number; initialImageType?: string }>();
+const props = defineProps<{ busy: boolean; file: File | null; initialImageType?: string }>();
 const emit = defineEmits<{ submit: [file: File, settings: JobSettings] }>();
 
 const windowSize = ref<number>(DEFAULT_WINDOW_SIZE);
 const frameRateText = ref("30");
 const colormap = ref<string>(DEFAULT_COLORMAP);
-const smoothing = ref<number>(DEFAULT_SMOOTHING);
-const smoothingWindowText = ref(String(DEFAULT_SMOOTHING_WINDOW));
 const threshold = ref<number>(DEFAULT_THRESHOLD);
 const imageType = ref<string>(props.initialImageType ?? DEFAULT_IMAGE_TYPE);
 const resolution = ref<number>(DEFAULT_RESOLUTION);
@@ -151,28 +137,12 @@ const polychordNotes = ref<number>(DEFAULT_POLYCHORD_NOTES);
 const polychordMinCopies = ref<number>(DEFAULT_POLYCHORD_MIN_COPIES);
 const polychordMaxCopies = ref<number>(DEFAULT_POLYCHORD_MAX_COPIES);
 const polychordRotation = ref<number>(DEFAULT_POLYCHORD_ROTATION);
+const extraNotes = ref<number>(DEFAULT_EXTRA_NOTES); // the Extra notes k of the six pictures that take the n loudest notes (feature 044)
 const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
 const peakDistance = ref<number>(DEFAULT_PEAK_DISTANCE);
-const spacingText = ref(defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value) ?? "");
-
-function defaultSpacingText(sampleRate: number, frameRate: string, size: number): string | null {
-  const spacing = defaultSpacing(sampleRate, frameRate, size);
-  return spacing === null ? null : formatSpacing(spacing);
-}
-
-// The default spacing follows the window size, frame rate and file: any change replaces what is in the field.
-// If the frame rate is not usable yet (empty, partly typed), the field is left alone.
-watch([windowSize, frameRateText, () => props.sampleRate, () => props.file], () => {
-  const text = defaultSpacingText(props.sampleRate, frameRateText.value, windowSize.value);
-  if (text !== null) spacingText.value = text;
-});
-
 const fileError = computed(() => validateFile(props.file));
 const windowError = computed(() => validateWindowSize(windowSize.value));
 const frameRateError = computed(() => validateFrameRate(frameRateText.value));
-const spacingError = computed(() => validateSpacing(spacingText.value));
-const smoothingError = computed(() => validateSmoothing(smoothing.value));
-const smoothingWindowError = computed(() => validateSmoothingWindow(smoothingWindowText.value));
 const thresholdError = computed(() => validateThreshold(threshold.value));
 const imageTypeError = computed(() => validateImageType(imageType.value));
 const colormapError = computed(() => validateColormap(colormap.value));
@@ -190,15 +160,15 @@ const polychordNotesError = computed(() => validatePolychordNotes(polychordNotes
 const polychordMinCopiesError = computed(() => validatePolychordMinCopies(polychordMinCopies.value));
 const polychordMaxCopiesError = computed(() => validatePolychordMaxCopies(polychordMaxCopies.value, polychordMinCopies.value));
 const polychordRotationError = computed(() => validatePolychordRotation(polychordRotation.value));
+// n, the number of notes of the chosen picture, limits k; the error only counts for the pictures that use the setting
+const heldCount = computed(() => heldNotesCount(imageType.value, polarNotes.value, polychordNotes.value));
+const extraNotesError = computed(() => (usesHeldNotes(imageType.value) ? validateExtraNotes(extraNotes.value, heldCount.value) : null));
 const peakDistanceError = computed(() => validatePeakDistance(peakDistance.value));
 const canSubmit = computed(
   () =>
     !fileError.value &&
     !windowError.value &&
     !frameRateError.value &&
-    !spacingError.value &&
-    !smoothingError.value &&
-    !smoothingWindowError.value &&
     !thresholdError.value &&
     !imageTypeError.value &&
     !colormapError.value &&
@@ -216,6 +186,7 @@ const canSubmit = computed(
     !polychordMinCopiesError.value &&
     !polychordMaxCopiesError.value &&
     !polychordRotationError.value &&
+    !extraNotesError.value &&
     !peakDistanceError.value,
 );
 
@@ -224,8 +195,8 @@ const canSubmit = computed(
 const TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"];
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
-const showDataSmoothing = computed(() => shownGroups.value.includes("data-smoothing")); // not for Energy graphs (feature 034)
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
+const showHeldNotes = computed(() => shownGroups.value.includes("held-notes"));
 // the Local peaks group has one of two ids: local-peaks (Contour: with the checkbox) or concentric-peaks (Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord: without; the id is from the first picture that had it)
 const showNoteLayout = computed(() => noteLayoutApplies(imageType.value));
 const peaksGroup = computed(() => shownGroups.value.find((id) => id === "local-peaks" || id === "concentric-peaks") ?? "");
@@ -240,7 +211,7 @@ function onToggle(id: string, open: boolean) {
 }
 
 // A group is flagged "needs attention" when one of its controls has a value that is not allowed (the same errors that disable Create frames).
-const analysisProblem = computed(() => !!(windowError.value || frameRateError.value || spacingError.value));
+const analysisProblem = computed(() => !!(windowError.value || frameRateError.value));
 const colormapProblem = computed(() => !!colormapError.value);
 const imageTypeProblem = computed(() => !!imageTypeError.value);
 const typeGroupProblem = computed(
@@ -258,30 +229,16 @@ const typeGroupProblem = computed(
     (inTypeGroup("wave-count") && !!waveCountError.value),
 );
 const noteLayoutProblem = computed(() => !!noteLayoutError.value);
+const heldNotesProblem = computed(() => !!extraNotesError.value);
 const localPeaksProblem = computed(() => !!peakDistanceError.value);
-const dataSmoothingProblem = computed(() => !!(smoothingWindowError.value || smoothingError.value));
 const imageSmoothingProblem = computed(() => !!(resolutionError.value || interpolateError.value || gaussianError.value));
-
-const belowMinimum = computed(
-  () => !spacingError.value && isBelowMinimum(Number(spacingText.value), windowSize.value),
-);
-
-const stepHint = computed(() => {
-  if (spacingError.value) return "";
-  const spacing = Number(spacingText.value);
-  const samples = stepSamples(spacing, windowSize.value);
-  const ms = stepMilliseconds(spacing, windowSize.value, props.sampleRate);
-  return `Step between windows: ${Number(samples.toFixed(2))} samples (${ms.toFixed(1)} ms).`;
-});
 
 function onSubmit() {
   if (!canSubmit.value || !props.file) return;
   emit("submit", props.file, {
     windowSize: windowSize.value,
     frameRate: Number(frameRateText.value),
-    windowSpacing: Number(spacingText.value),
     threshold: threshold.value,
-    smoothingWindow: Number(smoothingWindowText.value),
     imageType: imageType.value,
     colormap: colormap.value,
     resolution: resolution.value,
@@ -300,9 +257,9 @@ function onSubmit() {
     polychordMinCopies: polychordMinCopies.value,
     polychordMaxCopies: polychordMaxCopies.value,
     polychordRotation: polychordRotation.value,
+    extraNotes: extraNotes.value,
     beatColoring: beatColoring.value,
     peakDistance: peakDistance.value,
-    smoothing: Math.round(smoothing.value * 100) / 100,
   });
 }
 </script>
@@ -334,23 +291,6 @@ function onSubmit() {
         </div>
         <input id="frame-rate" v-model="frameRateText" type="number" step="any" inputmode="decimal" :disabled="busy" />
         <small v-if="frameRateError" class="error">{{ frameRateError }}</small>
-      </div>
-
-      <div class="field">
-        <div class="field-head">
-          <label for="window-spacing">Window spacing</label>
-          <InfoPopover label="window spacing" :text="spacingHelp(stepHint)" />
-        </div>
-        <input
-          id="window-spacing"
-          v-model="spacingText"
-          type="number"
-          step="any"
-          inputmode="decimal"
-          :disabled="busy"
-        />
-        <small v-if="spacingError" class="error">{{ spacingError }}</small>
-        <small v-else-if="belowMinimum" class="notice">{{ minimumMessage(windowSize) }}</small>
       </div>
     </SettingsGroup>
 
@@ -603,6 +543,33 @@ function onSubmit() {
     </SettingsGroup>
 
     <SettingsGroup
+      v-if="showHeldNotes"
+      id="held-notes"
+      :title="groupTitle('held-notes')"
+      :open="isOpen(openState, 'held-notes')"
+      :problem="heldNotesProblem"
+      @toggle="onToggle('held-notes', $event)"
+    >
+      <div class="field">
+        <div class="field-head">
+          <label for="extra-notes">Extra notes (k)</label>
+          <InfoPopover label="extra notes" :text="extraNotesHelp" />
+          <output class="slider-value" for="extra-notes">{{ formatExtraNotes(extraNotes) }}</output>
+        </div>
+        <input
+          id="extra-notes"
+          v-model.number="extraNotes"
+          type="range"
+          :min="EXTRA_NOTES_RANGE.min"
+          :max="heldCount"
+          :step="EXTRA_NOTES_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="extraNotesError" class="error">{{ extraNotesError }}</small>
+      </div>
+    </SettingsGroup>
+
+    <SettingsGroup
       v-if="showNoteLayout"
       id="note-layout"
       :title="groupTitle('note-layout')"
@@ -655,51 +622,6 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="peakDistanceError" class="error">{{ peakDistanceError }}</small>
-      </div>
-    </SettingsGroup>
-
-    <SettingsGroup
-      v-if="showDataSmoothing"
-      id="data-smoothing"
-      :title="groupTitle('data-smoothing')"
-      :open="isOpen(openState, 'data-smoothing')"
-      :problem="dataSmoothingProblem"
-      @toggle="onToggle('data-smoothing', $event)"
-    >
-      <div class="field">
-        <div class="field-head">
-          <label for="smoothing-window">Smoothing window (frames)</label>
-          <InfoPopover label="smoothing window" :text="smoothingWindowHelp" />
-        </div>
-        <input
-          id="smoothing-window"
-          v-model="smoothingWindowText"
-          type="number"
-          step="1"
-          :min="SMOOTHING_WINDOW_RANGE.min"
-          :max="SMOOTHING_WINDOW_RANGE.max"
-          inputmode="numeric"
-          :disabled="busy"
-        />
-        <small v-if="smoothingWindowError" class="error">{{ smoothingWindowError }}</small>
-      </div>
-
-      <div class="field">
-        <div class="field-head">
-          <label for="smoothing">Smoothing</label>
-          <InfoPopover label="smoothing" :text="smoothingHelp" />
-          <output class="slider-value" for="smoothing">{{ formatSmoothing(smoothing) }}</output>
-        </div>
-        <input
-          id="smoothing"
-          v-model.number="smoothing"
-          type="range"
-          :min="SMOOTHING_RANGE.min"
-          :max="SMOOTHING_RANGE.max"
-          :step="SMOOTHING_RANGE.step"
-          :disabled="busy"
-        />
-        <small v-if="smoothingError" class="error">{{ smoothingError }}</small>
       </div>
     </SettingsGroup>
 
@@ -816,9 +738,6 @@ small {
 }
 small.error {
   color: #b00020;
-}
-small.notice {
-  color: #8a5300;
 }
 button {
   padding: 0.5rem 1rem;

@@ -21,13 +21,13 @@ module only has what differs, and takes the rest from ``decay``:
 The decay amounts of ``decay`` (one for each saturation level) are not used. The drawing is
 ``decay.write_decay_frames``.
 
-This module knows nothing about the note analysis or the audio: the smoothed note values and the beat positions are
+This module knows nothing about the note analysis or the audio: the note values and the beat positions are
 passed in.
 
 Order of operations:
     1. Check the settings - ``_simulate()`` - the note layout and the decay rate (0.25 to 4 in steps of 0.25).
     2. Work out what every note would gain, before the taper - ``decay.gains()`` - ``PointGains`` ``(frames, 84)``: 24,
-       20, 16, 12 and 8 points for the five loudest notes plus ``8 * beat``; put them in cell order
+       20, 16, 12 and 8 points for the five loudest notes (the held notes of ``held_notes.hold_loudest()``) plus ``8 * beat``; put them in cell order
        (``note_layout.arrange_notes()``) and each frame as a ``(7, 12)`` grid.
     3. For each frame in turn, take the taper - ``taper_of()`` - 8 at first, then up 0.01 a frame to 12.
     4. Add the cut gains - ``_simulate()`` - each gain ``g`` becomes ``g * exp(-g / taper)``; the points are held
@@ -82,7 +82,7 @@ def next_taper(steps: int, rising: bool, full_circles: int) -> tuple[int, bool]:
     return steps, steps == 0
 
 
-def exp_gains(values: ArrayLike, beat: BeatPositions | None = None, taper: float | ArrayLike = TAPER) -> PointGains:
+def exp_gains(values: ArrayLike, beat: BeatPositions | None = None, taper: float | ArrayLike = TAPER, extra: int = 0) -> PointGains:
     """The points every note gains in every frame, in note order: a float64 array of shape ``(frames, 84)``.
 
     The gains of ``decay`` (``decay.gains``: the five loudest notes, 24, 20, 16, 12 and 8 plus ``8 * position``) each
@@ -90,17 +90,19 @@ def exp_gains(values: ArrayLike, beat: BeatPositions | None = None, taper: float
     is one number above 0 (8 by default) or one for each frame. The input is not changed.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``), in note order.
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
         ``taper``: a number or ``FrameTapers`` ``(frames,)`` - the number above 0 in ``exp(-g / taper)`` (8 to 12 in a
             job).
+        ``extra``: the Extra notes setting k, 0 (the default: the old five loudest) to 5: a note that was among the five of the frame before stays among them while it is within the
+            loudest ``5 + extra`` (see ``held_notes``).
 
     Returns:
         ``PointGains`` ``(frames, 84)`` - the points each note gains in each frame after the cut, in note order.
     """
-    gained = gains(values, beat)
+    gained = gains(values, beat, extra)
     taper = np.asarray(taper, dtype=np.float64)
     if taper.ndim > 1 or (taper.ndim == 1 and taper.shape[0] != gained.shape[0]) or not np.isfinite(taper).all() or (taper <= 0).any():
         raise ValueError("The taper must be a number above 0, or one for each frame.")
@@ -147,7 +149,7 @@ def decay_exp_step(points: ArrayLike, frames: float = 1) -> CirclePoints:
     return _spread(points, np.minimum(points, NEIGHBOURS * frames * exp_loss_per_frame(points)))
 
 
-def circle_points(values: ArrayLike, beat: BeatPositions | None = None, note_layout: str = DEFAULT_NOTE_LAYOUT, decay_rate: float = DEFAULT_DECAY_RATE) -> CirclePoints:
+def circle_points(values: ArrayLike, beat: BeatPositions | None = None, note_layout: str = DEFAULT_NOTE_LAYOUT, decay_rate: float = DEFAULT_DECAY_RATE, extra: int = 0) -> CirclePoints:
     """The points of the 84 circles after every frame: a float64 array of shape ``(frames, 84)``, in cell order (row by
     row).
 
@@ -158,7 +160,7 @@ def circle_points(values: ArrayLike, beat: BeatPositions | None = None, note_lay
     the taper of the next frame is then worked out from the circles with more than 32 points.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``), in note order.
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
@@ -167,15 +169,15 @@ def circle_points(values: ArrayLike, beat: BeatPositions | None = None, note_lay
         ``CirclePoints`` ``(frames, 84)`` - the points (0 to 64) of each of the 84 circles after each frame, in cell
         order.
     """
-    return _simulate(values, beat, note_layout, decay_rate)[0]
+    return _simulate(values, beat, note_layout, decay_rate, extra)[0]
 
 
-def circle_tapers(values: ArrayLike, beat: BeatPositions | None = None, note_layout: str = DEFAULT_NOTE_LAYOUT, decay_rate: float = DEFAULT_DECAY_RATE) -> FrameTapers:
+def circle_tapers(values: ArrayLike, beat: BeatPositions | None = None, note_layout: str = DEFAULT_NOTE_LAYOUT, decay_rate: float = DEFAULT_DECAY_RATE, extra: int = 0) -> FrameTapers:
     """The taper that every frame of :func:`circle_points` gained its points with: a float64 array of shape
     ``(frames,)``, 8 for the first frame.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame, in note
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame, in note
             order.
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
@@ -183,14 +185,14 @@ def circle_tapers(values: ArrayLike, beat: BeatPositions | None = None, note_lay
     Returns:
         ``FrameTapers`` ``(frames,)`` - the taper (8 to 12) each frame's gains were cut with.
     """
-    return _simulate(values, beat, note_layout, decay_rate)[1]
+    return _simulate(values, beat, note_layout, decay_rate, extra)[1]
 
 
-def _simulate(values: ArrayLike, beat: BeatPositions | None, note_layout: str, decay_rate: float) -> tuple[CirclePoints, FrameTapers]:
+def _simulate(values: ArrayLike, beat: BeatPositions | None, note_layout: str, decay_rate: float, extra: int = 0) -> tuple[CirclePoints, FrameTapers]:
     """The whole simulation: the points after every frame and the taper of every frame.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame, in note
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame, in note
             order.
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.
@@ -202,7 +204,7 @@ def _simulate(values: ArrayLike, beat: BeatPositions | None, note_layout: str, d
     note_layout = check_note_layout(note_layout)
     decay_rate = check_decay_rate(decay_rate)
     # the gains of decay, before the taper
-    raw = arrange_notes(gains(values, beat), note_layout).reshape(-1, GRID_ROWS, GRID_COLUMNS)
+    raw = arrange_notes(gains(values, beat, extra), note_layout).reshape(-1, GRID_ROWS, GRID_COLUMNS)
     points = np.zeros((GRID_ROWS, GRID_COLUMNS))
     recorded = np.zeros((raw.shape[0], NOTES))
     tapers = np.zeros(raw.shape[0])

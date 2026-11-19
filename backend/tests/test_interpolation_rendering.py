@@ -48,7 +48,7 @@ def decoded(directory, i):
 @pytest.mark.parametrize("image_type", TYPES)
 def test_interpolate_one_gives_exactly_the_files_made_without_the_setting(tmp_path, image_type):
     frames = random_notes(8, seed=3)
-    options = dict(smoothing=0.3, smoothing_window=2, threshold=3, resolution=2, note_count=40, image_type=image_type)
+    options = dict(threshold=3, resolution=2, note_count=40, image_type=image_type)
     a = write(frames, tmp_path / "a", **options)
     b = write(frames, tmp_path / "b", interpolate=1, **options)
     assert [f.read_bytes() for f in a] == [f.read_bytes() for f in b]
@@ -67,7 +67,7 @@ def test_the_frame_count_the_names_and_the_size_do_not_depend_on_the_interpolate
 @pytest.mark.parametrize("image_type", TYPES)
 def test_the_drawn_frames_are_byte_identical_to_the_frames_of_interpolate_one(tmp_path, image_type, n):
     frames = random_notes(12, seed=n)
-    options = dict(smoothing=0.4, smoothing_window=3, image_type=image_type)  # smoothing: values depend on earlier frames
+    options = dict(image_type=image_type)  # smoothing: values depend on earlier frames
     full = tmp_path / "full"
     write(frames, full, **options)
     part = tmp_path / "part"
@@ -79,7 +79,7 @@ def test_the_drawn_frames_are_byte_identical_to_the_frames_of_interpolate_one(tm
 @pytest.mark.parametrize("name_", COLORMAPS)
 def test_the_drawn_frames_follow_every_other_setting_exactly_as_without_interpolation(tmp_path, name_):
     frames = random_notes(11, seed=9)
-    options = dict(colormap=name_, smoothing=0.5, smoothing_window=3, threshold=5, resolution=3, note_count=24)
+    options = dict(colormap=name_, threshold=5, resolution=3, note_count=24)
     for image_type in TYPES:
         full, part = tmp_path / f"f_{image_type}", tmp_path / f"p_{image_type}"
         write(frames, full, image_type=image_type, **options)
@@ -175,7 +175,7 @@ def test_a_silent_input_gives_flat_frames_in_every_type_and_colormap(tmp_path, i
 @pytest.mark.parametrize("image_type", TYPES)
 def test_two_runs_give_byte_identical_files(tmp_path, image_type):
     frames = random_notes(12, seed=12)
-    options = dict(image_type=image_type, interpolate=4, smoothing=0.4, smoothing_window=3, threshold=4)
+    options = dict(image_type=image_type, interpolate=4, threshold=4)
     a = write(frames, tmp_path / "a", **options)
     b = write(frames, tmp_path / "b", **options)
     assert [f.read_bytes() for f in a] == [f.read_bytes() for f in b]

@@ -23,7 +23,7 @@ For every `FunctionDef` and `AsyncFunctionDef` in each file, **nested ones and m
    - An exempt module's module docstring contains the text `No data processing:`.
 2. **Arrays named**: for every top-level function and method (not nested) whose annotations include an alias from `array_types.py` or `np.ndarray` (as a parameter or in the return), the docstring exists and mentions each **array parameter** by name (double-backticked, ``` ``name`` ```); if the return is an array, it contains a `Returns:` line.
 3. **Aliases described**: each alias defined in `array_types.py` is immediately preceded or followed by a comment (a description is required), and each alias that is **used** in an annotation somewhere is defined there.
-4. **Overview complete**: the `image_types.py` module docstring contains `Pipeline overview:` and every name in `IMAGE_TYPES`, and each shared step name (READ, ANALYZE, FLOOR, MEASURE, AVERAGE, SMOOTH, DRAW, SAVE).
+4. **Overview complete**: the `image_types.py` module docstring contains `Pipeline overview:` and every name in `IMAGE_TYPES`, and each shared step name (READ, ANALYZE, FLOOR, MEASURE, AVERAGE, DRAW, SAVE).
 
 ## What the checks do not do (left to review and the feature's tools)
 

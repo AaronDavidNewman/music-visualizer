@@ -1,7 +1,7 @@
 """The number of notes: using only the notes with the most energy, spread over the whole grid.
 
 A frame is drawn from one value for each of the 84 drawn notes. The *number of notes* ``n`` (a whole number from 12 to
-84) keeps only the ``n`` notes with the most **energy**, where the energy of a note is the sum of its smoothed values
+84) keeps only the ``n`` notes with the most **energy**, where the energy of a note is the sum of its values
 over all frames of the file. The notes are chosen once for the whole file, so the same notes are used in every frame (a
 choice made in every frame would flip at the margin); notes of equal energy are ranked by pitch, the lower note first,
 so the choice is repeatable. The chosen notes keep their order of pitch.
@@ -73,11 +73,11 @@ def _check_values(values: ArrayLike) -> NoteStrengths:
 def top_energy_notes(values: NoteStrengths, count: int) -> Indices:
     """The ``count`` notes with the most energy, as sorted note numbers (0 to 83), the same for every frame.
 
-    ``values`` has one row per frame and 84 columns (the drawn notes, after smoothing). The energy of a note is the sum
+    ``values`` has one row per frame and 84 columns (the drawn notes). The energy of a note is the sum
     of its column. Notes of equal energy are ranked by pitch, the lower one first.
 
     Arrays:
-        ``values``: ``NoteStrengths`` ``(frames, 84)`` - the smoothed strength of each drawn note in each frame; the
+        ``values``: ``NoteStrengths`` ``(frames, 84)`` - the strength of each drawn note in each frame; the
             energy of a note is the sum of its column.
 
     Returns:
@@ -96,7 +96,7 @@ def spread_notes(values: NoteStrengths, count: int) -> NoteStrengths:
     See the module docstring. With ``count`` 84 the result equals ``values`` (a copy); the input is never modified.
 
     Arrays:
-        ``values``: ``NoteStrengths`` ``(frames, 84)`` - the smoothed strength of each drawn note in each frame.
+        ``values``: ``NoteStrengths`` ``(frames, 84)`` - the strength of each drawn note in each frame.
 
     Returns:
         ``NoteStrengths`` ``(frames, 84)`` - for each frame the strengths of the ``count`` chosen notes, interpolated

@@ -37,17 +37,9 @@ Examples: C4 E4 G4, E4 G4 C5 and G4 C5 E5 are all `(4, 7)`: place 1. C4 and F4 (
 
 Coverage of a bar at a pixel at distance `r` from the center: `clip(length × R − r + 0.5, 0, 1)`; across an arc edge the neighbouring arc has the share `clip(0.5 − d, 0, 1)` of a pixel whose center is `d` pixels from the edge.
 
-## Following (the note bars move one arc a frame)
+## Jumping (the note bars are in the arc of their notes; revised 2026-11-18)
 
-For each volume (column of the note bars: 0 the loudest, 1 the second loudest ...) the arc it **is heading for** is the arc of its note in the frame (`-1` if the volume has no note). The arc it **is in** is worked out frame by frame:
-
-| Case | The arc the bar is in |
-|------|----------------------|
-| The first frame, or a volume that had no note in the frame before | The arc of its note |
-| The volume has no note | None (no bar) |
-| Otherwise, `d = (target − current) mod 84` | `d = 0`: the same arc. `d` from 1 to 42: `current + 1` (clockwise). `d` from 43 to 83: `current − 1` (counterclockwise), both mod 84 |
-
-A bar thus moves at most one arc a frame, the shorter way round (clockwise for `d = 42`). Where the arcs of two volumes are equal in a frame, the bar of the volume with the higher number is hidden (slot −1, share 0); the following itself goes on. The color and strength share are those of the note of the volume, not of the arc. The chord place, the chord share and the length do not follow anything.
+For each volume (column of the note bars: 0 the loudest, 1 the second loudest ...) the arc the bar **is in** is the arc of its note in the frame (`-1` if the volume has no note, so no bar). There is no movement from frame to frame: when the note of a volume changes, the bar is in the arc of the new note in that frame. (Until 2026-11-18 the arc moved one arc a frame toward the note, the shorter way round, with `follow_arcs`, and the bar of a volume in the same arc as a louder volume was hidden; both are gone: two notes never share an arc.) The color and strength share are those of the note of the volume. The chord place, the chord share and the length are those of the frame.
 
 ## Polar bars (the worked-out result for a file)
 

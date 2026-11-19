@@ -18,7 +18,7 @@ import {
 } from "../utilities/help";
 
 async function render(busy = false): Promise<string> {
-  const app = createSSRApp(SettingsForm, { busy, file: null, sampleRate: 44100 });
+  const app = createSSRApp(SettingsForm, { busy, file: null });
   return renderToString(app);
 }
 
@@ -52,36 +52,37 @@ describe("the threshold slider", () => {
   it("comes after Image type (it is in the group of the type) and is disabled only while a job is running", async () => {
     const html = await render();
     expect(html.indexOf('for="threshold"')).toBeGreaterThan(html.indexOf('for="image-type"'));
-    expect(html.indexOf('for="threshold"')).toBeLessThan(html.indexOf('for="smoothing-window"'));
     expect(input(html)).not.toContain("disabled");
     expect(input(await render(true))).toContain("disabled");
   });
 });
 
-describe("the smoothing window field", () => {
-  const input = (html: string) => html.match(/<input id="smoothing-window"[^>]*>/)?.[0] ?? "";
-
-  it("is a whole-number input from 1 to 20, starting at 1", async () => {
-    const tag = input(await render());
-    expect(tag).toContain('type="number"');
-    expect(tag).toContain('min="1"');
-    expect(tag).toContain('max="20"');
-    expect(tag).toContain('step="1"');
-    expect(tag).toContain('value="1"');
+describe("the settings removed by feature 043 (window spacing, smoothing, smoothing window)", () => {
+  it("are not on the page for any image type, with their labels, info buttons and group", async () => {
+    for (const type of TYPE_IDS) {
+      const html = await renderType(type);
+      for (const id of ["window-spacing", "smoothing", "smoothing-window"]) {
+        expect(html, `${type} ${id}`).not.toContain(`id="${id}"`);
+        expect(html, `${type} ${id}`).not.toContain(`for="${id}"`);
+      }
+      expect(html, type).not.toContain('data-group="data-smoothing"');
+      for (const text of ["Window spacing", "Smoothing window", "About smoothing window", "About window spacing", ">Smoothing<"]) expect(html, `${type} ${text}`).not.toContain(text);
+    }
   });
 
-  it("has a label and an info button", async () => {
+  it("leave the window size and the frame rate, which are enough to make the pictures", async () => {
     const html = await render();
-    expect(html).toContain(">Smoothing window (frames)</label>");
-    expect(html).toContain('aria-label="About smoothing window"');
+    expect(html).toContain('for="window-size"');
+    expect(html).toContain('for="frame-rate"');
+    expect(formSource).not.toMatch(/spacing|smoothingWindow|sampleRate/i);
+    expect(formSource).not.toMatch(/\bsmoothing\b\s*[:=.]/);
   });
 
-  it("comes before the Smoothing slider and is disabled while a job is running", async () => {
-    const html = await render();
-    expect(html.indexOf('for="smoothing-window"')).toBeGreaterThan(0);
-    expect(html.indexOf('for="smoothing-window"')).toBeLessThan(html.indexOf('for="smoothing"'));
-    expect(input(html)).not.toContain("disabled");
-    expect(input(await render(true))).toContain("disabled");
+  it("does not send them: the settings the form emits have no windowSpacing, smoothing or smoothingWindow", () => {
+    const at = formSource.indexOf("function onSubmit");
+    expect(at).toBeGreaterThan(0);
+    const body = formSource.slice(at, formSource.indexOf("</script>", at));
+    for (const name of ["windowSpacing", "smoothing:", "smoothingWindow"]) expect(body, name).not.toContain(name);
   });
 });
 
@@ -125,10 +126,9 @@ describe("the colormap dropdown", () => {
     expect(await render(false)).not.toMatch(/<select id="colormap"[^>]*disabled/);
   });
 
-  it("comes after the window size row and before the smoothing window", async () => {
+  it("comes after the frame rate row, the last control of the top group", async () => {
     const html = await render();
-    expect(html.indexOf('for="colormap"')).toBeGreaterThan(html.indexOf('for="window-spacing"'));
-    expect(html.indexOf('for="colormap"')).toBeLessThan(html.indexOf('for="smoothing-window"'));
+    expect(html.indexOf('for="colormap"')).toBeGreaterThan(html.indexOf('for="frame-rate"'));
   });
 
   it("replaces the controls that were removed: no brightness, saturation or level steps", async () => {
@@ -169,10 +169,10 @@ describe("the resolution slider", () => {
     expect(await renderType("contour")).toContain('id="resolution"');
   });
 
-  it("comes after the group of the type and the Data smoothing group", async () => {
+  it("comes after the group of the type and the Local peaks group", async () => {
     const html = await renderType("contour");
     expect(html.indexOf('for="resolution"')).toBeGreaterThan(html.indexOf('for="notes"'));
-    expect(html.indexOf('for="resolution"')).toBeGreaterThan(html.indexOf('for="smoothing"'));
+    expect(html.indexOf('for="resolution"')).toBeGreaterThan(html.indexOf('for="peak-distance"'));
   });
 });
 
@@ -247,7 +247,7 @@ describe("the interpolate slider", () => {
 // --- the groups (feature 020) ---------------------------------------------------------------------------------------------------
 
 async function renderType(type: string, busy = false): Promise<string> {
-  const app = createSSRApp(SettingsForm, { busy, file: null, sampleRate: 44100, initialImageType: type });
+  const app = createSSRApp(SettingsForm, { busy, file: null, initialImageType: type });
   return renderToString(app);
 }
 
@@ -276,7 +276,7 @@ function groupsOf(html: string): RenderedGroup[] {
     });
 }
 
-const TOP = ["window-size", "frame-rate", "window-spacing"];
+const TOP = ["window-size", "frame-rate"];
 const BEAT_CONTROLS = ["beat-coloring", "peak-distance"];
 const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
   contour: [
@@ -285,7 +285,6 @@ const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
     ["image-type", "Image type", ["image-type"]],
     ["contour", "Contour", ["threshold", "notes", "wave-count"]],
     ["local-peaks", "Local peaks", BEAT_CONTROLS],
-    ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
   ],
 };
@@ -304,7 +303,7 @@ describe("the form is a list of titled groups (Story 1)", () => {
     expect(html.lastIndexOf("</details>")).toBeLessThan(html.indexOf('type="submit"'));
   });
 
-  it("puts Window size, Frame rate and Window spacing in the top group, in that order", async () => {
+  it("puts Window size and Frame rate in the top group, in that order", async () => {
     expect(groupsOf(await render())[0].controls).toEqual(TOP);
   });
 
@@ -324,8 +323,8 @@ describe("the form is a list of titled groups (Story 1)", () => {
     }
   });
 
-  it("ties the open state and the problem flag of each of the eight groups (the Local peaks group is one of them for either id) to the form", () => {
-    expect((formSource.match(/<SettingsGroup\b/g) ?? []).length).toBe(8); // top, Colormap, Image type, the type's group, Note layout, Local peaks, Data smoothing, Image smoothing
+  it("ties the open state and the problem flag of each of each of the eight groups (the Local peaks group is one of them for either id) to the form", () => {
+    expect((formSource.match(/<SettingsGroup\b/g) ?? []).length).toBe(8); // top, Colormap, Image type, the type's group, Held notes, Note layout, Local peaks, Image smoothing
     expect((formSource.match(/:open="isOpen\(/g) ?? []).length).toBe(8);
     expect((formSource.match(/:problem="/g) ?? []).length).toBe(8);
     expect((formSource.match(/@toggle="/g) ?? []).length).toBe(8);
@@ -340,10 +339,10 @@ describe("the form is a list of titled groups (Story 1)", () => {
   });
 
   it("flags a group when one of its controls has a value that is not allowed", () => {
-    for (const name of ["analysisProblem", "colormapProblem", "imageTypeProblem", "typeGroupProblem", "noteLayoutProblem", "localPeaksProblem", "dataSmoothingProblem", "imageSmoothingProblem"]) {
+    for (const name of ["analysisProblem", "colormapProblem", "imageTypeProblem", "typeGroupProblem", "noteLayoutProblem", "localPeaksProblem", "heldNotesProblem", "imageSmoothingProblem"]) {
       expect(formSource, name).toContain(name);
     }
-    expect(formSource).toMatch(/windowError\.value\s*\|\|\s*frameRateError\.value\s*\|\|\s*spacingError\.value/);
+    expect(formSource).toMatch(/windowError\.value\s*\|\|\s*frameRateError\.value\)/);
   });
 });
 
@@ -438,10 +437,10 @@ describe("the label font", () => {
 });
 
 describe("the smoothing groups and the new names (Story 3)", () => {
-  it("shows Data smoothing for every image type and Image smoothing for the grid types only", async () => {
+  it("shows no Data smoothing for any image type and Image smoothing for the grid types only", async () => {
     for (const type of TYPE_IDS) {
       const ids = groupsOf(await renderType(type)).map((g) => g.id);
-      expect(ids, type).toContain("data-smoothing");
+      expect(ids, type).not.toContain("data-smoothing");
       expect(ids.includes("image-smoothing"), type).toBe(type !== "circles" && type !== "circles_paint");
     }
   });
@@ -500,11 +499,11 @@ describe("the Local peaks group (feature 024)", () => {
     }
   });
 
-  it("is shown for Contour, after its group and before Data smoothing, and for no other type", async () => {
+  it("is shown for Contour, after its group and before Image smoothing, and for no other type", async () => {
     const html = await renderType("contour");
     expect(html).toContain('data-group="local-peaks"');
     expect(html.indexOf('data-group="local-peaks"')).toBeGreaterThan(html.indexOf('data-group="contour"'));
-    expect(html.indexOf('data-group="local-peaks"')).toBeLessThan(html.indexOf('data-group="data-smoothing"'));
+    expect(html.indexOf('data-group="local-peaks"')).toBeLessThan(html.indexOf('data-group="image-smoothing"'));
     for (const type of ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "rhythm-circles", "energy-graphs"]) {
       const other = await renderType(type);
       expect(other, type).not.toContain('id="beat-coloring"');
@@ -549,7 +548,6 @@ describe("the Note layout dropdown (feature 026)", () => {
       const html = await renderType(type);
       const at = html.indexOf('data-group="note-layout"');
       expect(at, type).toBeGreaterThan(html.indexOf('data-group="image-type"'));
-      expect(at, type).toBeLessThan(html.indexOf('data-group="data-smoothing"'));
       const peaks = html.indexOf('data-group="local-peaks"') >= 0 ? html.indexOf('data-group="local-peaks"') : html.indexOf('data-group="concentric-peaks"');
       expect(at, type).toBeLessThan(peaks);
     }
@@ -566,16 +564,16 @@ describe("the Note layout dropdown (feature 026)", () => {
 });
 
 describe("the page for Decay (feature 027)", () => {
-  it("shows Analysis, Colormap, Image type, Decay, Note layout, Local peaks and Data smoothing, in this order", async () => {
+  it("shows Analysis, Colormap, Image type, Decay, Note layout and Local peaks, in this order", async () => {
     const groups = groupsOf(await renderType("decay"));
     expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["decay", "Decay", ["decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated"]],
+      ["held-notes", "Held notes", ["extra-notes"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
-      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
 
@@ -615,7 +613,7 @@ describe("the page for Decay (feature 027)", () => {
 });
 
 describe("the page for Contour: the beat wave (feature 028)", () => {
-  it("shows Analysis, Colormap, Image type, Contour, Local peaks, Data smoothing and Image smoothing, in this order", async () => {
+  it("shows Analysis, Colormap, Image type, Contour, Local peaks and Image smoothing, in this order", async () => {
     const groups = groupsOf(await renderType("contour"));
     expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
       ["analysis", "Analysis", TOP],
@@ -623,7 +621,6 @@ describe("the page for Contour: the beat wave (feature 028)", () => {
       ["image-type", "Image type", ["image-type"]],
       ["contour", "Contour", ["threshold", "notes", "wave-count"]],
       ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance"]],
-      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
       ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
     ]);
   });
@@ -709,16 +706,16 @@ describe("the decay amounts, one for each saturation level (feature 027, revised
 });
 
 describe("the page for Decay Exp (feature 030)", () => {
-  it("shows Analysis, Colormap, Image type, Decay (the rate only), Note layout, Local peaks and Data smoothing, in this order", async () => {
+  it("shows Analysis, Colormap, Image type, Decay (the rate only), Note layout and Local peaks, in this order", async () => {
     const groups = groupsOf(await renderType("decay-exp"));
     expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["decay-exp", "Decay", ["decay-rate"]],
+      ["held-notes", "Held notes", ["extra-notes"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
-      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
 
@@ -758,16 +755,16 @@ describe("the page for Decay Exp (feature 030)", () => {
 });
 
 describe("the page for Polar Chords (feature 032)", () => {
-  it("shows Analysis, Colormap, Image type, Polar chords (Notes shown), Note layout, Local peaks and Data smoothing, in this order", async () => {
+  it("shows Analysis, Colormap, Image type, Polar chords (Notes shown), Note layout and Local peaks, in this order", async () => {
     const groups = groupsOf(await renderType("polar-chords"));
     expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["polar-chords", "Polar chords", ["polar-notes"]],
+      ["held-notes", "Held notes", ["extra-notes"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
-      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
 
@@ -830,23 +827,21 @@ describe("the page for Energy graphs (feature 034)", () => {
     expect(await renderType("energy-graphs")).not.toContain("The image type must be one of");
   });
 
-  it("is the one type that hides Data smoothing, with Rhythm Circles (feature 038)", async () => {
-    for (const type of ["tiles", "blended", "contour", "circles", "circles_paint", "concentric", "decay", "decay-exp", "polar-chords", "chromatic-decay"]) {
-      expect(await renderType(type), type).toContain('data-group="data-smoothing"');
-    }
+  it("has no Data smoothing group for any type (feature 043)", async () => {
+    for (const type of TYPE_IDS) expect(await renderType(type), type).not.toContain('data-group="data-smoothing"');
   });
 });
 
 describe("the page for Chromatic Decay (feature 035)", () => {
-  it("shows Analysis, Colormap, Image type, Chromatic Decay (the decay rate), Local peaks and Data smoothing, in this order", async () => {
+  it("shows Analysis, Colormap, Image type, Chromatic Decay (the decay rate) and Local peaks, in this order", async () => {
     const groups = groupsOf(await renderType("chromatic-decay"));
     expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["chromatic-decay", "Chromatic Decay", ["threshold", "chromatic-decay-rate"]],
+      ["held-notes", "Held notes", ["extra-notes"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
-      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
 
@@ -943,22 +938,22 @@ describe("the page for Rhythm Circles (feature 038)", () => {
     expect(await renderType("rhythm-circles")).not.toContain("The image type must be one of");
   });
 
-  it("does not take the Local peaks group away from the types that had it, nor give Data smoothing back to Energy graphs", async () => {
+  it("does not take the Local peaks group away from the types that had it, and gives no Data smoothing group to any type", async () => {
     for (const type of ["decay", "decay-exp", "polar-chords", "chromatic-decay"]) expect(await renderType(type), type).toContain('data-group="concentric-peaks"');
     expect(await renderType("energy-graphs")).not.toContain('data-group="concentric-peaks"');
   });
 });
 
 describe("the page for Chromatic Wireframe (feature 039)", () => {
-  it("shows Analysis, Colormap, Image type, Chromatic Wireframe (the Threshold and the decay rate), Local peaks and Data smoothing, in this order", async () => {
+  it("shows Analysis, Colormap, Image type, Chromatic Wireframe (the Threshold and the decay rate) and Local peaks, in this order", async () => {
     const groups = groupsOf(await renderType("chromatic-wireframe"));
     expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["chromatic-wireframe", "Chromatic Wireframe", ["threshold", "chromatic-decay-rate"]],
+      ["held-notes", "Held notes", ["extra-notes"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
-      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
 
@@ -988,15 +983,15 @@ describe("the page for Chromatic Wireframe (feature 039)", () => {
 });
 
 describe("the page for Polychord (feature 042)", () => {
-  it("shows Analysis, Colormap, Image type, Polychord (the four settings), Local peaks and Data smoothing, in this order", async () => {
+  it("shows Analysis, Colormap, Image type, Polychord (the four settings) and Local peaks, in this order", async () => {
     const groups = groupsOf(await renderType("polychord"));
     expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["polychord", "Polychord", ["polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation"]],
+      ["held-notes", "Held notes", ["extra-notes"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
-      ["data-smoothing", "Data smoothing", ["smoothing-window", "smoothing"]],
     ]);
   });
 
@@ -1076,5 +1071,48 @@ describe("the page for Polychord (feature 042)", () => {
     ]) {
       expect(formSource, piece).toContain(piece);
     }
+  });
+});
+
+
+describe("the Extra notes (k) control (feature 044)", () => {
+  const SIX = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"];
+  const slider = (html: string) => html.match(/<input id="extra-notes"[^>]*>/)?.[0] ?? "";
+
+  it.each(SIX)("is a slider from 1 to the number of notes, starting at 2, with a label and an info button, for %s", async (type) => {
+    const html = await renderType(type);
+    const tag = slider(html);
+    expect(tag).toContain('type="range"');
+    expect(tag).toContain('min="1"');
+    expect(tag).toContain('step="1"');
+    expect(tag).toContain('value="2"');
+    expect(html).toContain(">Extra notes (k)</label>");
+    expect(html).toContain('aria-label="About extra notes"');
+    expect(html).toContain('data-group="held-notes"');
+  });
+
+  it("has a maximum that follows the picture: 5 for Decay, Notes shown for Polar Chords, Number of notes for Polychord", async () => {
+    expect(slider(await renderType("decay"))).toContain('max="5"');
+    expect(slider(await renderType("chromatic-wireframe"))).toContain('max="5"');
+    expect(slider(await renderType("polar-chords"))).toContain('max="5"'); // Notes shown starts at 5
+    expect(slider(await renderType("polychord"))).toContain('max="6"'); // Number of notes starts at 6
+  });
+
+  it.each(["contour", "energy-graphs", "rhythm-circles"])("is not shown for %s", async (type) => {
+    const html = await renderType(type);
+    expect(html).not.toContain('id="extra-notes"');
+    expect(html).not.toContain('data-group="held-notes"');
+  });
+
+  it("is disabled only while a job is running", async () => {
+    expect(await renderType("decay")).not.toMatch(/<input id="extra-notes"[^>]*disabled/);
+    expect(slider(await renderType("decay", true))).toContain("disabled");
+  });
+
+  it("is sent with the settings for every picture, checked against n only for the six", () => {
+    const at = formSource.indexOf("function onSubmit");
+    expect(formSource.slice(at, formSource.indexOf("</script>", at))).toContain("extraNotes: extraNotes.value");
+    expect(formSource).toMatch(/usesHeldNotes\(imageType\.value\) \? validateExtraNotes\(extraNotes\.value, heldCount\.value\) : null/);
+    expect(formSource).toMatch(/!extraNotesError\.value/);
   });
 });

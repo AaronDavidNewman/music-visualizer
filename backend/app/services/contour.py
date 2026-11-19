@@ -133,13 +133,13 @@ def write_contour_frames(
     peak) switches the beat wave on, with ``waves`` (a whole number from 2 to 10) waves across the largest dimension of
     the grid; ``None``, or a position of 0, draws the plain contour.
 
-    ``values`` is ``(frames, rows * columns)``: the smoothed value of every drawn note in every frame, with the notes
+    ``values`` is ``(frames, rows * columns)``: the value of every drawn note in every frame, with the notes
     the threshold hides already set to 0; note ``n`` is at row ``n // columns`` and column ``n % columns`` of the grid,
-    and the first row is drawn at the *top* of the picture, like the grid of notes. ``peak`` is the largest smoothed
+    and the first row is drawn at the *top* of the picture, like the grid of notes. ``peak`` is the largest
     value of the whole file (0 for a silent file).
 
     Arrays:
-        ``values``: ``GridValues`` ``(frames, rows * columns)`` - the smoothed value of each cell of the grid in each
+        ``values``: ``GridValues`` ``(frames, rows * columns)`` - the value of each cell of the grid in each
             frame, row by row (the hidden notes are 0).
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1.

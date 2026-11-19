@@ -428,7 +428,7 @@ def test_with_all_84_notes_loud_at_once_there_are_as_many_bars_as_notes_shown_an
 
 
 def test_drawing_a_frame_does_not_depend_on_the_frames_around_it_once_the_bars_are_worked_out(tmp_path):
-    # the bars follow their notes from frame to frame, so the bars of a frame depend on the frames before it; drawing them does not
+    # the bars are made from the notes of each frame (the held notes of feature 044 apart), and drawing them does not depend on the other frames
     bars = polar_bars(stream(6, seed=9), np.linspace(0, 1, 6), 5)
     order = np.array([3, 0, 5, 1, 4, 2])
     shuffled = PolarBars(bars.note_slots[order], bars.note_shares[order], bars.chord_place[order], bars.chord_share[order], bars.length[order])
@@ -438,14 +438,14 @@ def test_drawing_a_frame_does_not_depend_on_the_frames_around_it_once_the_bars_a
     assert reordered == [straight[i] for i in order]
 
 
-def test_the_picture_of_a_frame_depends_on_the_frames_before_it_because_the_bars_follow_their_notes(tmp_path):
+def test_the_picture_of_a_frame_does_not_depend_on_the_frames_before_it_because_the_bars_jump_to_their_notes(tmp_path):
     values = np.zeros((3, 88))
     values[0, 10] = 1.0
     values[1, 40] = 1.0
     values[2, 40] = 1.0
     write_frames(values, tmp_path / "after", colormap="viridis", image_type="polar-chords")
     write_frames(values[1:], tmp_path / "alone", colormap="viridis", image_type="polar-chords")
-    assert all_frames(tmp_path / "after")[1] != all_frames(tmp_path / "alone")[0]  # the bar is on its way from the note 10, not yet in the arc of the note 40
+    assert all_frames(tmp_path / "after")[1] == all_frames(tmp_path / "alone")[0]  # the bar is in the arc of the note 40 at once
 
 
 # ---- the note layout: rows or spiral ----------------------------------------------------------------------------------------------------------

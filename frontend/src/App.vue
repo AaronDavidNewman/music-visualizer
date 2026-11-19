@@ -5,7 +5,6 @@ import VideoExport from "./components/VideoExport.vue";
 import FilePicker from "./components/FilePicker.vue";
 import SettingsForm from "./components/SettingsForm.vue";
 import { submitJob, type JobResult, type JobSettings } from "./api";
-import { DEFAULT_SAMPLE_RATE, formatSpacing } from "./utilities/spacing";
 import {
   colormapLabel,
   formatDecayAmount,
@@ -21,6 +20,8 @@ import {
   isPolychordType,
   formatWaveCount,
   formatBeatColoring,
+  formatExtraNotes,
+  usesHeldNotes,
   formatGaussian,
   formatPeakDistance,
   beatColoringApplies,
@@ -37,7 +38,6 @@ import {
 type Status = "idle" | "busy" | "done" | "error";
 
 const file = ref<File | null>(null);
-const fileSampleRate = ref<number>(DEFAULT_SAMPLE_RATE); // the chosen file's rate; 44.1 kHz until a file is chosen
 const status = ref<Status>("idle");
 const result = ref<JobResult | null>(null);
 const errorMessage = ref("");
@@ -60,7 +60,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
     <h1>Music Visualizer</h1>
     <div class="layout">
       <div class="column">
-        <FilePicker v-model:file="file" :busy="status === 'busy'" @update:sample-rate="fileSampleRate = $event" />
+        <FilePicker v-model:file="file" :busy="status === 'busy'" />
 
         <p v-if="status === 'busy'" class="busy" role="status">
           Uploading and creating frames… this can take a little while for long files.
@@ -78,8 +78,6 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li>Frame rate: {{ result.frame_rate }} fps</li>
             <li>Frames: {{ result.frame_count }}</li>
             <li>Colormap: {{ colormapLabel(result.colormap) }}</li>
-            <li>Smoothing: {{ result.smoothing.toFixed(2) }}</li>
-            <li>Smoothing window: {{ result.smoothing_window }}</li>
             <li v-if="gridSettingsApply(result.image_type) || isChromaticType(result.image_type)">Threshold: {{ formatThresholdSummary(result.threshold) }}</li>
             <li v-if="gridSettingsApply(result.image_type)">Notes: {{ formatNoteCountSummary(result.note_count) }}</li>
             <li v-if="gridSettingsApply(result.image_type)">Interpolate: {{ result.interpolate }}</li>
@@ -96,22 +94,19 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li v-if="isPolychordType(result.image_type)">Number of notes: {{ formatPolychordNotes(result.polychord_notes) }}</li>
             <li v-if="isPolychordType(result.image_type)">Copies: {{ formatPolychordCopies(result.polychord_min_copies) }} to {{ formatPolychordCopies(result.polychord_max_copies) }}</li>
             <li v-if="isPolychordType(result.image_type)">Rotation: {{ formatPolychordRotation(result.polychord_rotation) }}</li>
+            <li v-if="usesHeldNotes(result.image_type)">Extra notes (k): {{ formatExtraNotes(result.extra_notes) }}</li>
             <li v-if="noteLayoutApplies(result.image_type)">Note layout: {{ noteLayoutLabel(result.note_layout) }}</li>
             <li v-if="beatColoringApplies(result.image_type)">Beat coloring: {{ formatBeatColoring(result.beat_coloring) }}</li>
             <li v-if="peakSettingsShown(result.image_type, result.beat_coloring)">Minimum distance: {{ formatPeakDistance(result.peak_distance) }}</li>
             <li v-if="result.image_type === 'contour' && result.beat_coloring">Wave count: {{ formatWaveCount(result.wave_count) }}</li>
-            <li>Window spacing: {{ formatSpacing(result.window_spacing) }}</li>
             <li>Step: {{ Number(result.step_samples.toFixed(2)) }} samples</li>
             <li>Windows analyzed: {{ result.window_count }}</li>
           </ul>
-          <p v-if="result.spacing_raised" class="notice-box" role="status">
-            The window spacing was raised to {{ formatSpacing(result.window_spacing) }} so the step is one sample.
-          </p>
         </section>
       </div>
 
       <div class="column">
-        <SettingsForm :busy="status === 'busy'" :file="file" :sample-rate="fileSampleRate" @submit="onSubmit" />
+        <SettingsForm :busy="status === 'busy'" :file="file" @submit="onSubmit" />
       </div>
     </div>
   </main>
@@ -157,12 +152,6 @@ main {
   color: #b00020;
   background: #fdecee;
   padding: 0.75rem 1rem;
-  border-radius: 0.25rem;
-}
-.notice-box {
-  color: #6b4200;
-  background: #fff4e0;
-  padding: 0.5rem 0.75rem;
   border-radius: 0.25rem;
 }
 .results {

@@ -4,10 +4,7 @@ import { createVideo, submitJob, videoUrl, type JobResult, type JobSettings } fr
 const SETTINGS: JobSettings = {
   windowSize: 8192,
   frameRate: 24,
-  windowSpacing: 0.75,
-  smoothing: 0.3,
   threshold: 4,
-  smoothingWindow: 3,
   imageType: "decay",
   colormap: "inferno",
   resolution: 3,
@@ -23,6 +20,7 @@ const SETTINGS: JobSettings = {
   polychordMinCopies: 2,
   polychordMaxCopies: 9,
   polychordRotation: -22.5,
+  extraNotes: 3,
   waveCount: 7,
   decayLow: 1.5,
   decayMedium: 2,
@@ -50,10 +48,7 @@ describe("the request that submitJob sends", () => {
     expect(await posted(SETTINGS)).toEqual({
       window_size: "8192",
       frame_rate: "24",
-      window_spacing: "0.75",
-      smoothing: "0.3",
       threshold: "4",
-      smoothing_window: "3",
       image_type: "decay",
       colormap: "inferno",
       resolution: "3",
@@ -69,12 +64,20 @@ describe("the request that submitJob sends", () => {
       polychord_min_copies: "2",
       polychord_max_copies: "9",
       polychord_rotation: "-22.5",
+      extra_notes: "3",
       wave_count: "7",
       decay_low: "1.5",
       decay_medium: "2",
       decay_high: "2.5",
       decay_saturated: "3",
     });
+  });
+
+  it("sends none of the settings that feature 043 removed (window spacing, smoothing, smoothing window)", async () => {
+    const fields = await posted(SETTINGS);
+    for (const name of ["window_spacing", "smoothing", "smoothing_window", "windowSpacing", "smoothingWindow"]) {
+      expect(Object.keys(fields), name).not.toContain(name);
+    }
   });
 
   it("sends the gaussian smoothing as 0 when it is off, and the file", async () => {
@@ -273,5 +276,14 @@ describe("the request for Polychord (feature 042)", () => {
     const fields = await posted({ ...SETTINGS, imageType: "contour" });
     expect(fields.polychord_notes).toBe("7");
     expect(fields.polychord_rotation).toBe("-22.5");
+  });
+});
+
+describe("the Extra notes setting (feature 044)", () => {
+  it("is sent as extra_notes for every picture, as text", async () => {
+    for (const imageType of ["decay", "contour", "polychord", "energy-graphs"]) {
+      const fields = await posted({ ...SETTINGS, imageType, extraNotes: 5 });
+      expect(fields.extra_notes, imageType).toBe("5");
+    }
   });
 });

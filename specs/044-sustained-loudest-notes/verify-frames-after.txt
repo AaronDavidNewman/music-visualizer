@@ -1,0 +1,16 @@
+DIFFERENT contour: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT decay: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT decay-exp: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT polar-chords: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT energy-graphs: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT chromatic-decay: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+identical rhythm-circles: 60 frames
+DIFFERENT chromatic-wireframe: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT contour+beat-coloring: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+8 case(s) differ
+
+Reading of this result (T031): NOT A GATE and not specific to this feature. The baseline-frames.json of verify_frames.py was made in feature 041; feature 043 already made every
+type that draws from note values differ (the analysis step changed: see ../043-decouple-frame-rate/baseline-verify-frames-after.txt, which has the same 8 differences), so this run
+cannot say what feature 044 changed. Contour and Energy graphs, which do not use held notes, differ here only because of feature 043. Every type still makes 60 frames.
+The no-change proof for feature 044 is tools verify_drawing.py (specs/043-decouple-frame-rate/tools): all 9 image types, 216 frames identical to the baseline with the library default
+extra = 0, and tests/test_held_notes_pictures.py (a steady chord gives the same pictures for every k; extra_notes = 0 equals the default).

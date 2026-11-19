@@ -258,8 +258,7 @@ def test_the_settings_that_do_not_apply_are_accepted_and_change_nothing(client):
     base = rhythm(client, pulse_wav()).json()
     other = rhythm(
         client,
-        pulse_wav(),
-        smoothing="0.5", smoothing_window="4", threshold="7", note_count="40", resolution="2", interpolate="2", gaussian="2",
+        pulse_wav(), threshold="7", note_count="40", resolution="2", interpolate="2", gaussian="2",
         note_layout="spiral", decay_rate="3", polar_notes="6", wave_count="3", beat_coloring="true",
     )
     assert other.status_code == 200, other.text
@@ -269,7 +268,7 @@ def test_the_settings_that_do_not_apply_are_accepted_and_change_nothing(client):
 
 
 def test_a_bad_setting_of_another_type_is_refused_as_for_every_type(client):
-    for field, text in (("smoothing", "0.9"), ("threshold", "11"), ("resolution", "9"), ("decay_rate", "5")):
+    for field, text in (("threshold", "11"), ("resolution", "9"), ("decay_rate", "5")):
         r = rhythm(client, tiny(), **{field: text})
         assert r.status_code == 400, field
     assert leftovers() == []

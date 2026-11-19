@@ -1,4 +1,4 @@
-import { beatColoringApplies, gridSettingsApply, isChromaticType, isEnergyType, isPolarType, isPolychordType, isRhythmType, isRingsType, noteLayoutApplies } from "./validation";
+import { beatColoringApplies, gridSettingsApply, isChromaticType, isEnergyType, isPolarType, isPolychordType, isRhythmType, isRingsType, noteLayoutApplies, usesHeldNotes } from "./validation";
 
 /**
  * The groups of the settings form (feature 020): which groups there are, what is in each, which are shown for an image type, and
@@ -13,7 +13,7 @@ export interface GroupDefinition {
 }
 
 export const GROUPS: readonly GroupDefinition[] = [
-  { id: "analysis", title: "Analysis", controls: ["window-size", "frame-rate", "window-spacing"] },
+  { id: "analysis", title: "Analysis", controls: ["window-size", "frame-rate"] },
   { id: "colormap", title: "Colormap", controls: ["colormap"] },
   { id: "image-type", title: "Image type", controls: ["image-type"] },
   // the wave count of the beat wave (feature 028) comes after Threshold and Notes
@@ -31,13 +31,14 @@ export const GROUPS: readonly GroupDefinition[] = [
   { id: "chromatic-wireframe", title: "Chromatic Wireframe", controls: ["threshold", "chromatic-decay-rate"] },
   // Polychord (feature 042): the links in a figure, the fewest and the most copies of it, and how fast the picture turns
   { id: "polychord", title: "Polychord", controls: ["polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation"] },
+  // the Extra notes (feature 044) of the six pictures that take the n loudest notes: one setting, in a group of its own after the group of the type
+  { id: "held-notes", title: "Held notes", controls: ["extra-notes"] },
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
   // the beat coloring of Contour, its beat wave (feature 028): its own group, after the group of the type
   { id: "local-peaks", title: "Local peaks", controls: ["beat-coloring", "peak-distance"] },
   // the same two settings for Decay (feature 027) and the pictures after it: the beat always charges them, so no checkbox (the id is from Concentric, feature 025, the first picture that had it)
   { id: "concentric-peaks", title: "Local peaks", controls: ["peak-distance"] },
-  { id: "data-smoothing", title: "Data smoothing", controls: ["smoothing-window", "smoothing"] },
   { id: "image-smoothing", title: "Image smoothing", controls: ["resolution", "interpolate", "gaussian"] },
 ];
 
@@ -56,18 +57,18 @@ export function controlsIn(id: string): readonly string[] {
 
 /**
  * The ids of the groups shown for an image type, top to bottom: the top group, Colormap, Image type, the group of the type
- * (none for Energy graphs and Rhythm Circles, which have no controls of their own, nor for a type that is not one of the eight), Note layout for Decay, Decay Exp and Polar Chords,
- * Local peaks for Contour (with the checkbox) and for Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord (without it), Data smoothing (not for Energy graphs and Rhythm
- * Circles, which do not smooth the data), and Image smoothing when the type draws a grid (Contour). Energy graphs has
+ * (none for Energy graphs and Rhythm Circles, which have no controls of their own, nor for a type that is not one of the eight), Held notes for the six pictures that take the n loudest notes
+ * (Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord), Note layout for Decay, Decay Exp and Polar Chords,
+ * Local peaks for Contour (with the checkbox) and for Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord (without it), and Image smoothing when the type draws a grid (Contour). Energy graphs has
  * no group of its own: only the top group, Colormap and Image type. Rhythm Circles has none either, and adds only Local peaks (without the checkbox) to those three.
  */
 export function groupsFor(imageType: string): string[] {
   const ids = ["analysis", "colormap", "image-type"];
   if (TYPE_GROUPS.includes(imageType)) ids.push(imageType);
+  if (usesHeldNotes(imageType)) ids.push("held-notes");
   if (noteLayoutApplies(imageType)) ids.push("note-layout");
   if (beatColoringApplies(imageType)) ids.push("local-peaks");
   if (isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || isRhythmType(imageType) || isPolychordType(imageType)) ids.push("concentric-peaks");
-  if (!isEnergyType(imageType) && !isRhythmType(imageType)) ids.push("data-smoothing");
   if (gridSettingsApply(imageType)) ids.push("image-smoothing");
   return ids;
 }

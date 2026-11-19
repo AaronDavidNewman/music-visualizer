@@ -212,16 +212,6 @@ def test_a_note_at_or_above_the_threshold_is_kept(tmp_path):
     assert contour(values, tmp_path / "a", threshold=10)[0].read_bytes() == contour(values, tmp_path / "b")[0].read_bytes()
 
 
-def test_smoothing_is_applied_before_the_contour_is_drawn(tmp_path):
-    impulse = notes({}, {40: 1.0}, {}, {}, {}, {}, {})
-    plain = contour(impulse, tmp_path / "plain")
-    smooth = contour(impulse, tmp_path / "smooth", smoothing=0.5, smoothing_window=3)
-    flat = lambda f: len({tuple(p) for p in read(f)[..., :3].reshape(-1, 3).tolist()}) == 1  # noqa: E731
-    assert flat(plain[2]) and flat(plain[3])  # nothing sounds after the impulse
-    assert not flat(smooth[2]) and not flat(smooth[3]) and not flat(smooth[4])  # its trace, for the window
-    assert flat(smooth[6])  # and then it is gone
-
-
 @pytest.mark.parametrize("name", COLORMAPS)
 def test_changing_the_colormap_changes_only_the_colours(tmp_path, name):
     other = COLORMAPS[(COLORMAPS.index(name) + 1) % len(COLORMAPS)]
@@ -252,8 +242,8 @@ def test_a_silent_input_is_flat_in_the_first_colour_and_does_not_warn(tmp_path, 
 
 
 @pytest.mark.parametrize("name", COLORMAPS)
-def test_a_silent_input_stays_flat_with_a_threshold_and_smoothing(tmp_path, name):
-    files = contour(np.zeros((5, 88)), tmp_path, name, threshold=10, smoothing=0.5, smoothing_window=3)
+def test_a_silent_input_stays_flat_with_a_threshold(tmp_path, name):
+    files = contour(np.zeros((5, 88)), tmp_path, name, threshold=10)
     assert all((read(f)[..., :3] == lookup_table(name)[0]).all() for f in files)
 
 
@@ -293,8 +283,8 @@ def test_the_same_input_gives_byte_identical_files_without_any_warning(tmp_path)
     frames = rng.random((6, 88)) ** 3
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        a = contour(frames, tmp_path / "a", smoothing=0.3, smoothing_window=2)
-        b = contour(frames, tmp_path / "b", smoothing=0.3, smoothing_window=2)
+        a = contour(frames, tmp_path / "a")
+        b = contour(frames, tmp_path / "b")
     assert [f.read_bytes() for f in a] == [f.read_bytes() for f in b]
 
 
@@ -345,7 +335,7 @@ def test_a_failure_while_drawing_still_closes_the_figure(tmp_path):
 
 def test_bad_arguments_are_refused_before_anything_is_written(tmp_path):
     frames = np.random.default_rng(1).random((3, 88))
-    for kwargs in ({"colormap": INVALID[0]}, {"threshold": 11}, {"smoothing": 0.9}, {"smoothing_window": 0}):
+    for kwargs in ({"colormap": INVALID[0]}, {"threshold": 11}):
         with pytest.raises(ValueError):
             write_frames(frames, tmp_path / "out", image_type="contour", **kwargs)
     assert not (tmp_path / "out").exists()
@@ -373,7 +363,7 @@ def test_matplotlib_is_imported_only_when_a_contour_is_drawn():
 def test_three_hundred_frames_finish_well_within_a_minute(tmp_path):
     frames = np.random.default_rng(4).random((300, 88)) ** 3
     start = time.perf_counter()
-    files = contour(frames, tmp_path, smoothing=0.3, smoothing_window=3)
+    files = contour(frames, tmp_path)
     elapsed = time.perf_counter() - start
     assert len(files) == 300
     assert elapsed < 60, f"300 contour frames took {elapsed:.1f} s"

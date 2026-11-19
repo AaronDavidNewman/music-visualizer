@@ -20,6 +20,7 @@ ARRAY_TYPES = APP / "services" / "array_types.py"
 # Modules that transform data: their module docstring has an "Order of operations:" numbered list.
 PROCESSING_MODULES = {
     "services/beat_wave.py",
+    "services/buffer_interval.py",
     "services/chords.py",
     "services/chromatic_decay.py",
     "services/chromatic_wireframe.py",
@@ -32,6 +33,7 @@ PROCESSING_MODULES = {
     "services/frame_rendering.py",
     "services/image_processing.py",
     "services/gaussian.py",
+    "services/held_notes.py",
     "services/local_peaks.py",
     "services/noise_floor.py",
     "services/note_analysis.py",
@@ -43,7 +45,6 @@ PROCESSING_MODULES = {
     "services/resolution.py",
     "services/rhythm_circles.py",
     "services/tempo_finder.py",
-    "services/window_spacing.py",
     "services/video.py",
     "routers/jobs.py",
 }
@@ -60,7 +61,7 @@ EXEMPT_MODULES = {
     "services/image_types.py",
 }
 
-SHARED_STEPS = ("READ", "ANALYZE", "FLOOR", "MEASURE", "AVERAGE", "SMOOTH", "DRAW", "SAVE")
+SHARED_STEPS = ("READ", "ANALYZE", "FLOOR", "MEASURE", "AVERAGE", "DRAW", "SAVE")
 
 
 def python_files() -> list[Path]:

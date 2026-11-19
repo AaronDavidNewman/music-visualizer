@@ -6,11 +6,8 @@ export interface JobResult {
   window_size: number;
   frame_rate: number;
   frame_count: number;
-  smoothing: number;
   /** Percent of the loudest note value below which a note is drawn black (0 is off). */
   threshold: number;
-  /** How many earlier frames are mixed into each frame (1 to 20). */
-  smoothing_window: number;
   /** One of the names in IMAGE_TYPES (utilities/validation.ts), such as "contour". */
   image_type: string;
   /** The colormap used: one of the names in COLORMAPS (utilities/validation.ts). */
@@ -38,15 +35,17 @@ export interface JobResult {
   polychord_min_copies: number;
   polychord_max_copies: number;
   polychord_rotation: number;
+  /** Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord: the extra notes k, 1 to the number of notes of the picture (feature 044); sent and echoed for every picture. */
+  extra_notes: number;
   /** Decay: the points a circle gives to each neighbour per frame at the low, medium, high and saturated levels (0.5 to 3 each). */
   decay_low: number;
   decay_medium: number;
   decay_high: number;
   decay_saturated: number;
-  window_spacing: number;
+  /** The distance between the starts of two frequency buffers in samples: always 60 ms of the file's sample rate (feature 043). */
   step_samples: number;
+  /** How many frequency buffers the file was measured in. */
   window_count: number;
-  spacing_raised: boolean;
   frame_url_template: string;
 }
 
@@ -54,12 +53,8 @@ export interface JobResult {
 export interface JobSettings {
   windowSize: number;
   frameRate: number;
-  windowSpacing: number;
-  smoothing: number;
   /** 0 (off) to 10, percent of the loudest note value. */
   threshold: number;
-  /** 1 to 20. */
-  smoothingWindow: number;
   /** One of the names in IMAGE_TYPES (utilities/validation.ts), such as "contour". */
   imageType: string;
   /** One of the names in COLORMAPS (utilities/validation.ts). */
@@ -84,6 +79,8 @@ export interface JobSettings {
   polychordMinCopies: number;
   polychordMaxCopies: number;
   polychordRotation: number;
+  /** 1 to n, the number of notes of the picture (5, or Notes shown / Number of notes); 1 to 8 for the pictures that do not use it (feature 044). */
+  extraNotes: number;
   decayLow: number;
   decayMedium: number;
   decayHigh: number;
@@ -96,10 +93,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("file", file);
   body.append("window_size", String(settings.windowSize));
   body.append("frame_rate", String(settings.frameRate));
-  body.append("window_spacing", String(settings.windowSpacing));
-  body.append("smoothing", String(settings.smoothing));
   body.append("threshold", String(settings.threshold));
-  body.append("smoothing_window", String(settings.smoothingWindow));
   body.append("image_type", settings.imageType);
   body.append("colormap", settings.colormap);
   body.append("resolution", String(settings.resolution));
@@ -116,6 +110,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("polychord_min_copies", String(settings.polychordMinCopies));
   body.append("polychord_max_copies", String(settings.polychordMaxCopies));
   body.append("polychord_rotation", String(settings.polychordRotation));
+  body.append("extra_notes", String(settings.extraNotes));
   body.append("decay_low", String(settings.decayLow));
   body.append("decay_medium", String(settings.decayMedium));
   body.append("decay_high", String(settings.decayHigh));

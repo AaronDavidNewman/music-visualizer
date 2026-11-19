@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     frames_temp_dir: Path = Path(tempfile.gettempdir()) / "music-visualizer" / "frames"
     max_audio_bytes: int = 200 * 1024 * 1024
     max_frames: int = 30000
-    max_windows: int = 60000  # analysis windows per submission (a tiny window spacing can create very many)
+    max_windows: int = 60000  # frequency buffers (one every 60 ms) per submission: protects against a very long file
     min_window_size: int = 4096  # window sizes are the powers of 2 from min to max
     max_window_size: int = 32768
     min_frame_rate: float = 1

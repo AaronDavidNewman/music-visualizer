@@ -17,7 +17,9 @@ description: "Task list for Polar Chords (feature 032)"
 
 **Revised 2026-11-06 (second change)**: the chord ring has 7 arcs, one for each chord type, with no root (see the spec): the place of a chord is the index of its type, `chord_root` is gone, `CHORD_ARCS = 7`, the chord arcs of the drawing are `360 / 7` degrees wide. Where a task below speaks of 84 chord places, of `type x 12 + root` or of the root, this replaces it.
 
-**Revised 2026-11-06 (third change)**: the note bars follow their notes, one arc a frame (see the spec, FR-014 and FR-015): `note_targets`, `follow_arcs`, `polar_bars` hiding a covered bar, tests for the movement, the wrap-around, the silent volume, the covered bar and a tone that jumps. Where a task below says that a note bar is in the arc of its note in every frame, this replaces it.
+**Revised 2026-11-18 (fifth change)**: the third change below (the bars follow their notes one arc a frame: `follow_arcs`, hiding a covered bar) is **replaced**: the bars jump to their notes, so `follow_arcs` and the hiding are removed and the tests of the movement, the wrap-around, the silent volume and the covered bar became tests of the jump (see the spec, FR-014 and FR-015, revised).
+
+**Revised 2026-11-06 (third change, replaced 2026-11-18)**: the note bars follow their notes, one arc a frame (see the spec, FR-014 and FR-015): `note_targets`, `follow_arcs`, `polar_bars` hiding a covered bar, tests for the movement, the wrap-around, the silent volume, the covered bar and a tone that jumps. Where a task below says that a note bar is in the arc of its note in every frame, this replaces it.
 
 **Organization**: By user story: US1 the note ring (P1), US2 the chord ring (P1), US3 the setting, the API and the page (P2), US4 the quiet and odd moments (P3).
 

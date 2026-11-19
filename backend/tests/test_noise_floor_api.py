@@ -51,8 +51,16 @@ def given(monkeypatch):
     return calls
 
 
+OVERHANG_FRAMES = 3  # at 10 frames a second: the windows are 60 ms apart (feature 043), so those that start in the last 0.19 s overhang the end of the file
+
+
+def settled(frames):
+    """The frames made only from windows that lie wholly in the file: the last windows are zero-padded, which cuts a tone off, and a tone that is cut off leaks into the notes around it."""
+    return frames[:-OVERHANG_FRAMES]
+
+
 def job_of(client, data, **fields):
-    r = post(client, data, window_size=WINDOW, window_spacing="1", **fields)  # spacing 1: the windows follow one another, so the last one is full
+    r = post(client, data, window_size=WINDOW, **fields)
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -63,7 +71,7 @@ def job_of(client, data, **fields):
 @pytest.mark.parametrize("image_type", IMAGE_TYPES)
 def test_a_note_70_db_below_the_loudest_is_0_in_every_frame_for_every_image_type(client, given, image_type):
     job_of(client, audio(-70.0), image_type=image_type)
-    frames = given[0]
+    frames = settled(given[0])
     assert frames.shape[1] == 88 and frames.shape[0] > 5
     assert (frames[:, FAINT] == 0.0).all()  # the faint note never sounds
     assert (frames[:, LOUD] > 0).sum() >= 5  # the loud one does, in the frames it fills
@@ -138,7 +146,7 @@ def test_the_values_the_pictures_are_given_do_not_depend_on_the_threshold_and_th
         job_of(client, audio(-70.0), image_type=image_type, threshold=threshold)
     zero, five, ten = given
     for frames in (zero, five, ten):
-        assert (frames[:, FAINT] == 0.0).all()  # a Threshold of 0 hides nothing more, and does not switch the floor off
+        assert (settled(frames)[:, FAINT] == 0.0).all()  # a Threshold of 0 hides nothing more, and does not switch the floor off
     np.testing.assert_array_equal(zero, five)  # the Threshold works inside write_frames, after the cut
     np.testing.assert_array_equal(zero, ten)
 

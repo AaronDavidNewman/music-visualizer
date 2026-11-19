@@ -1,0 +1,16 @@
+DIFFERENT contour: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT decay: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT decay-exp: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT polar-chords: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT energy-graphs: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT chromatic-decay: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+identical rhythm-circles: 60 frames
+DIFFERENT chromatic-wireframe: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+DIFFERENT contour+beat-coloring: 60 of 60 frames (first: [0, 1, 2, 3, 4]), frame count 60 vs 60
+8 case(s) differ
+
+Reading of this result (T035): EXPECTED. verify_frames.py makes its jobs at 10 frames a second with a window of 4096, where the old default step was one frame
+period (4410 samples) and the step is now 60 ms (2646 samples), so the note values differ and so do the pictures of every type that draws from them. Every type still
+makes 60 frames (the same number as before: "frame count 60 vs 60"). Rhythm Circles is identical because it draws only from the local-peaks measurement of the audio,
+which the buffers do not touch. That the drawing itself did not change is proved by tools/verify_drawing.py (all 9 image types, 216 frames identical to the baseline
+made before the first edit).

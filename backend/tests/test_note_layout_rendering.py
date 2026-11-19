@@ -74,7 +74,7 @@ def test_the_rows_layout_gives_the_frames_that_are_made_without_the_argument(tmp
 
 
 @pytest.mark.parametrize("image_type", LAID_OUT)
-@pytest.mark.parametrize("options", [{}, {"beat": np.array([0.0, 0.5, 1.0])}, {"smoothing": 0.5, "smoothing_window": 3}])
+@pytest.mark.parametrize("options", [{}, {"beat": np.array([0.0, 0.5, 1.0])}])
 def test_the_spiral_puts_the_notes_in_other_cells_than_the_rows_do(tmp_path, image_type, options):
     values = notes()
     assert files(tmp_path, "spiral", values, image_type, note_layout="spiral", **options) != files(tmp_path, "rows", values, image_type, note_layout="rows", **options)

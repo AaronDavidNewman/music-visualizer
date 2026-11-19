@@ -48,7 +48,7 @@ def music_with_noise(frames=10, strong=(20, 30, 40, 50), seed=2):
 @pytest.mark.parametrize("image_type", TYPES)
 def test_eighty_four_notes_gives_exactly_the_files_made_without_the_setting(tmp_path, image_type):
     frames = random_notes(4, seed=3)
-    options = dict(smoothing=0.3, smoothing_window=2, threshold=3, image_type=image_type)
+    options = dict(threshold=3, image_type=image_type)
     a = write(frames, tmp_path / "a", **options)
     b = write(frames, tmp_path / "b", note_count=84, **options)
     assert [f.read_bytes() for f in a] == [f.read_bytes() for f in b]
@@ -103,7 +103,7 @@ def test_the_frame_count_the_names_and_the_size_do_not_depend_on_the_number_of_n
 @pytest.mark.parametrize("n", [12, 48])
 def test_the_same_input_gives_byte_identical_files(tmp_path, image_type, n):
     frames = random_notes(4, seed=60)
-    options = dict(image_type=image_type, note_count=n, resolution=2, smoothing=0.4, smoothing_window=3, threshold=4)
+    options = dict(image_type=image_type, note_count=n, resolution=2, threshold=4)
     a = write(frames, tmp_path / "a", **options)
     b = write(frames, tmp_path / "b", **options)
     assert [f.read_bytes() for f in a] == [f.read_bytes() for f in b]

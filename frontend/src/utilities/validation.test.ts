@@ -1,20 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_EXTRA_NOTES,
+  EXTRA_NOTES_RANGE,
+  formatExtraNotes,
+  heldNotesCount,
+  usesHeldNotes,
+  validateExtraNotes,
   COLORMAPS,
   DEFAULT_COLORMAP,
   colormapLabel,
   validateColormap,
   DEFAULT_IMAGE_TYPE,
   IMAGE_TYPES,
-  SMOOTHING_RANGE,
-  SMOOTHING_WINDOW_RANGE,
-  DEFAULT_SMOOTHING,
-  DEFAULT_SMOOTHING_WINDOW,
   DEFAULT_THRESHOLD,
   DEFAULT_WINDOW_SIZE,
   THRESHOLD_RANGE,
   WINDOW_SIZES,
-  formatSmoothing,
   imageTypeLabel,
   GAUSSIAN_RANGE,
   DEFAULT_GAUSSIAN,
@@ -39,8 +40,6 @@ import {
   formatResolution,
   validateResolution,
   validateImageType,
-  validateSmoothing,
-  validateSmoothingWindow,
   validateThreshold,
   validateWindowSize,
 } from "./validation";
@@ -97,36 +96,6 @@ describe("validateFile", () => {
   });
 });
 
-describe("smoothing", () => {
-  it("is a number from 0 to 0.8 in steps of 0.01, defaulting to 0", () => {
-    expect(SMOOTHING_RANGE).toEqual({ min: 0, max: 0.8, step: 0.01 });
-    expect(DEFAULT_SMOOTHING).toBe(0);
-  });
-
-  it("gives the slider 81 positions with the right end at exactly 0.8", () => {
-    const { min, max, step } = SMOOTHING_RANGE;
-    expect(Math.round((max - min) / step) + 1).toBe(81);
-    expect(Math.round(max * 100) / 100).toBe(0.8);
-    expect(Math.round(min * 100) / 100).toBe(0);
-  });
-
-  it.each([0, 0.8, "0.35", "0", "0.80", 0.01, " 0.5 "])("accepts %s", (v) => {
-    expect(validateSmoothing(v)).toBeNull();
-  });
-
-  it.each([-0.01, 0.81, 1, "", "  ", "abc", "NaN", "Infinity", "-Infinity", "1e9"])("rejects %j", (v) => {
-    expect(validateSmoothing(v)).toBe("The smoothing must be a number from 0.0 to 0.8.");
-  });
-
-  it("formats with two decimals and no float noise", () => {
-    expect(formatSmoothing(0)).toBe("0.00");
-    expect(formatSmoothing(0.3)).toBe("0.30");
-    expect(formatSmoothing(0.30000000000000004)).toBe("0.30");
-    expect(formatSmoothing(0.8)).toBe("0.80");
-    expect(formatSmoothing(0.35)).toBe("0.35");
-  });
-});
-
 describe("threshold", () => {
   it("ranges from 0 (off) to 10 in steps of 1 and starts at 0", () => {
     expect(THRESHOLD_RANGE).toEqual({ min: 0, max: 10, step: 1 });
@@ -153,21 +122,6 @@ describe("threshold", () => {
     expect(formatThresholdSummary(0)).toBe("Off");
     expect(formatThresholdSummary(7)).toBe("7%");
     expect(formatThresholdSummary(2.5)).toBe("2.5%");
-  });
-});
-
-describe("smoothing window", () => {
-  it("is a whole number from 1 to 20 and starts at 1", () => {
-    expect(SMOOTHING_WINDOW_RANGE).toEqual({ min: 1, max: 20 });
-    expect(DEFAULT_SMOOTHING_WINDOW).toBe(1);
-  });
-
-  it.each([1, 5, 20, "1", "20", "7", " 7 "])("accepts %j", (v) => {
-    expect(validateSmoothingWindow(v)).toBeNull();
-  });
-
-  it.each([0, 21, -1, 2.5, "", "  ", "abc", "NaN", "Infinity", "1e9", "5%"])("rejects %j", (v) => {
-    expect(validateSmoothingWindow(v)).toBe("The smoothing window must be a whole number from 1 to 20.");
   });
 });
 
@@ -790,5 +744,38 @@ describe("Polychord (feature 042)", () => {
     expect(formatPolychordRotation(0)).toBe("Still");
     expect(formatPolychordRotation(15)).toBe("15 degrees/s");
     expect(formatPolychordRotation(-22.5)).toBe("-22.5 degrees/s");
+  });
+});
+
+describe("extra notes (feature 044)", () => {
+  const SIX = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"];
+
+  it("is a whole number from 1 to 8 in steps of 1, defaulting to 2", () => {
+    expect(EXTRA_NOTES_RANGE).toEqual({ min: 1, max: 8, step: 1 });
+    expect(DEFAULT_EXTRA_NOTES).toBe(2);
+  });
+
+  it("is used by exactly the six pictures that take the n loudest notes", () => {
+    for (const type of IMAGE_TYPES.map((t) => t.value as string)) expect(usesHeldNotes(type), type).toBe(SIX.includes(type));
+    expect(usesHeldNotes("nonsense")).toBe(false);
+  });
+
+  it("has the number of notes n of the picture: 5, Notes shown, Number of notes, and 8 for a picture that does not use it", () => {
+    for (const type of ["decay", "decay-exp", "chromatic-decay", "chromatic-wireframe"]) expect(heldNotesCount(type, 7, 8), type).toBe(5);
+    expect(heldNotesCount("polar-chords", 7, 8)).toBe(7);
+    expect(heldNotesCount("polychord", 7, 8)).toBe(8);
+    for (const type of ["contour", "energy-graphs", "rhythm-circles"]) expect(heldNotesCount(type, 7, 8), type).toBe(8);
+  });
+
+  it.each([[1, 5], [5, 5], [3, 5], ["2", 8], [8, 8], [" 4 ", 6]])("accepts %j with %j notes", (value, notes) => {
+    expect(validateExtraNotes(value, notes)).toBeNull();
+  });
+
+  it.each([[0, 5], [6, 5], [9, 8], [-1, 5], [2.5, 5], ["", 5], ["  ", 5], ["abc", 5], [NaN, 5], ["Infinity", 5], ["1e9", 8]])("rejects %j with %j notes", (value, notes) => {
+    expect(validateExtraNotes(value, notes)).toBe(`The extra notes must be a whole number from 1 to ${notes}.`);
+  });
+
+  it("formats the readout as the number", () => {
+    expect(formatExtraNotes(2)).toBe("2");
   });
 });

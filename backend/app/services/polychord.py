@@ -26,15 +26,16 @@ slowest tempo is the first color and the fastest the last (``tempo_colors``). Th
 **The drawing.** One ``matplotlib`` ``LineCollection`` for every piece of every copy, on a ``Figure`` that is not a
 ``pyplot`` figure, so that the pictures can be drawn by several threads at once with the same result (``_frame``).
 
-This module knows nothing about the audio, the job or the page: the smoothed note values, the beat, the tempos, the
+This module knows nothing about the audio, the job or the page: the note values, the beat, the tempos, the
 settings, the colormap and the picture size are passed in.
 
 Order of operations:
     1. Check the inputs and the four settings - ``write_polychord_frames()`` with ``check_polychord_settings()`` -
-       ``NoteStrengths`` ``(frames, 88)`` (the smoothed note values), ``BeatPositions`` ``(frames,)`` or ``None``,
+       ``NoteStrengths`` ``(frames, 88)`` (the note values), ``BeatPositions`` ``(frames,)`` or ``None``,
        ``FrameTempos`` ``(frames,)`` (from ``frame_tempos()``), and a picture big enough for a figure.
     2. Take the loudest notes of each frame as letters - ``loudest_letters()`` - ``LoudLetters`` ``(frames, count)``:
-       the letter of each of the ``count`` loudest of the first 84 notes, loudest first, -1 where fewer sound.
+       the letter of each of the ``count`` loudest of the first 84 notes (the held notes: ``held_notes.hold_loudest()``,
+       ``LoudestIndices`` ``(frames, count)``), loudest first, -1 where fewer sound.
     3. Work out the turn of each link - ``link_turns()`` - ``LinkTurns`` ``(frames, count)``: 22.5 degrees for every
        step of a fifth from the previous link's letter (0 for the first link).
     4. Work out how many copies each frame has - ``copy_counts()`` (with ``chromatic_decay.beat_distances()``) -
@@ -75,6 +76,7 @@ from .array_types import (
 )
 from .chromatic_decay import FIFTH, FIRST_LETTER_AT_TOP, LETTERS, _check_beat, beat_distances
 from .colormaps import COLORMAP_STEPS, check_colormap, lookup_table
+from .held_notes import hold_loudest
 from .frame_saving import SAVE_WORKERS
 from .local_peaks import LocalPeaks
 from .tempo_finder import HIGH_LIMIT, LOW_LIMIT, START_TEMPO, find_tempo
@@ -194,10 +196,10 @@ def _check_size(width: object, height: object) -> tuple[int, int]:
 
 
 def _check_values(values: object) -> NoteStrengths:
-    """The smoothed note values as a float64 ``(frames, columns)`` array; anything else is refused.
+    """The note values as a float64 ``(frames, columns)`` array; anything else is refused.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame.
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame.
 
     Returns:
         ``NoteStrengths`` ``(frames, columns)`` - the same values as float64, all finite and at least 0.
@@ -226,17 +228,20 @@ def _check_letters(letters: object) -> LoudLetters:
     return array.astype(np.intp)
 
 
-def loudest_letters(values: ArrayLike, count: int) -> LoudLetters:
+def loudest_letters(values: ArrayLike, count: int, extra: int = 0) -> LoudLetters:
     """The letters of the ``count`` loudest notes of every frame, loudest first: ``(frames, count)``.
 
     Only the first 84 columns are notes of a letter (note ``j`` is the letter ``j mod 12``, 0 for A, as in
     ``chromatic_decay.letter_energies``); the same letter can appear twice, from two octaves. A tie in loudness goes to
-    the lower note, so a file always gives the same letters. A note whose value is not above 0 does not sound and is not
+    the lower note, so a file always gives the same letters. With ``extra`` above 0 the notes are the held notes: a note that
+    was among the loudest in the frame before keeps its place while it is within the loudest ``count + extra`` (see
+    ``held_notes``). A note whose value is not above 0 does not sound and is not
     used: the frame gets -1 for it, and a frame with no sound is all -1. The input is not changed.
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``).
+        ``extra``: the Extra notes setting k, 0 (the default: the old ``count`` loudest) to ``count``.
 
     Returns:
         ``LoudLetters`` ``(frames, count)`` - the letter (0 is A, up to 11) of each of the ``count`` loudest notes of
@@ -244,7 +249,7 @@ def loudest_letters(values: ArrayLike, count: int) -> LoudLetters:
     """
     count = check_polychord_notes(count)
     shown = _check_values(values)[:, :NOTE_COLUMNS]
-    order = np.argsort(-shown, axis=1, kind="stable")[:, :count]
+    order = hold_loudest(shown, count, extra)  # LoudestIndices (frames, count)
     sounding = np.take_along_axis(shown, order, axis=1) > 0
     return np.where(sounding, order % LETTERS, -1).astype(np.intp)
 
@@ -518,6 +523,7 @@ def write_polychord_frames(
     directory: Path,
     width: int,
     height: int,
+    extra_notes: int = 0,
 ) -> None:
     """Save one PNG of ``width`` x ``height`` pixels per frame as ``frame_000000.png`` and up.
 
@@ -526,12 +532,15 @@ def write_polychord_frames(
     as for the other types).
 
     Arrays:
-        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the smoothed strength of each note in each frame
+        ``values``: ``ArrayLike`` ``(frames, 84 or more)`` - the strength of each note in each frame
             (``NoteStrengths``).
         ``beat``: ``BeatPositions`` ``(frames,)`` or ``None`` - the place of each frame in the local energy peak, 0 to
             1; ``None`` gives every frame the minimum number of copies.
         ``tempos``: ``ArrayLike`` ``(frames,)`` - the current tempo of each frame in beats per minute
             (``FrameTempos``).
+
+    ``extra_notes`` is the Extra notes setting k, 0 (the default: the old loudest notes) to the number of notes of the figure:
+    a note that is still among the loudest ``notes + extra_notes`` keeps its link (see ``held_notes``).
     """
     settings = check_polychord_settings(settings)
     colormap = check_colormap(colormap)
@@ -549,7 +558,7 @@ def write_polychord_frames(
     if tempo_array.shape != (frames,):
         raise ValueError(f"The tempos must be one number for each of the {frames} frames.")
     colors = tempo_colors(tempo_array, colormap)
-    letters = loudest_letters(notes_values, settings.notes)
+    letters = loudest_letters(notes_values, settings.notes, extra_notes)
     turns = link_turns(letters)
     copies = copy_counts(checked_beat, settings.min_copies, settings.max_copies, frames)
     angles = start_angles(settings.rotation, frame_rate, frames)

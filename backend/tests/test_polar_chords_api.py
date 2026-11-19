@@ -180,12 +180,17 @@ def test_the_minimum_distance_changes_the_length_of_the_bars(client):
     assert far != default
 
 
+# The windows are 60 ms apart (feature 043), so the last ones overhang the end of the file and see the tone cut off, which leaks into other notes: a steady tone is
+# checked in a frame that is made only from windows lying wholly inside the file (the last 3 of 30 frames at 10 a second are not).
+WHOLE_FRAMES_BEFORE_THE_END = 3
+
+
 # --- the picture --------------------------------------------------------------------------------------------------------------
 
 
 def test_a_steady_tone_is_a_bar_at_the_angle_of_its_note_from_the_first_half_of_the_colormap_half_the_radius_long_without_a_beat(client, no_beat):
     job = polar(client, wav_bytes(0.5 * note_tone(TONE_NOTE, 3.0))).json()  # no peak is found (the no_beat fixture)
-    image = picture(client, job, job["frame_count"] - 1)
+    image = picture(client, job, job["frame_count"] - WHOLE_FRAMES_BEFORE_THE_END)
     angle = (TONE_NOTE + 0.5) * ARC
     assert row_at(image, angle, 0.3 * RADIUS) == 0  # the loudest possible note has the first color
     assert pixel(image, angle, 0.45 * RADIUS) != tuple(lookup_table(COLORMAP)[MIDDLE])  # still in the bar
@@ -237,13 +242,6 @@ def test_those_settings_are_still_checked(client, fields):
     assert polar(client, tiny(), **fields).status_code == 400
 
 
-def test_the_smoothing_applies(client):
-    audio = pulse_wav(seconds=3.0)
-    plain = all_frames(client, polar(client, audio).json())
-    smooth = all_frames(client, polar(client, audio, smoothing="0.6", smoothing_window="5").json())
-    assert smooth != plain and len(smooth) == len(plain)
-
-
 def test_two_runs_give_identical_frames(client):
     audio = pulse_wav(seconds=3.0)
     assert all_frames(client, polar(client, audio).json()) == all_frames(client, polar(client, audio).json())
@@ -274,13 +272,13 @@ def test_a_steady_tone_is_in_the_arc_of_its_note_in_the_layout_chosen(client):
     audio = wav_bytes(0.5 * note_tone(TONE_NOTE, 3.0))
     for layout in ("rows", "spiral"):
         job = polar(client, audio, note_layout=layout).json()
-        image = picture(client, job, job["frame_count"] - 1)
+        image = picture(client, job, job["frame_count"] - WHOLE_FRAMES_BEFORE_THE_END)
         order = note_order(layout)
         arc = int(np.flatnonzero(order == TONE_NOTE)[0])
         assert row_at(image, (arc + 0.5) * ARC, 0.3 * RADIUS) == 0, layout
 
 
-# --- the bars follow their notes -----------------------------------------------------------------------------------------------
+# --- the bars jump to their notes -----------------------------------------------------------------------------------------------
 
 
 def loud_arcs(image):
@@ -293,7 +291,7 @@ def loud_arcs(image):
     return found
 
 
-def test_when_the_note_jumps_far_the_bar_slides_to_it_one_arc_a_frame_instead_of_jumping(client):
+def test_when_the_note_jumps_far_the_bar_jumps_to_it(client):
     audio = wav_bytes(np.concatenate([0.5 * note_tone(36, 1.5), 0.5 * note_tone(48, 3.0)]))  # note 36, then note 48: twelve arcs away
     job = polar(client, audio, frame_rate="30").json()
     seen = []  # (frame, arc) wherever the loudest bar is easy to see: the last window of the file is only partly filled and the change of tone is noisy
@@ -302,8 +300,5 @@ def test_when_the_note_jumps_far_the_bar_slides_to_it_one_arc_a_frame_instead_of
         if len(found) == 1:
             seen.append((index, found[0]))
     assert seen[0] == (0, 36) and seen[-1][1] == 48
-    for (before, a), (after, b) in zip(seen, seen[1:]):
-        assert abs(b - a) <= after - before, (before, a, after, b)  # never faster than one arc a frame
     arcs = [arc for _, arc in seen]
-    assert len(set(range(36, 49)) & set(arcs)) >= 11  # it passed the arcs on the way (a frame or two is not clear: the change of tone is noisy): 37, 38, ... 47
-    assert arcs == sorted(arcs)  # and went the one way
+    assert set(arcs) <= {36, 48}  # never in the arcs between them: no sliding

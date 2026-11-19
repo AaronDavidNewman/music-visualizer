@@ -18,7 +18,6 @@ from app.services.polar_chords import (
     chord_place,
     chord_root,
     check_polar_notes,
-    follow_arcs,
     note_targets,
     polar_bars,
 )
@@ -405,105 +404,50 @@ def test_a_layout_that_is_not_offered_is_refused():
             polar_bars(frames([10]), None, 5, note_layout=bad)
 
 
-# ---- the bars follow their notes: one arc a frame (revision of feature 032) -----------------------------------------------------------------
+# ---- the bars jump to their notes (revision of feature 032, 2026-11-18) ---------------------------------------------------------------------
 
 
-def targets_of(*columns):
-    """A ``(frames, ranks)`` array of target arcs from one list of arcs per rank."""
-    return np.array(columns, dtype=np.int16).T
-
-
-def test_the_first_frame_is_in_the_arcs_of_the_notes():
-    targets = targets_of([10, 10], [40, 40], [83, 83])
-    assert follow_arcs(targets)[0].tolist() == [10, 40, 83]
-
-
-def test_a_bar_whose_note_changes_moves_one_arc_a_frame_toward_it_clockwise_when_that_is_shorter():
-    positions = follow_arcs(targets_of([10, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20]))
-    assert positions[:, 0].tolist() == [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 20]  # 10 arcs in 10 frames, then it stays
-
-
-def test_and_counterclockwise_when_that_is_shorter():
-    positions = follow_arcs(targets_of([20, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]))
-    assert positions[:, 0].tolist() == [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 10]
-
-
-def test_a_bar_goes_round_the_top_of_the_circle_by_the_shorter_way():
-    assert follow_arcs(targets_of([1, 83, 83, 83]))[:, 0].tolist() == [1, 0, 83, 83]  # 1, 0, 83: not all the way round the other side
-    assert follow_arcs(targets_of([83, 1, 1, 1]))[:, 0].tolist() == [83, 0, 1, 1]
-    assert follow_arcs(targets_of([80, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]))[:, 0].tolist() == [80, 81, 82, 83, 0, 1, 2, 3, 4, 5, 5, 5]
-
-
-def test_a_note_exactly_on_the_other_side_of_the_circle_is_reached_clockwise():
-    positions = follow_arcs(targets_of([0] + [42] * 44))[:, 0]
-    assert positions[1] == 1 and positions[42] == 42 and positions[-1] == 42  # 42 steps, all clockwise
-
-
-def test_a_bar_never_moves_more_than_one_arc_a_frame_however_far_the_note_is():
-    rng = np.random.default_rng(31)
-    targets = rng.integers(0, 84, (200, 3)).astype(np.int16)
-    positions = follow_arcs(targets)
-    step = (positions[1:].astype(int) - positions[:-1] + 42) % 84 - 42  # the signed distance round the circle
-    assert (np.abs(step) <= 1).all()
-    assert positions.min() >= 0 and positions.max() <= 83 and positions.dtype == np.int16 and positions.shape == targets.shape
-
-
-def test_a_bar_that_has_reached_its_note_stays_and_follows_it_when_it_moves_by_one_arc():
-    positions = follow_arcs(targets_of([30, 30, 30, 31, 32, 31, 31]))
-    assert positions[:, 0].tolist() == [30, 30, 30, 31, 32, 31, 31]
-
-
-def test_each_rank_follows_its_own_note_independently_of_the_others():
-    both = follow_arcs(targets_of([10, 20, 20, 20], [50, 40, 40, 40]))
-    assert both[:, 0].tolist() == follow_arcs(targets_of([10, 20, 20, 20]))[:, 0].tolist()
-    assert both[:, 1].tolist() == follow_arcs(targets_of([50, 40, 40, 40]))[:, 0].tolist()
-
-
-def test_a_rank_without_a_note_loses_its_place_and_comes_back_in_the_arc_of_its_note():
-    positions = follow_arcs(targets_of([10, -1, -1, 60, 60, 60]))
-    assert positions[:, 0].tolist() == [10, -1, -1, 60, 60, 60]  # it does not slide in from where it was
-
-
-def test_the_targets_are_not_changed():
-    targets = targets_of([10, 20, 30, 40])
-    before = targets.copy()
-    follow_arcs(targets)
-    np.testing.assert_array_equal(targets, before)
-
-
-def test_bad_targets_are_refused():
-    for bad in (np.zeros(5), np.full((3, 2), 84), np.full((3, 2), -2), np.array([[1.5, 2.0]])):
-        with pytest.raises(ValueError):
-            follow_arcs(bad)
-
-
-def test_in_the_picture_the_first_frame_is_the_notes_and_the_next_frames_move_a_bar_one_arc_toward_a_new_note():
+def test_a_bar_is_in_the_arc_of_its_note_in_every_frame_a_changed_note_is_jumped_to_at_once():
     rows = [{10: 1.0}] + [{20: 1.0}] * 12
     bars = polar_bars(frames(*rows), None, 5)
-    assert bars.note_slots[:, 0].tolist() == [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 20]
+    assert bars.note_slots[:, 0].tolist() == [10] + [20] * 12  # no sliding through 11, 12, ... 19
     assert (bars.note_slots[:, 1:] == -1).all()
-    assert bars.note_shares[0, 0] > 0 and bars.note_shares[5, 0] == bars.note_shares[12, 0] == 1.0  # the color and the strength are the new note's at once
+    assert bars.note_shares[0, 0] > 0 and bars.note_shares[1, 0] == bars.note_shares[12, 0] == 1.0
 
 
-def test_in_the_picture_a_steady_note_does_not_move():
+def test_a_jump_goes_to_the_note_whichever_way_round_the_circle_and_over_the_top():
+    for before, after in ((10, 20), (20, 10), (1, 83), (83, 1), (0, 42), (80, 5)):
+        bars = polar_bars(frames({before: 1.0}, {after: 1.0}), None, 5)
+        assert bars.note_slots[:, 0].tolist() == [before, after], (before, after)
+
+
+def test_a_steady_note_does_not_move():
     bars = polar_bars(frames(*([{36: 1.0}] * 20)), None, 5)
     assert set(bars.note_slots[:, 0].tolist()) == {36}
 
 
-def test_the_bar_of_the_second_loudest_note_is_tracked_apart_from_the_loudest():
-    rows = [{10: 1.0, 50: 0.5}] + [{12: 1.0, 40: 0.5}] * 12
-    bars = polar_bars(frames(*rows), None, 5)
-    assert bars.note_slots[:, 0].tolist() == [10, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12]
-    assert bars.note_slots[:, 1].tolist() == [50, 49, 48, 47, 46, 45, 44, 43, 42, 41, 40, 40, 40]
+def test_every_bar_is_in_the_arc_of_its_note_with_random_notes():
+    rng = np.random.default_rng(31)
+    for layout in ("rows", "spiral"):
+        values = rng.random((60, 88)) ** 3
+        values[rng.random(values.shape) < 0.5] = 0.0
+        bars = polar_bars(values, None, 6, note_layout=layout)
+        targets, shares = note_targets(values, 6, layout)
+        np.testing.assert_array_equal(bars.note_slots, targets)  # the arcs are the arcs of the notes: nothing is followed or hidden
+        np.testing.assert_array_equal(bars.note_shares, shares)
+        assert bars.note_slots.dtype == np.int16 and bars.note_slots.min() >= -1 and bars.note_slots.max() <= 83
 
 
-def test_two_bars_on_the_same_arc_show_only_the_louder_one():
-    rows = [{10: 1.0, 12: 0.5}, {14: 1.0, 12: 0.5}, {14: 1.0, 12: 0.5}, {14: 1.0, 12: 0.5}, {14: 1.0, 12: 0.5}]
+def test_the_second_loudest_note_jumps_too():
+    rows = [{10: 1.0, 50: 0.5}] + [{12: 1.0, 40: 0.5}] * 3
     bars = polar_bars(frames(*rows), None, 5)
-    # the loudest bar goes 10, 11, 12, 13, 14; the second stays at 12; in the frame in which both are at 12 only the louder is drawn
-    assert bars.note_slots[:, 0].tolist() == [10, 11, 12, 13, 14]
-    assert bars.note_slots[:, 1].tolist() == [12, 12, -1, 12, 12]
-    assert bars.note_shares[2, 1] == 0.0 and bars.note_shares[1, 1] > 0
+    assert bars.note_slots[:, 0].tolist() == [10, 12, 12, 12]
+    assert bars.note_slots[:, 1].tolist() == [50, 40, 40, 40]
+
+
+def test_a_note_that_comes_back_after_silence_is_in_its_arc():
+    bars = polar_bars(frames({10: 1.0}, {}, {}, {60: 1.0}), None, 5)
+    assert bars.note_slots[:, 0].tolist() == [10, -1, -1, 60]
 
 
 def test_the_arcs_of_the_bars_of_a_frame_are_always_different():
@@ -517,17 +461,13 @@ def test_the_arcs_of_the_bars_of_a_frame_are_always_different():
             assert len(shown) == len(set(shown.tolist()))
 
 
-def test_in_the_picture_the_movement_is_in_the_arcs_of_the_note_layout():
-    # middle C (27) is in arc 29 with the spiral and the next note up (28) in arc 30: the bar moves from arc 29 to arc 30, one arc
-    rows = [{27: 1.0}, {28: 1.0}, {28: 1.0}]
-    assert polar_bars(frames(*rows), None, 5, note_layout="spiral").note_slots[:, 0].tolist() == [29, 30, 30]
-    # a jump in pitch that is far in the rows layout is a slide of arcs in whatever arcs the layout puts the notes
-    spiral = polar_bars(frames({27: 1.0}, *([{70: 1.0}] * 60)), None, 5, note_layout="spiral").note_slots[:, 0]
-    assert spiral[0] == 29 and spiral[-1] == arc_of(70, "spiral")
-    assert (np.abs((spiral[1:].astype(int) - spiral[:-1] + 42) % 84 - 42) <= 1).all()
+def test_the_jump_is_in_the_arcs_of_the_note_layout():
+    # middle C (27) is in arc 29 with the spiral and the next note up (28) in arc 30; a far note is in whatever arc the layout puts it
+    rows = [{27: 1.0}, {28: 1.0}, {70: 1.0}]
+    assert polar_bars(frames(*rows), None, 5, note_layout="spiral").note_slots[:, 0].tolist() == [29, 30, arc_of(70, "spiral")]
 
 
-def test_the_chord_the_lengths_and_the_strengths_do_not_follow_anything():
+def test_the_chord_the_lengths_and_the_strengths_are_those_of_the_frame():
     rows = [{C4: 1.0, E4: 0.9, G4: 0.8}, {40: 1.0, 44: 0.9, 47: 0.8}]
     bars = polar_bars(frames(*rows), [0.2, 0.9], 5)
     assert bars.chord_place.tolist() == [22, 29]  # the chord is where its root and type are, at once: (4, 7) on C, then (4, 7) on the letter 4
