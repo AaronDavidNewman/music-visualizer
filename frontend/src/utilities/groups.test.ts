@@ -7,21 +7,22 @@ const TYPES = IMAGE_TYPES.map((t) => t.value);
 // What each image type must show, written out here independently of the module under test (spec FR-003 to FR-009).
 const COMMON_TOP = ["window-size", "frame-rate", "colormap", "image-type"];
 const BEAT = ["beat-coloring", "peak-distance"];
-const SIX = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"]; // the pictures that take the n loudest notes (feature 044)
+const SEVEN = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"]; // the pictures that take the n loudest notes (feature 044, Spirograph feature 046)
 const EXPECTED: Record<string, string[]> = {
-  contour: [...COMMON_TOP, "threshold", "notes", "wave-count", ...BEAT, "resolution", "interpolate", "gaussian"],
+  contour: [...COMMON_TOP, "threshold", "notes", "wave-count", "export-obj", ...BEAT, "resolution", "interpolate", "gaussian"],
   decay: [...COMMON_TOP, "decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated", "extra-notes", "note-layout", "peak-distance"],
   "decay-exp": [...COMMON_TOP, "decay-rate", "extra-notes", "note-layout", "peak-distance"],
   "polar-chords": [...COMMON_TOP, "polar-notes", "extra-notes", "note-layout", "peak-distance"],
   "energy-graphs": [...COMMON_TOP], // no setting of its own, and the data is not smoothed
   "chromatic-decay": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "extra-notes", "peak-distance"],
   "rhythm-circles": [...COMMON_TOP, "peak-distance"], // the two Local peaks settings and nothing else: the data is not smoothed
-  "chromatic-wireframe": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "extra-notes", "peak-distance"], // the controls of Chromatic Decay (feature 039)
+  "chromatic-wireframe": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "extra-notes", "export-obj", "peak-distance"], // the controls of Chromatic Decay (feature 039)
   polychord: [...COMMON_TOP, "polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation", "extra-notes", "peak-distance"], // feature 042
+  spirograph: [...COMMON_TOP, "spirograph-notes", "spirograph-history", "spirograph-fade", "extra-notes", "peak-distance"], // feature 046: the beat sets the turns and the big circle
 };
 
 describe("the groups", () => {
-  it("are the fifteen groups of the data model, with their titles and controls in order", () => {
+  it("are the seventeen groups of the data model, with their titles and controls in order", () => {
     expect(GROUPS.map((g) => [g.id, g.title, [...g.controls]])).toEqual([
       ["analysis", "Analysis", ["window-size", "frame-rate"]],
       ["colormap", "Colormap", ["colormap"]],
@@ -33,7 +34,9 @@ describe("the groups", () => {
       ["chromatic-decay", "Chromatic Decay", ["threshold", "chromatic-decay-rate"]],
       ["chromatic-wireframe", "Chromatic Wireframe", ["threshold", "chromatic-decay-rate"]],
       ["polychord", "Polychord", ["polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation"]],
+      ["spirograph", "Spirograph", ["spirograph-notes", "spirograph-history", "spirograph-fade"]],
       ["held-notes", "Held notes", ["extra-notes"]],
+      ["obj-export", "3D export", ["export-obj"]],
       ["note-layout", "Note layout", ["note-layout"]],
       ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
@@ -54,10 +57,11 @@ describe("the groups shown for each image type", () => {
   it.each(TYPES)("are, for %s, in this order: the top group, Colormap, Image type, the type's group, Image smoothing", (type) => {
     const want = ["analysis", "colormap", "image-type"];
     if (type !== "energy-graphs" && type !== "rhythm-circles") want.push(type); // Energy graphs and Rhythm Circles have no group of their own
-    if (SIX.includes(type)) want.push("held-notes"); // feature 044: the six pictures that take the n loudest notes
+    if (SEVEN.includes(type)) want.push("held-notes"); // feature 044: the seven pictures that take the n loudest notes
+    if (type === "contour" || type === "chromatic-wireframe") want.push("obj-export"); // feature 045: the two pictures with the 3D export
     if (type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("note-layout");
     if (type === "contour") want.push("local-peaks");
-    if (type === "decay" || type === "decay-exp" || type === "polar-chords" || type === "chromatic-decay" || type === "chromatic-wireframe" || type === "rhythm-circles" || type === "polychord") want.push("concentric-peaks");
+    if (type === "decay" || type === "decay-exp" || type === "polar-chords" || type === "chromatic-decay" || type === "chromatic-wireframe" || type === "rhythm-circles" || type === "polychord" || type === "spirograph") want.push("concentric-peaks");
     if (type === "contour") want.push("image-smoothing");
     expect(groupsFor(type)).toEqual(want);
   });
@@ -177,7 +181,7 @@ describe("the Local peaks group (feature 024)", () => {
 
   it("follows the group of Contour, before Image smoothing, and is shown for no other type", () => {
     const contour = groupsFor("contour");
-    expect(contour.indexOf("local-peaks")).toBe(contour.indexOf("contour") + 1); // Contour has no Note layout group
+    expect(contour.indexOf("local-peaks")).toBe(contour.indexOf("obj-export") + 1); // Contour has no Note layout group (3D export, feature 045, is between)
     expect(contour.indexOf("local-peaks")).toBeLessThan(contour.indexOf("image-smoothing"));
     for (const type of [...TYPES.filter((t) => t !== "contour"), "nonsense"]) expect(groupsFor(type), type).not.toContain("local-peaks");
   });
@@ -281,7 +285,7 @@ describe("the Contour group and the wave count (feature 028)", () => {
   });
 
   it("shows, for Contour, the groups in the order of the contract", () => {
-    expect(groupsFor("contour")).toEqual(["analysis", "colormap", "image-type", "contour", "local-peaks", "image-smoothing"]);
+    expect(groupsFor("contour")).toEqual(["analysis", "colormap", "image-type", "contour", "obj-export", "local-peaks", "image-smoothing"]);
   });
 });
 
@@ -407,8 +411,8 @@ describe("the groups of Rhythm Circles (feature 038)", () => {
 
 describe("the groups of Chromatic Wireframe (feature 039)", () => {
   it("are those of Chromatic Decay, with a group of its own: Analysis, Colormap, Image type, Chromatic Wireframe, Local peaks (no checkbox)", () => {
-    expect(groupsFor("chromatic-wireframe")).toEqual(["analysis", "colormap", "image-type", "chromatic-wireframe", "held-notes", "concentric-peaks"]);
-    expect(groupsFor("chromatic-wireframe").map((id) => (id === "chromatic-wireframe" ? "chromatic-decay" : id))).toEqual(groupsFor("chromatic-decay"));
+    expect(groupsFor("chromatic-wireframe")).toEqual(["analysis", "colormap", "image-type", "chromatic-wireframe", "held-notes", "obj-export", "concentric-peaks"]);
+    expect(groupsFor("chromatic-wireframe").filter((id) => id !== "obj-export").map((id) => (id === "chromatic-wireframe" ? "chromatic-decay" : id))).toEqual(groupsFor("chromatic-decay"));
   });
 
   it("has the title Chromatic Wireframe and the Threshold and the decay rate of Chromatic Decay (a whole number of frames), on one row", () => {
@@ -465,10 +469,10 @@ describe("the Held notes group (feature 044)", () => {
     expect(rowsOf(controlsIn("held-notes").length)).toEqual([1]);
   });
 
-  it("is shown for exactly the six pictures that take the n loudest notes, right after the group of the type", () => {
+  it("is shown for exactly the seven pictures that take the n loudest notes, right after the group of the type", () => {
     for (const type of TYPES) {
       const ids = groupsFor(type);
-      if (SIX.includes(type)) {
+      if (SEVEN.includes(type)) {
         expect(ids.indexOf("held-notes"), type).toBe(ids.indexOf(type) + 1);
         expect(groupOf("extra-notes", type), type).toBe("held-notes");
       } else {
@@ -484,5 +488,63 @@ describe("the Held notes group (feature 044)", () => {
       expect(ids.indexOf("held-notes"), type).toBeLessThan(ids.indexOf("note-layout"));
       expect(ids.indexOf("held-notes"), type).toBeLessThan(ids.indexOf("concentric-peaks"));
     }
+  });
+});
+
+describe("the 3D export group (feature 045)", () => {
+  const TWO = ["contour", "chromatic-wireframe"];
+
+  it("has the title 3D export and the one control Export 3D files", () => {
+    expect(groupTitle("obj-export")).toBe("3D export");
+    expect([...controlsIn("obj-export")]).toEqual(["export-obj"]);
+    expect(rowsOf(controlsIn("obj-export").length)).toEqual([1]);
+  });
+
+  it("is shown for exactly Contour and Chromatic Wireframe, right after the group of the type (and Held notes)", () => {
+    for (const type of TYPES) {
+      const ids = groupsFor(type);
+      if (TWO.includes(type)) {
+        const before = type === "contour" ? type : "held-notes"; // Chromatic Wireframe also has Held notes after its group
+        expect(ids.indexOf("obj-export"), type).toBe(ids.indexOf(before) + 1);
+        expect(groupOf("export-obj", type), type).toBe("obj-export");
+      } else {
+        expect(ids, type).not.toContain("obj-export");
+        expect(groupOf("export-obj", type), type).toBeUndefined();
+      }
+    }
+    expect(groupsFor("nonsense")).not.toContain("obj-export");
+  });
+
+  it("comes before Local peaks and before Image smoothing", () => {
+    for (const type of TWO) {
+      const ids = groupsFor(type);
+      expect(ids.indexOf("obj-export"), type).toBeLessThan(ids.indexOf(type === "contour" ? "local-peaks" : "concentric-peaks"));
+    }
+    expect(groupsFor("contour").indexOf("obj-export")).toBeLessThan(groupsFor("contour").indexOf("image-smoothing"));
+  });
+});
+
+describe("the groups of Spirograph (feature 046)", () => {
+  it("are Analysis, Colormap, Image type, Spirograph, Held notes and Local peaks (Minimum distance only), in this order", () => {
+    expect(groupsFor("spirograph")).toEqual(["analysis", "colormap", "image-type", "spirograph", "held-notes", "concentric-peaks"]);
+  });
+
+  it("has the title Spirograph and the three controls, in a row of two and a row of one", () => {
+    expect(groupTitle("spirograph")).toBe("Spirograph");
+    expect([...controlsIn("spirograph")]).toEqual(["spirograph-notes", "spirograph-history", "spirograph-fade"]);
+    expect(rowsOf(controlsIn("spirograph").length)).toEqual([2, 1]);
+  });
+
+  it("puts each control in its group (Minimum distance in Local peaks) and shows none of the other types' controls", () => {
+    for (const control of ["spirograph-notes", "spirograph-history", "spirograph-fade"]) expect(groupOf(control, "spirograph"), control).toBe("spirograph");
+    expect(groupOf("extra-notes", "spirograph")).toBe("held-notes");
+    expect(groupOf("peak-distance", "spirograph")).toBe("concentric-peaks");
+    for (const control of ["beat-coloring", "threshold", "note-layout", "export-obj", "resolution", "polychord-notes"]) {
+      expect(groupOf(control, "spirograph"), control).toBeUndefined();
+    }
+  });
+
+  it("is shown for no other type", () => {
+    for (const type of TYPES.filter((t) => t !== "spirograph")) expect(groupsFor(type), type).not.toContain("spirograph");
   });
 });

@@ -45,6 +45,7 @@ CONFIGS = [
     ("chromatic-decay", {"image_type": "chromatic-decay"}),
     ("chromatic-wireframe", {"image_type": "chromatic-wireframe"}),
     ("polychord", {"image_type": "polychord", "polychord": PolychordData(np.full(4, 120.0), 10.0)}),
+    ("spirograph", {"image_type": "spirograph"}),
 ]
 IDS = [c[0] for c in CONFIGS]
 

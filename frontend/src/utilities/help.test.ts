@@ -14,6 +14,9 @@ import {
   polychordMinCopiesHelp,
   polychordNotesHelp,
   polychordRotationHelp,
+  spirographFadeHelp,
+  spirographHistoryHelp,
+  spirographNotesHelp,
   waveCountHelp,
   noteCountHelp,
   resolutionHelp,
@@ -430,6 +433,7 @@ describe("the Polychord help (feature 042)", () => {
 
   it("names Polychord in the Local peaks help", () => {
     expect(peakDistanceHelp).toContain("Polychord");
+    expect(peakDistanceHelp).toContain("Spirograph");
   });
 });
 
@@ -447,5 +451,50 @@ describe("the help of the Extra notes setting (feature 044)", () => {
     expect(imageTypeHelpText).toContain("the notes that get a bar are held notes");
     expect(imageTypeHelpText).toContain("the five loudest letters are held letters");
     expect(imageTypeHelpText).toContain("the notes of the figure are held notes");
+  });
+});
+
+import { exportObjHelp as exportObjHelpText } from "./help";
+
+describe("the help of the Export 3D files setting (feature 045)", () => {
+  it("explains the files, the axes and ranges, the colors, the modifiers, the two pictures and that the pictures are still made", () => {
+    for (const piece of ["Wavefront OBJ", "one ZIP", "Blender", "Subdivision Surface", "0 to 11", "0 to 12", "three numbers from 0 to 1", "84 points and 66 faces", "11 frames before it", "still made"]) {
+      expect(exportObjHelpText).toContain(piece);
+    }
+    for (const picture of ["Contour", "Chromatic Wireframe"]) expect(exportObjHelpText).toContain(picture);
+  });
+
+  it("is said in the descriptions of Contour and Chromatic Wireframe", () => {
+    expect(imageTypeHelpText.match(/Export 3D files/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(imageTypeHelpText).toContain("84 points and 66 faces");
+    expect(imageTypeHelpText).toContain("the 11 frames before it");
+  });
+});
+
+describe("the Spirograph help (feature 046)", () => {
+  it("explains the number of notes: 5 to 12, default 8, the loudest notes, a curve each, the 13 colors", () => {
+    for (const piece of ["5 to 12", "default 8", "Only used by Spirograph", "loudest", "13 colors"]) expect(spirographNotesHelp).toContain(piece);
+  });
+
+  it("explains the history: 5 to 12 frames, default 8, the frame itself and the ones before, counted in frames", () => {
+    for (const piece of ["5 to 12", "default 8", "Only used by Spirograph", "the frame itself", "counted in frames"]) expect(spirographHistoryHelp).toContain(piece);
+  });
+
+  it("explains the history fade: 0.4 to 0.85, default 0.7, multiplied once for every frame older, the newest keeps its size", () => {
+    for (const piece of ["0.4 to 0.85", "default 0.7", "Only used by Spirograph", "once for every frame", "keeps its full size"]) expect(spirographFadeHelp).toContain(piece);
+  });
+
+  it("is in the image type help, after Polychord, with the rolling circle, the colors, the history and the black background", () => {
+    expect(imageTypeHelp).toContain("Spirograph:");
+    expect(imageTypeHelp.indexOf("Spirograph:")).toBeGreaterThan(imageTypeHelp.indexOf("Polychord:"));
+    const text = imageTypeHelp.slice(imageTypeHelp.indexOf("Spirograph:"));
+    for (const piece of ["rolling", "13 colors", "History length", "black", "6 times", "20 times", "Local peaks settings"]) expect(text).toContain(piece);
+    expect(text).not.toContain("no beat");
+  });
+
+  it("names Spirograph in the Extra notes help, with the limit of 8", async () => {
+    const { extraNotesHelp } = await import("./help");
+    expect(extraNotesHelp).toContain("Spirograph");
+    expect(extraNotesHelp).toContain("never more than 8");
   });
 });

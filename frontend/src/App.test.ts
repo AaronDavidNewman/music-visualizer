@@ -265,3 +265,33 @@ describe("the result summary: Extra notes (feature 044)", () => {
     expect(line).toContain("formatExtraNotes(result.extra_notes)");
   });
 });
+
+describe("the result: 3D export (feature 045)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+
+  it("shows the 3D export line for Contour and Chromatic Wireframe only", () => {
+    const line = summary.split("\n").find((l) => l.includes("3D export:")) ?? "";
+    expect(line).toContain("usesObjExport(result.image_type)");
+    expect(line).toContain("formatExportObj(result.export_obj)");
+  });
+
+  it("offers the download of the ZIP only when the job has the files", () => {
+    const link = appSource.split("\n").find((l) => l.includes("Download 3D files")) ?? "";
+    expect(link).toContain('v-if="result.obj_url"');
+    expect(link).toContain(':href="result.obj_url"');
+    expect(link).toContain("download");
+  });
+});
+
+describe("the result summary for Spirograph (feature 046)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows the number of notes and the history length for Spirograph only", () => {
+    expect(summary.split("\n").filter((l) => l.includes("Number of notes:")).some((l) => l.includes("isSpirographType(result.image_type)") && l.includes("formatSpirographNotes(result.spirograph_notes)"))).toBe(true);
+    expect(line("History length:")).toContain("isSpirographType(result.image_type)");
+    expect(line("History length:")).toContain("formatSpirographHistory(result.spirograph_history)");
+    expect(line("History fade:")).toContain("isSpirographType(result.image_type)");
+    expect(line("History fade:")).toContain("formatSpirographFade(result.spirograph_fade)");
+  });
+});

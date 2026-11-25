@@ -59,14 +59,14 @@ NoteStrengths = npt.NDArray[np.float64]
 # LoudestIndices: the notes (or letters) that a picture counts as the loudest of each frame, one place for each.
 #   Shape: ``(frames, count)``: one row for each frame; one column for each of the ``count`` places of the selection,
 #          loudest first (``count`` is n: 5 for Decay, Decay Exp, Chromatic Decay and Chromatic Wireframe, 5 to 8 for
-#          Polar Chords and Polychord).
+#          Polar Chords and Polychord, 5 to 12 for Spirograph).
 #   Meaning: the index of the note at that place: 0 to 83 for a note (note 0 is 55 Hz, as in ``NoteStrengths``), 0 to 11
 #            for a letter (A is 0) in the two Chromatic pictures. A note that was in the selection of the frame before
 #            stays in it while it is among the loudest ``count + k`` of this frame and still sounds (it is *held*); a free
 #            place goes to the loudest note that is not held. When fewer than ``count`` notes sound the last places hold
 #            notes whose strength is 0, so that ``values[order] > 0`` says that a place is empty; they are never used as
 #            notes.
-#   Made by: ``held_notes.hold_loudest``.
+#   Made by: ``held_notes.hold_loudest`` (also through ``spirograph.tracked_notes``, whose ``count`` is 5 to 12).
 LoudestIndices = npt.NDArray[np.intp]
 
 # WindowRanges: for each frame, which analysis windows it owns.
@@ -96,7 +96,7 @@ PixelEdges = npt.NDArray[np.int64]
 #          by ``12 r`` at resolution ``r``).
 #   Meaning: the value of the cell at each row and column, 0 or more (one frame of ``GridValues`` reshaped);
 #            for the contour the rows are flipped so that the first row of notes is drawn at the top of the picture.
-#   Made by: ``contour.write_contour_frames`` (from one row of ``GridValues``).
+#   Made by: ``contour.smoothed_grid`` (from one row of ``GridValues``; ``contour.write_contour_frames`` and the 3D export both use it).
 FrameGrid = npt.NDArray[np.float64]
 
 # HiddenMask: which values are too faint to show.
@@ -515,6 +515,75 @@ LinkSegments = npt.NDArray[np.float64]
 #   Made by: ``polychord.figure_segments``.
 LinkWidths = npt.NDArray[np.float64]
 
+# --- Spirograph (feature 046) -----------------------------------------------------------------------------------------
+
+# TrackedValues: the value of each tracked note of each frame, the user's "bin values".
+#   Shape: ``(frames, count)``: one row for each frame (a *history entry*); one column for each of the ``count`` tracked
+#          notes, loudest first (``count`` is the Number of notes setting, 5 to 12). The indices of the same notes are
+#          ``LoudestIndices`` of the same shape.
+#   Meaning: the square root of the strength of the note over the largest strength of the whole file, from 0 to 1 (the
+#            loudest note of the file is 1; the square root pulls the quiet notes up toward it); 0 for a place with no sounding note, for which nothing is drawn. It sets the size, the loop width
+#            and the color of the note's curve.
+#   Made by: ``spirograph.tracked_notes``.
+TrackedValues = npt.NDArray[np.float64]
+
+# ReducedColors: the 13 colors that Spirograph takes from the colormap.
+#   Shape: ``(13, 3)``: one row for each color number 0 to 12; red, green, blue.
+#   Meaning: row ``k`` is the row of the colormap's ``ColorTable`` at ``min(255, floor(sqrt(k / 12) * 256))`` (each channel
+#            0 to 255): the steps between colors are small at the quiet end and large at the loud end.
+#   Made by: ``spirograph.reduced_colors``.
+ReducedColors = npt.NDArray[np.uint8]
+
+# ColorNumbers: which of the 13 reduced colors each curve takes.
+#   Shape: ``(curves,)``: one entry for each curve of a picture, in drawing order.
+#   Meaning: ``min(floor(12 * value), 12)``, 0 to 12: the row of ``ReducedColors`` of the curve.
+#   Made by: ``spirograph.color_numbers``, ``spirograph.window_curves``.
+ColorNumbers = npt.NDArray[np.intp]
+
+# PeakPercents: how near each frame is to the top of the local energy peak, for Spirograph.
+#   Shape: ``(frames,)``: one entry for each frame.
+#   Meaning: from 0 (at the bottom of the local energy, far from a peak) to 1 (at the top of a peak): ``1 -
+#            beat_distances`` (the beat stretched over the range of the beat of the file). Above 0.5 a frame is closer to
+#            the peak than to the bottom. Every frame is 1 when no beat was measured.
+#   Made by: ``spirograph.peak_percents``.
+PeakPercents = npt.NDArray[np.float64]
+
+# CurveTurns: how many times the small circle turns round the big one in each spirograph curve.
+#   Shape: ``(curves,)``: one entry for each curve.
+#   Meaning: ``2 * 7 * pct + 6``, from 6 (the bottom of the local energy) to 20 (the top of a peak), not rounded.
+#   Made by: ``spirograph.turns_of``.
+CurveTurns = npt.NDArray[np.float64]
+
+# BigRadii: the radius ``rc`` of the big circle of each spirograph curve.
+#   Shape: ``(curves,)``: one entry for each curve.
+#   Meaning: 5 when the curve's frame is closer to the top of the peak than to the bottom (``pct`` above 0.5), 4 otherwise.
+#   Made by: ``spirograph.big_radii``.
+BigRadii = npt.NDArray[np.float64]
+
+# CurveExtents: the farthest point of each spirograph curve from the center.
+#   Shape: ``(curves,)``: one entry for each curve.
+#   Meaning: ``val (rc + (index mod 12) val)`` in the units of the formula: the first point of the curve, above 0 for a
+#            curve that sounds.
+#   Made by: ``spirograph._extents``.
+CurveExtents = npt.NDArray[np.float64]
+
+# CurveWidths: how wide the line of each spirograph curve of a picture is.
+#   Shape: ``(curves,)``: one entry for each curve of a picture, in drawing order (the order of ``SpiroCurves``).
+#   Meaning: the width in pixels, a whole number: 3 for the picture's own frame (the newest history entry), at most 2 for
+#            every older entry, down to 1 for the oldest place of the history; stored as float64 for the drawing.
+#   Made by: ``spirograph.window_curves`` (from ``spirograph.entry_line_width``).
+CurveWidths = npt.NDArray[np.float64]
+
+# SpiroCurves: the points of the spirograph curves of a picture.
+#   Shape: ``(curves, 1000, 2)``: one entry for each curve (one for each tracked note of each history entry whose value is
+#          above 0); its 1000 points in order; the x and y of each point.
+#   Meaning: ``spiro_curves`` gives the points in units of the formula (centered on 0, y up, a curve of value 1 reaches up to
+#            about 17); ``window_curves`` gives them in pixels from the left and the top of the picture (y down), the
+#            oldest history entry first, the loudest place first inside an entry, each curve sized so that its farthest
+#            point is between a quarter of the smallest side and the room of the picture from the center.
+#   Made by: ``spirograph.spiro_curves``, ``spirograph.window_curves``.
+SpiroCurves = npt.NDArray[np.float64]
+
 # --- Polar Chords -----------------------------------------------------------------------------------------------------
 
 # BarArcs: the arc of the circle that each note bar is in, in each frame.
@@ -659,5 +728,32 @@ ColorTable = npt.NDArray[np.uint8]
 #          the application are 400 rows by 600 columns).
 #   Meaning: the color of each pixel, each channel from 0 to 255.
 #   Made by: the drawing of each image type (``contour``, ``decay``, ``polar_chords``, ``energy_graphs``,
-#            ``chromatic_decay``, ``chromatic_wireframe``, ``rhythm_circles``, ``polychord``).
+#            ``chromatic_decay``, ``chromatic_wireframe``, ``rhythm_circles``, ``polychord``, ``spirograph``).
 Pictures = npt.NDArray[np.uint8]
+
+# --- the 3D export (feature 045) --------------------------------------------------------------------------------------
+
+# MeshVertices: the points of the mesh of one frame of the 3D export.
+#   Shape: ``(points, 6)``: one row for each point; ``points`` is 84 for the contour and 12 times the lines (1 to 12) for
+#          Chromatic Wireframe; the columns are x, y, z, red, green, blue.
+#   Meaning: x, y and z are the position in grid units (x the column or letter, y the row or the age of the line, z the
+#            height scaled to 0 to 12) and red, green and blue the color from 0 to 1; row ``k`` is vertex ``k + 1`` of the
+#            OBJ file, the ``k``-th ``v`` line.
+#   Made by: ``obj_export.contour_mesh``, ``obj_export.wireframe_mesh``.
+MeshVertices = npt.NDArray[np.float64]
+
+# MeshFaces: the four-sided faces of the mesh of one frame of the 3D export.
+#   Shape: ``(faces, 4)``: one row for each face; 66 for the contour, ``11 * (lines - 1)`` for Chromatic Wireframe; the
+#          columns are the four corners.
+#   Meaning: the numbers of the four corner points, counted from 1 as in OBJ files (row ``k`` of ``MeshVertices`` is point
+#            ``k + 1``), in the order round the face, counterclockwise seen from +Z.
+#   Made by: ``obj_export.contour_mesh``, ``obj_export.wireframe_mesh``.
+MeshFaces = npt.NDArray[np.intp]
+
+# LetterAmplitudes: the amplitude of the sine of each letter of Chromatic Wireframe.
+#   Shape: ``(frames, 12)``: one row for each frame; one column for each of the 12 letters in the order of the letters (A
+#          first); the shape of the ``CirclePoints`` it is made from.
+#   Meaning: the radius of the letter's circle as a share of the full radius, from 1/12 (0 points) to 1 (24 points or
+#            more): the amplitude of the letter's wave in the picture, and the height of its point in the 3D export.
+#   Made by: ``obj_export.amplitude_share``.
+LetterAmplitudes = npt.NDArray[np.float64]

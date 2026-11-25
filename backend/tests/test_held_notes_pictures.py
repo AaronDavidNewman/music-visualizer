@@ -16,10 +16,11 @@ from app.services.image_types import IMAGE_TYPES
 from app.services.note_layout import note_order
 from app.services.polychord import PolychordData, PolychordSettings, loudest_letters
 from app.services.rhythm_circles import RhythmData
+from app.services.spirograph import SpirographSettings
 
 HELD = (10, 11, 12, 13, 14)  # five notes, loudest first, that are struck in frame 0
 NEWCOMER = 40
-SIX = ("decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord")
+SEVEN = ("decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph")
 
 
 def values_with_newcomer(held=HELD, newcomer=NEWCOMER):
@@ -171,12 +172,14 @@ def draw(tmp_path, name, image_type, values, **kwargs):
         extra["rhythm"] = RhythmData(np.cumsum(np.full((frames, 4), 0.02), axis=0))
     if image_type == "polychord":
         extra["polychord"] = PolychordData(np.full(frames, 100.0), 10.0)
+    if image_type == "spirograph":
+        extra["spirograph_settings"] = SpirographSettings(5, 8)  # five places, like the other pictures: with the default 8 the 7 notes of these files all fit and nothing is displaced
     directory = tmp_path / name
     write_frames(values, directory, image_type=image_type, **extra, **kwargs)
     return [p.read_bytes() for p in sorted(directory.glob("frame_*.png"))]
 
 
-@pytest.mark.parametrize("image_type", SIX)
+@pytest.mark.parametrize("image_type", SEVEN)
 def test_when_notes_are_displaced_the_pictures_change_with_extra_and_not_with_extra_0(tmp_path, image_type):
     values = fading_list()
     default = draw(tmp_path, "default", image_type, values)
@@ -186,7 +189,7 @@ def test_when_notes_are_displaced_the_pictures_change_with_extra_and_not_with_ex
     assert held != off  # the held notes make a different picture
 
 
-@pytest.mark.parametrize("image_type", SIX)
+@pytest.mark.parametrize("image_type", SEVEN)
 def test_a_steady_chord_gives_the_same_pictures_at_every_extra(tmp_path, image_type):
     values = steady()
     off = draw(tmp_path, "off", image_type, values, extra_notes=0)
@@ -209,6 +212,8 @@ def test_the_other_pictures_ignore_extra_notes(tmp_path, image_type):
         ("chromatic-decay", {}, 6, "The extra notes must be a whole number from 1 to 5."),
         ("polar-chords", {"polar_notes": 6}, 7, "The extra notes must be a whole number from 1 to 6."),
         ("polychord", {"polychord_settings": PolychordSettings(6, 2, 9, 10.0)}, 7, "The extra notes must be a whole number from 1 to 6."),
+        ("spirograph", {"spirograph_settings": SpirographSettings(6, 8)}, 7, "The extra notes must be a whole number from 1 to 6."),
+        ("spirograph", {"spirograph_settings": SpirographSettings(12, 8)}, 9, "The extra notes must be a whole number from 1 to 8."),
         ("contour", {}, 9, "The extra notes must be a whole number from 1 to 8."),
         ("decay", {}, True, "The extra notes must be a whole number from 1 to 5."),
         ("decay", {}, 2.5, "The extra notes must be a whole number from 1 to 5."),
@@ -223,4 +228,4 @@ def test_write_frames_refuses_a_bad_extra_notes_before_writing_anything(tmp_path
 
 
 def test_every_image_type_is_known_to_this_test():
-    assert set(SIX) <= set(IMAGE_TYPES) and len(IMAGE_TYPES) == 9
+    assert set(SEVEN) <= set(IMAGE_TYPES) and len(IMAGE_TYPES) == 10

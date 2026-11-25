@@ -20,6 +20,12 @@ import {
   POLYCHORD_COPIES_RANGE,
   POLYCHORD_NOTES_RANGE,
   POLYCHORD_ROTATION_RANGE,
+  DEFAULT_SPIROGRAPH_FADE,
+  DEFAULT_SPIROGRAPH_HISTORY,
+  DEFAULT_SPIROGRAPH_NOTES,
+  SPIROGRAPH_FADE_RANGE,
+  SPIROGRAPH_HISTORY_RANGE,
+  SPIROGRAPH_NOTES_RANGE,
   DEFAULT_NOTE_LAYOUT,
   CHROMATIC_RATE_RANGE,
   DECAY_RATE_RANGE,
@@ -47,6 +53,9 @@ import {
   heldNotesCount,
   usesHeldNotes,
   validateExtraNotes,
+  DEFAULT_EXPORT_OBJ,
+  formatExportObj,
+  usesObjExport,
   formatDecayAmount,
   formatChromaticRate,
   formatDecayRate,
@@ -54,6 +63,9 @@ import {
   formatPolychordCopies,
   formatPolychordNotes,
   formatPolychordRotation,
+  formatSpirographFade,
+  formatSpirographHistory,
+  formatSpirographNotes,
   formatWaveCount,
   formatPeakDistance,
   formatGaussian,
@@ -70,6 +82,9 @@ import {
   validatePolychordMinCopies,
   validatePolychordNotes,
   validatePolychordRotation,
+  validateSpirographFade,
+  validateSpirographHistory,
+  validateSpirographNotes,
   validateWaveCount,
   validateNoteLayout,
   isChromaticType,
@@ -96,11 +111,15 @@ import {
   chromaticRateHelp,
   decayRateHelp,
   extraNotesHelp,
+  exportObjHelp,
   polarNotesHelp,
   polychordMaxCopiesHelp,
   polychordMinCopiesHelp,
   polychordNotesHelp,
   polychordRotationHelp,
+  spirographFadeHelp,
+  spirographHistoryHelp,
+  spirographNotesHelp,
   waveCountHelp,
   noteLayoutHelp,
   peakDistanceHelp,
@@ -137,7 +156,11 @@ const polychordNotes = ref<number>(DEFAULT_POLYCHORD_NOTES);
 const polychordMinCopies = ref<number>(DEFAULT_POLYCHORD_MIN_COPIES);
 const polychordMaxCopies = ref<number>(DEFAULT_POLYCHORD_MAX_COPIES);
 const polychordRotation = ref<number>(DEFAULT_POLYCHORD_ROTATION);
-const extraNotes = ref<number>(DEFAULT_EXTRA_NOTES); // the Extra notes k of the six pictures that take the n loudest notes (feature 044)
+const spirographNotes = ref<number>(DEFAULT_SPIROGRAPH_NOTES);
+const spirographHistory = ref<number>(DEFAULT_SPIROGRAPH_HISTORY);
+const spirographFade = ref<number>(DEFAULT_SPIROGRAPH_FADE);
+const extraNotes = ref<number>(DEFAULT_EXTRA_NOTES); // the Extra notes k of the seven pictures that take the n loudest notes (feature 044)
+const exportObj = ref<boolean>(DEFAULT_EXPORT_OBJ); // the export of 3D files of Contour and Chromatic Wireframe (feature 045)
 const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
 const peakDistance = ref<number>(DEFAULT_PEAK_DISTANCE);
 const fileError = computed(() => validateFile(props.file));
@@ -160,8 +183,11 @@ const polychordNotesError = computed(() => validatePolychordNotes(polychordNotes
 const polychordMinCopiesError = computed(() => validatePolychordMinCopies(polychordMinCopies.value));
 const polychordMaxCopiesError = computed(() => validatePolychordMaxCopies(polychordMaxCopies.value, polychordMinCopies.value));
 const polychordRotationError = computed(() => validatePolychordRotation(polychordRotation.value));
+const spirographNotesError = computed(() => validateSpirographNotes(spirographNotes.value));
+const spirographHistoryError = computed(() => validateSpirographHistory(spirographHistory.value));
+const spirographFadeError = computed(() => validateSpirographFade(spirographFade.value));
 // n, the number of notes of the chosen picture, limits k; the error only counts for the pictures that use the setting
-const heldCount = computed(() => heldNotesCount(imageType.value, polarNotes.value, polychordNotes.value));
+const heldCount = computed(() => heldNotesCount(imageType.value, polarNotes.value, polychordNotes.value, spirographNotes.value));
 const extraNotesError = computed(() => (usesHeldNotes(imageType.value) ? validateExtraNotes(extraNotes.value, heldCount.value) : null));
 const peakDistanceError = computed(() => validatePeakDistance(peakDistance.value));
 const canSubmit = computed(
@@ -186,17 +212,21 @@ const canSubmit = computed(
     !polychordMinCopiesError.value &&
     !polychordMaxCopiesError.value &&
     !polychordRotationError.value &&
+    !spirographNotesError.value &&
+    !spirographHistoryError.value &&
+    !spirographFadeError.value &&
     !extraNotesError.value &&
     !peakDistanceError.value,
 );
 
 // The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
 // shown. Every value stays in its ref, so it is kept when a group is folded or the type is changed, and is still sent.
-const TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"];
+const TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"];
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
 const showHeldNotes = computed(() => shownGroups.value.includes("held-notes"));
+const showObjExport = computed(() => shownGroups.value.includes("obj-export"));
 // the Local peaks group has one of two ids: local-peaks (Contour: with the checkbox) or concentric-peaks (Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord: without; the id is from the first picture that had it)
 const showNoteLayout = computed(() => noteLayoutApplies(imageType.value));
 const peaksGroup = computed(() => shownGroups.value.find((id) => id === "local-peaks" || id === "concentric-peaks") ?? "");
@@ -226,6 +256,9 @@ const typeGroupProblem = computed(
     (inTypeGroup("polychord-min-copies") && !!polychordMinCopiesError.value) ||
     (inTypeGroup("polychord-max-copies") && !!polychordMaxCopiesError.value) ||
     (inTypeGroup("polychord-rotation") && !!polychordRotationError.value) ||
+    (inTypeGroup("spirograph-notes") && !!spirographNotesError.value) ||
+    (inTypeGroup("spirograph-history") && !!spirographHistoryError.value) ||
+    (inTypeGroup("spirograph-fade") && !!spirographFadeError.value) ||
     (inTypeGroup("wave-count") && !!waveCountError.value),
 );
 const noteLayoutProblem = computed(() => !!noteLayoutError.value);
@@ -257,7 +290,11 @@ function onSubmit() {
     polychordMinCopies: polychordMinCopies.value,
     polychordMaxCopies: polychordMaxCopies.value,
     polychordRotation: polychordRotation.value,
+    spirographNotes: spirographNotes.value,
+    spirographHistory: spirographHistory.value,
+    spirographFade: spirographFade.value,
     extraNotes: extraNotes.value,
+    exportObj: usesObjExport(imageType.value) && exportObj.value, // a stale check is never sent as true for a picture without the export
     beatColoring: beatColoring.value,
     peakDistance: peakDistance.value,
   });
@@ -467,6 +504,60 @@ function onSubmit() {
         <small v-if="polychordRotationError" class="error">{{ polychordRotationError }}</small>
       </div>
 
+      <div v-if="inTypeGroup('spirograph-notes')" class="field">
+        <div class="field-head">
+          <label for="spirograph-notes">Number of notes</label>
+          <InfoPopover label="number of notes" :text="spirographNotesHelp" />
+          <output class="slider-value" for="spirograph-notes">{{ formatSpirographNotes(spirographNotes) }}</output>
+        </div>
+        <input
+          id="spirograph-notes"
+          v-model.number="spirographNotes"
+          type="range"
+          :min="SPIROGRAPH_NOTES_RANGE.min"
+          :max="SPIROGRAPH_NOTES_RANGE.max"
+          :step="SPIROGRAPH_NOTES_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="spirographNotesError" class="error">{{ spirographNotesError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('spirograph-history')" class="field">
+        <div class="field-head">
+          <label for="spirograph-history">History length</label>
+          <InfoPopover label="history length" :text="spirographHistoryHelp" />
+          <output class="slider-value" for="spirograph-history">{{ formatSpirographHistory(spirographHistory) }}</output>
+        </div>
+        <input
+          id="spirograph-history"
+          v-model.number="spirographHistory"
+          type="range"
+          :min="SPIROGRAPH_HISTORY_RANGE.min"
+          :max="SPIROGRAPH_HISTORY_RANGE.max"
+          :step="SPIROGRAPH_HISTORY_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="spirographHistoryError" class="error">{{ spirographHistoryError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('spirograph-fade')" class="field">
+        <div class="field-head">
+          <label for="spirograph-fade">History fade</label>
+          <InfoPopover label="history fade" :text="spirographFadeHelp" />
+          <output class="slider-value" for="spirograph-fade">{{ formatSpirographFade(spirographFade) }}</output>
+        </div>
+        <input
+          id="spirograph-fade"
+          v-model.number="spirographFade"
+          type="range"
+          :min="SPIROGRAPH_FADE_RANGE.min"
+          :max="SPIROGRAPH_FADE_RANGE.max"
+          :step="SPIROGRAPH_FADE_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="spirographFadeError" class="error">{{ spirographFadeError }}</small>
+      </div>
+
       <div v-if="inTypeGroup('decay-rate')" class="field">
         <div class="field-head">
           <label for="decay-rate">Decay rate</label>
@@ -566,6 +657,24 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="extraNotesError" class="error">{{ extraNotesError }}</small>
+      </div>
+    </SettingsGroup>
+
+    <SettingsGroup
+      v-if="showObjExport"
+      id="obj-export"
+      :title="groupTitle('obj-export')"
+      :open="isOpen(openState, 'obj-export')"
+      :problem="false"
+      @toggle="onToggle('obj-export', $event)"
+    >
+      <div class="field">
+        <div class="field-head">
+          <label for="export-obj">Export 3D files (.obj)</label>
+          <InfoPopover label="3D export" :text="exportObjHelp" />
+          <output class="slider-value" for="export-obj">{{ formatExportObj(exportObj) }}</output>
+        </div>
+        <input id="export-obj" v-model="exportObj" type="checkbox" :disabled="busy" />
       </div>
     </SettingsGroup>
 

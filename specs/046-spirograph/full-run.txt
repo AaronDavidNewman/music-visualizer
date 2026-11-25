@@ -1,0 +1,798 @@
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  3%]
+........................................................................ [  5%]
+........................................................................ [  6%]
+..............................F......................................... [  7%]
+.................F...................................................... [  9%]
+........................................................................ [ 10%]
+........................................................................ [ 11%]
+........................................................................ [ 13%]
+........................................................................ [ 14%]
+......................................F...............F................. [ 15%]
+........................................................................ [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 22%]
+........................................................................ [ 23%]
+........................................................................ [ 25%]
+........................................................................ [ 26%]
+........................................................................ [ 27%]
+......................................................FFF............... [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 31%]
+........................................................................ [ 33%]
+........................................................................ [ 34%]
+...................FFF.................................................. [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 38%]
+...............................FFF...................................... [ 39%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+........................................................................ [ 56%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+............................................F........................... [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 74%]
+........................................................................ [ 75%]
+..................F..................................................... [ 76%]
+........................................................................ [ 78%]
+.............................FFF........................................ [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+......................................................................FF [ 83%]
+FFFFF.......................................................F........... [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 91%]
+.........F..............F..........FFFFFFFF............................. [ 92%]
+........................................................................ [ 94%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+..........................................
+sonata.wav: 393 peaks, 4 restarts, 49% of the peaks after 10 s within 10% of 116 bpm
+      0 s: tempo  120.0
+     10 s: tempo  101.1
+     20 s: tempo  102.1
+     30 s: tempo  139.0
+     40 s: tempo   95.2
+     50 s: tempo  123.6
+     60 s: tempo   98.0
+     70 s: tempo   95.9
+     80 s: tempo  138.2
+     90 s: tempo   61.7
+    100 s: tempo  112.1
+    110 s: tempo  110.9
+    120 s: tempo  117.5
+    130 s: tempo  107.2
+    140 s: tempo   80.2
+    150 s: tempo   89.4
+    160 s: tempo  142.8
+    170 s: tempo   84.5
+    180 s: tempo  106.3
+.
+almost2.wav: 293 peaks, 0 restarts, 35% of the peaks after 10 s within 10% of 90 bpm
+      0 s: tempo  120.0
+     10 s: tempo   83.2
+     20 s: tempo  124.6
+     30 s: tempo  110.8
+     40 s: tempo   93.9
+     50 s: tempo   77.2
+     60 s: tempo  109.5
+     70 s: tempo  121.1
+     80 s: tempo   99.8
+     90 s: tempo  119.8
+    100 s: tempo  106.9
+    110 s: tempo   73.1
+    120 s: tempo   82.9
+    130 s: tempo   62.9
+    140 s: tempo   97.2
+    150 s: tempo   90.1
+    160 s: tempo  101.0
+............................. [ 98%]
+........................................................................ [ 99%]
+...................................                                      [100%]
+================================== FAILURES ===================================
+____ test_chromatic_decay_is_the_sixth_image_type_and_the_message_lists_it ____
+
+    def test_chromatic_decay_is_the_sixth_image_type_and_the_message_lists_it():
+        assert IMAGE_TYPES[5] == "chromatic-decay" and len(IMAGE_TYPES) == 10
+>       assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.")
+E       AssertionError: assert False
+E        +  where False = <built-in method endswith of str object at 0x000001E32591BBB0>('polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.')
+E        +    where <built-in method endswith of str object at 0x000001E32591BBB0> = 'The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord, spirograph.'.endswith
+
+tests\test_chromatic_decay_api.py:65: AssertionError
+_ test_the_beat_is_measured_for_this_type_with_the_local_peaks_settings_and_not_for_a_type_that_does_not_use_it _
+
+client = <starlette.testclient.TestClient object at 0x000001E326C23FD0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E326C231F0>
+
+    def test_the_beat_is_measured_for_this_type_with_the_local_peaks_settings_and_not_for_a_type_that_does_not_use_it(client, monkeypatch):
+        import app.routers.jobs as jobs
+    
+        calls = []
+        real = jobs.measure_local_peaks
+    
+        def spy(left, right, rate, distance, prominence):
+            calls.append((distance, prominence))
+            return real(left, right, rate, distance, prominence)
+    
+        monkeypatch.setattr(jobs, "measure_local_peaks", spy)
+        assert chromatic(client, tiny(), peak_distance="700").status_code == 200
+>       assert calls == [(700, 20)]  # the prominence is fixed at 20 percent (feature 040)
+E       assert [(700.0, 15.0)] == [(700, 20)]
+E         
+E         At index 0 diff: (700.0, 15.0) != (700, 20)
+E         Use -v to get more diff
+
+tests\test_chromatic_decay_api.py:185: AssertionError
+___ test_it_is_the_last_of_the_eight_image_types_and_the_message_lists_them ___
+
+    def test_it_is_the_last_of_the_eight_image_types_and_the_message_lists_them():
+        assert IMAGE_TYPES[7] == TYPE and len(IMAGE_TYPES) == 10
+>       assert TYPE_MESSAGE.endswith("chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.")
+E       AssertionError: assert False
+E        +  where False = <built-in method endswith of str object at 0x000001E325C32950>('chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.')
+E        +    where <built-in method endswith of str object at 0x000001E325C32950> = 'The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord, spirograph.'.endswith
+
+tests\test_chromatic_wireframe_api.py:67: AssertionError
+___________ test_the_beat_is_measured_with_the_local_peaks_settings ___________
+
+client = <starlette.testclient.TestClient object at 0x000001E32A5B2D40>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E32A5B1180>
+
+    def test_the_beat_is_measured_with_the_local_peaks_settings(client, monkeypatch):
+        import app.routers.jobs as jobs
+    
+        seen = []
+        real = jobs.measure_local_peaks
+    
+        def spy(left, right, rate, distance, prominence):
+            seen.append((distance, prominence))
+            return real(left, right, rate, distance, prominence)
+    
+        monkeypatch.setattr(jobs, "measure_local_peaks", spy)
+        assert wireframe(client, tiny(), peak_distance="700").status_code == 200
+>       assert seen == [(700, 20)]  # the prominence is fixed at 20 percent (feature 040)
+E       assert [(700.0, 15.0)] == [(700, 20)]
+E         
+E         At index 0 diff: (700.0, 15.0) != (700, 20)
+E         Use -v to get more diff
+
+tests\test_chromatic_wireframe_api.py:150: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on[true] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32AA67E20>
+measured = [(22050, 44100, 300.0, 15.0)], box = 'true'
+
+    @pytest.mark.parametrize("box", ["true", "True", "1"])
+    def test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on(client, measured, box):
+        r = contour(client, tiny(), beat_coloring=box, peak_distance="300")
+        assert r.status_code == 200 and r.json()["beat_coloring"] is True
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_contour_beat_wave_api.py:90: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on[True] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32AAD2740>
+measured = [(22050, 44100, 300.0, 15.0)], box = 'True'
+
+    @pytest.mark.parametrize("box", ["true", "True", "1"])
+    def test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on(client, measured, box):
+        r = contour(client, tiny(), beat_coloring=box, peak_distance="300")
+        assert r.status_code == 200 and r.json()["beat_coloring"] is True
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_contour_beat_wave_api.py:90: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on[1] __
+
+client = <starlette.testclient.TestClient object at 0x000001E32A8D1F60>
+measured = [(22050, 44100, 300.0, 15.0)], box = '1'
+
+    @pytest.mark.parametrize("box", ["true", "True", "1"])
+    def test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on(client, measured, box):
+        r = contour(client, tiny(), beat_coloring=box, peak_distance="300")
+        assert r.status_code == 200 and r.json()["beat_coloring"] is True
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_contour_beat_wave_api.py:90: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[None] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32A933670>
+measured = [(22050, 44100, 300.0, 15.0)], box = None
+
+    @pytest.mark.parametrize("box", [None, "false", "true"])
+    def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
+        fields = {"peak_distance": "300"}
+        if box is not None:
+            fields["beat_coloring"] = box
+        assert decay(client, tiny(), **fields).status_code == 200
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_decay_api.py:142: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[false] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32AA8DA80>
+measured = [(22050, 44100, 300.0, 15.0)], box = 'false'
+
+    @pytest.mark.parametrize("box", [None, "false", "true"])
+    def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
+        fields = {"peak_distance": "300"}
+        if box is not None:
+            fields["beat_coloring"] = box
+        assert decay(client, tiny(), **fields).status_code == 200
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_decay_api.py:142: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[true] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32C0F5FF0>
+measured = [(22050, 44100, 300.0, 15.0)], box = 'true'
+
+    @pytest.mark.parametrize("box", [None, "false", "true"])
+    def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
+        fields = {"peak_distance": "300"}
+        if box is not None:
+            fields["beat_coloring"] = box
+        assert decay(client, tiny(), **fields).status_code == 200
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_decay_api.py:142: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[None] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32A972890>
+measured = [(22050, 44100, 300.0, 15.0)], box = None
+
+    @pytest.mark.parametrize("box", [None, "false", "true"])
+    def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
+        fields = {"peak_distance": "300"}
+        if box is not None:
+            fields["beat_coloring"] = box
+        assert exp(client, tiny(), **fields).status_code == 200
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_decay_exp_api.py:147: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[false] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32C0DF130>
+measured = [(22050, 44100, 300.0, 15.0)], box = 'false'
+
+    @pytest.mark.parametrize("box", [None, "false", "true"])
+    def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
+        fields = {"peak_distance": "300"}
+        if box is not None:
+            fields["beat_coloring"] = box
+        assert exp(client, tiny(), **fields).status_code == 200
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_decay_exp_api.py:147: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[true] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32AD9DA80>
+measured = [(22050, 44100, 300.0, 15.0)], box = 'true'
+
+    @pytest.mark.parametrize("box", [None, "false", "true"])
+    def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
+        fields = {"peak_distance": "300"}
+        if box is not None:
+            fields["beat_coloring"] = box
+        assert exp(client, tiny(), **fields).status_code == 200
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_decay_exp_api.py:147: AssertionError
+____________ test_the_defaults_are_350_milliseconds_and_20_percent ____________
+
+    def test_the_defaults_are_350_milliseconds_and_20_percent():
+        # feature 040: the minimum distance defaults to 350 ms and the prominence, which the job no longer lets the user set, is 20 percent
+>       assert (lp.DEFAULT_MIN_DISTANCE, lp.DEFAULT_PROMINENCE) == (350.0, 20.0)
+E       assert (350.0, 15.0) == (350.0, 20.0)
+E         
+E         At index 1 diff: 15.0 != 20.0
+E         Use -v to get more diff
+
+tests\test_local_peaks.py:627: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on[contour] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32A94E0E0>
+measured = [(22050, 44100, 300.0, 15.0)], image_type = 'contour'
+
+    @pytest.mark.parametrize("image_type", ["contour"])
+    def test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on(client, measured, image_type):
+        post(client, tiny(), image_type=image_type, beat_coloring="true", peak_distance="300")
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_peak_tile_colors_api.py:172: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[None] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32A8A1360>
+measured = [(22050, 44100, 300.0, 15.0)], box = None
+
+    @pytest.mark.parametrize("box", [None, "false", "true"])
+    def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
+        fields = {"peak_distance": "300"}
+        if box is not None:
+            fields["beat_coloring"] = box
+        assert polar(client, tiny(), **fields).status_code == 200
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_polar_chords_api.py:156: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[false] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32C5B4A90>
+measured = [(22050, 44100, 300.0, 15.0)], box = 'false'
+
+    @pytest.mark.parametrize("box", [None, "false", "true"])
+    def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
+        fields = {"peak_distance": "300"}
+        if box is not None:
+            fields["beat_coloring"] = box
+        assert polar(client, tiny(), **fields).status_code == 200
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_polar_chords_api.py:156: AssertionError
+_ test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[true] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32A606F20>
+measured = [(22050, 44100, 300.0, 15.0)], box = 'true'
+
+    @pytest.mark.parametrize("box", [None, "false", "true"])
+    def test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says(client, measured, box):
+        fields = {"peak_distance": "300"}
+        if box is not None:
+            fields["beat_coloring"] = box
+        assert polar(client, tiny(), **fields).status_code == 200
+>       assert measured == [(22050, SR, 300.0, 20.0)]
+E       assert [(22050, 44100, 300.0, 15.0)] == [(22050, 44100, 300.0, 20.0)]
+E         
+E         At index 0 diff: (22050, 44100, 300.0, 15.0) != (22050, 44100, 300.0, 20.0)
+E         Use -v to get more diff
+
+tests\test_polar_chords_api.py:156: AssertionError
+_ test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches[600-400] _
+
+width = 600, height = 400
+
+    @pytest.mark.parametrize("width, height", SIZES)
+    def test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches(width, height):
+        rng = np.random.default_rng(width + height)
+        for _ in range(60):
+            notes = int(rng.integers(5, 9))
+            count = int(rng.integers(0, notes + 1))
+            letters = [int(v) for v in rng.integers(0, 12, size=count)]
+            segments, _ = figure(letters, float(rng.uniform(-720, 720)), int(rng.integers(1, 13)), width, height, notes)
+            if not len(segments):
+                continue
+            offsets = (segments.reshape(-1, 2) - np.array([width / 2, height / 2])) / np.array([X_SCALE, Y_SCALE])  # unsqueezed
+>           assert np.hypot(offsets[:, 0], offsets[:, 1]).max() <= reach(width, height) * count / notes + 1e-6
+E           AssertionError: assert np.float64(45.33333333333335) <= (((261.3333333333333 * 1) / 7) + 1e-06)
+E            +  where np.float64(45.33333333333335) = <built-in method max of numpy.ndarray object at 0x000001E32C74ED90>()
+E            +    where <built-in method max of numpy.ndarray object at 0x000001E32C74ED90> = array([ 0.        ,  7.55555556,  7.55555556, 15.11111111, 15.11111111,\n       22.66666667, 22.66666667, 30.22222222, ... 15.11111111, 22.66666667,\n       22.66666667, 30.22222222, 30.22222222, 37.77777778, 37.77777778,\n       45.33333333]).max
+E            +      where array([ 0.        ,  7.55555556,  7.55555556, 15.11111111, 15.11111111,\n       22.66666667, 22.66666667, 30.22222222, ... 15.11111111, 22.66666667,\n       22.66666667, 30.22222222, 30.22222222, 37.77777778, 37.77777778,\n       45.33333333]) = <ufunc 'hypot'>(array([  0.        ,  -2.9578175 ,  -2.9578175 ,  -5.91563501,\n        -5.91563501,  -8.87345251,  -8.87345251, -11.83...  9.08432541,  13.62648812,  13.62648812,  18.16865083,\n        18.16865083,  22.71081354,  22.71081354,  27.25297624]), array([  0.        ,  -6.95253446,  -6.95253446, -13.90506891,\n       -13.90506891, -20.85760337, -20.85760337, -27.81...-12.07562465, -18.11343698, -18.11343698, -24.15124931,\n       -24.15124931, -30.18906163, -30.18906163, -36.22687396]))
+E            +        where <ufunc 'hypot'> = np.hypot
+E            +  and   261.3333333333333 = reach(600, 400)
+
+tests\test_polychord.py:364: AssertionError
+_ test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches[300-200] _
+
+width = 300, height = 200
+
+    @pytest.mark.parametrize("width, height", SIZES)
+    def test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches(width, height):
+        rng = np.random.default_rng(width + height)
+        for _ in range(60):
+            notes = int(rng.integers(5, 9))
+            count = int(rng.integers(0, notes + 1))
+            letters = [int(v) for v in rng.integers(0, 12, size=count)]
+            segments, _ = figure(letters, float(rng.uniform(-720, 720)), int(rng.integers(1, 13)), width, height, notes)
+            if not len(segments):
+                continue
+            offsets = (segments.reshape(-1, 2) - np.array([width / 2, height / 2])) / np.array([X_SCALE, Y_SCALE])  # unsqueezed
+>           assert np.hypot(offsets[:, 0], offsets[:, 1]).max() <= reach(width, height) * count / notes + 1e-6
+E           AssertionError: assert np.float64(66.34646033246666) <= (((123.66666666666666 * 3) / 6) + 1e-06)
+E            +  where np.float64(66.34646033246666) = <built-in method max of numpy.ndarray object at 0x000001E32C66F810>()
+E            +    where <built-in method max of numpy.ndarray object at 0x000001E32C66F810> = array([ 0.        ,  4.1712963 ,  4.1712963 ,  8.34259259,  8.34259259,\n       12.51388889, 12.51388889, 16.68518519, ... 54.17457177,\n       57.00374752, 57.00374752, 59.9897463 , 59.9897463 , 63.11031229,\n       63.11031229, 66.34646033]).max
+E            +      where array([ 0.        ,  4.1712963 ,  4.1712963 ,  8.34259259,  8.34259259,\n       12.51388889, 12.51388889, 16.68518519, ... 54.17457177,\n       57.00374752, 57.00374752, 59.9897463 , 59.9897463 , 63.11031229,\n       63.11031229, 66.34646033]) = <ufunc 'hypot'>(array([  0.        ,   2.75019989,   2.75019989,   5.50039979,\n         5.50039979,   8.25059968,   8.25059968,  11.00...-38.40151483, -38.12853062, -38.12853062, -37.85554642,\n       -37.85554642, -37.58256221, -37.58256221, -37.30957801]), array([  0.        ,  -3.13625786,  -3.13625786,  -6.27251571,\n        -6.27251571,  -9.40877357,  -9.40877357, -12.54... 38.21266656,  42.37502076,  42.37502076,  46.53737495,\n        46.53737495,  50.69972914,  50.69972914,  54.86208333]))
+E            +        where <ufunc 'hypot'> = np.hypot
+E            +  and   123.66666666666666 = reach(300, 200)
+
+tests\test_polychord.py:364: AssertionError
+_ test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches[200-600] _
+
+width = 200, height = 600
+
+    @pytest.mark.parametrize("width, height", SIZES)
+    def test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches(width, height):
+        rng = np.random.default_rng(width + height)
+        for _ in range(60):
+            notes = int(rng.integers(5, 9))
+            count = int(rng.integers(0, notes + 1))
+            letters = [int(v) for v in rng.integers(0, 12, size=count)]
+            segments, _ = figure(letters, float(rng.uniform(-720, 720)), int(rng.integers(1, 13)), width, height, notes)
+            if not len(segments):
+                continue
+            offsets = (segments.reshape(-1, 2) - np.array([width / 2, height / 2])) / np.array([X_SCALE, Y_SCALE])  # unsqueezed
+>           assert np.hypot(offsets[:, 0], offsets[:, 1]).max() <= reach(width, height) * count / notes + 1e-6
+E           AssertionError: assert np.float64(33.375148111970255) <= (((118.99999999999999 * 2) / 8) + 1e-06)
+E            +  where np.float64(33.375148111970255) = <built-in method max of numpy.ndarray object at 0x000001E32C66FE10>()
+E            +    where <built-in method max of numpy.ndarray object at 0x000001E32C66FE10> = array([ 0.        ,  3.01041667,  3.01041667,  6.02083333,  6.02083333,\n        9.03125   ,  9.03125   , 12.04166667, ...227776, 22.72227776, 25.26882926, 25.26882926, 27.90789808,\n       27.90789808, 30.6155685 , 30.6155685 , 33.37514811]).max
+E            +      where array([ 0.        ,  3.01041667,  3.01041667,  6.02083333,  6.02083333,\n        9.03125   ,  9.03125   , 12.04166667, ...227776, 22.72227776, 25.26882926, 25.26882926, 27.90789808,\n       27.90789808, 30.6155685 , 30.6155685 , 33.37514811]) = <ufunc 'hypot'>(array([  0.        ,   2.15664143,   2.15664143,   4.31328285,\n         4.31328285,   6.46992428,   6.46992428,   8.62...-10.15869868, -12.78546714, -12.78546714, -15.4122356 ,\n       -15.4122356 , -18.03900405, -18.03900405, -20.66577251]), array([  0.        ,  -2.1003586 ,  -2.1003586 ,  -4.20071721,\n        -4.20071721,  -6.30107581,  -6.30107581,  -8.40... 20.32492922,  21.79553997,  21.79553997,  23.26615071,\n        23.26615071,  24.73676146,  24.73676146,  26.2073722 ]))
+E            +        where <ufunc 'hypot'> = np.hypot
+E            +  and   118.99999999999999 = reach(200, 600)
+
+tests\test_polychord.py:364: AssertionError
+_ test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches[1800-1200] _
+
+width = 1800, height = 1200
+
+    @pytest.mark.parametrize("width, height", SIZES)
+    def test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches(width, height):
+        rng = np.random.default_rng(width + height)
+        for _ in range(60):
+            notes = int(rng.integers(5, 9))
+            count = int(rng.integers(0, notes + 1))
+            letters = [int(v) for v in rng.integers(0, 12, size=count)]
+            segments, _ = figure(letters, float(rng.uniform(-720, 720)), int(rng.integers(1, 13)), width, height, notes)
+            if not len(segments):
+                continue
+            offsets = (segments.reshape(-1, 2) - np.array([width / 2, height / 2])) / np.array([X_SCALE, Y_SCALE])  # unsqueezed
+>           assert np.hypot(offsets[:, 0], offsets[:, 1]).max() <= reach(width, height) * count / notes + 1e-6
+E           AssertionError: assert np.float64(314.96907608243976) <= (((812.0 * 3) / 8) + 1e-06)
+E            +  where np.float64(314.96907608243976) = <built-in method max of numpy.ndarray object at 0x000001E32C66CB70>()
+E            +    where <built-in method max of numpy.ndarray object at 0x000001E32C66CB70> = array([  0.        ,  20.54166667,  20.54166667,  41.08333333,\n        41.08333333,  61.625     ,  61.625     ,  82.16...264.95469878, 276.01855702, 276.01855702, 288.12395834,\n       288.12395834, 301.14532548, 301.14532548, 314.96907608]).max
+E            +      where array([  0.        ,  20.54166667,  20.54166667,  41.08333333,\n        41.08333333,  61.625     ,  61.625     ,  82.16...264.95469878, 276.01855702, 276.01855702, 288.12395834,\n       288.12395834, 301.14532548, 301.14532548, 314.96907608]) = <ufunc 'hypot'>(array([   0.        ,  -20.24767712,  -20.24767712,  -40.49535424,\n        -40.49535424,  -60.74303137,  -60.74303137,...373  ,  273.06385847,  273.06385847,  287.01934394,\n        287.01934394,  300.97482941,  300.97482941,  314.93031488]), array([   0.        ,   -3.46289483,   -3.46289483,   -6.92578966,\n         -6.92578966,  -10.3886845 ,  -10.3886845 ,...99591,  -40.27869186,  -40.27869186,  -25.20538782,\n        -25.20538782,  -10.13208378,  -10.13208378,    4.94122026]))
+E            +        where <ufunc 'hypot'> = np.hypot
+E            +  and   812.0 = reach(1800, 1200)
+
+tests\test_polychord.py:364: AssertionError
+_ test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches[100-100] _
+
+width = 100, height = 100
+
+    @pytest.mark.parametrize("width, height", SIZES)
+    def test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches(width, height):
+        rng = np.random.default_rng(width + height)
+        for _ in range(60):
+            notes = int(rng.integers(5, 9))
+            count = int(rng.integers(0, notes + 1))
+            letters = [int(v) for v in rng.integers(0, 12, size=count)]
+            segments, _ = figure(letters, float(rng.uniform(-720, 720)), int(rng.integers(1, 13)), width, height, notes)
+            if not len(segments):
+                continue
+            offsets = (segments.reshape(-1, 2) - np.array([width / 2, height / 2])) / np.array([X_SCALE, Y_SCALE])  # unsqueezed
+>           assert np.hypot(offsets[:, 0], offsets[:, 1]).max() <= reach(width, height) * count / notes + 1e-6
+E           AssertionError: assert np.float64(35.30132417689736) <= (((54.83333333333333 * 3) / 5) + 1e-06)
+E            +  where np.float64(35.30132417689736) = <built-in method max of numpy.ndarray object at 0x000001E32C66F8D0>()
+E            +    where <built-in method max of numpy.ndarray object at 0x000001E32C66F8D0> = array([ 0.        ,  2.21944444,  2.21944444,  4.43888889,  4.43888889,\n        6.65833333,  6.65833333,  8.87777778, ... 28.82496083, 30.33029585,\n       30.33029585, 31.91907256, 31.91907256, 33.57944918, 33.57944918,\n       35.30132418]).max
+E            +      where array([ 0.        ,  2.21944444,  2.21944444,  4.43888889,  4.43888889,\n        6.65833333,  6.65833333,  8.87777778, ... 28.82496083, 30.33029585,\n       30.33029585, 31.91907256, 31.91907256, 33.57944918, 33.57944918,\n       35.30132418]) = <ufunc 'hypot'>(array([  0.        ,  -2.15423834,  -2.15423834,  -4.30847668,\n        -4.30847668,  -6.46271502,  -6.46271502,  -8.61...-27.44256693, -29.34346155, -29.34346155, -31.24435616,\n       -31.24435616, -33.14525077, -33.14525077, -35.04614539]), array([ 0.        ,  0.5340326 ,  0.5340326 ,  1.06806521,  1.06806521,\n        1.60209781,  1.60209781,  2.13613042, ...  8.81951739,  7.67385892,\n        7.67385892,  6.52820046,  6.52820046,  5.382542  ,  5.382542  ,\n        4.23688354]))
+E            +        where <ufunc 'hypot'> = np.hypot
+E            +  and   54.83333333333333 = reach(100, 100)
+
+tests\test_polychord.py:364: AssertionError
+_ test_the_longest_figure_going_straight_on_reaches_the_room_forty_percent_over_squeezed_and_stays_inside _
+
+    def test_the_longest_figure_going_straight_on_reaches_the_room_forty_percent_over_squeezed_and_stays_inside():
+        notes = 8
+        segments, _ = figure([C] * notes, 90.0, 1, 600, 400, notes)  # straight to the right
+>       assert segments[-1, 1, 0] - 300.0 == pytest.approx(reach(600, 400) * 2 / 3)
+E       assert np.float64(211.5555555555556) == 174.2222222222222 ± 1.7e-04
+E         
+E         comparison failed
+E         Obtained: 211.5555555555556
+E         Expected: 174.2222222222222 ± 1.7e-04
+
+tests\test_polychord.py:370: AssertionError
+__ test_a_link_is_forty_percent_longer_than_the_room_over_the_notes_allowed ___
+
+    def test_a_link_is_forty_percent_longer_than_the_room_over_the_notes_allowed():
+>       assert pc.LENGTH_FACTOR == 1.4
+E       assert 1.7 == 1.4
+E        +  where 1.7 = pc.LENGTH_FACTOR
+
+tests\test_polychord.py:378: AssertionError
+___ test_it_is_the_last_of_the_nine_image_types_and_the_message_lists_them ____
+
+    def test_it_is_the_last_of_the_nine_image_types_and_the_message_lists_them():
+>       assert IMAGE_TYPES[-1] == TYPE and len(IMAGE_TYPES) == 10
+E       AssertionError: assert ('spirograph' == 'polychord'
+E         
+E         - polychord
+E         + spirograph)
+
+tests\test_polychord_api.py:61: AssertionError
+_ test_rhythm_circles_is_the_seventh_image_type_and_the_message_lists_all_eight _
+
+    def test_rhythm_circles_is_the_seventh_image_type_and_the_message_lists_all_eight():
+        assert IMAGE_TYPES[6] == "rhythm-circles" and len(IMAGE_TYPES) == 10
+>       assert TYPE_MESSAGE.endswith("polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.")
+E       AssertionError: assert False
+E        +  where False = <built-in method endswith of str object at 0x000001E326842950>('polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.')
+E        +    where <built-in method endswith of str object at 0x000001E326842950> = 'The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord, spirograph.'.endswith
+
+tests\test_rhythm_circles_api.py:100: AssertionError
+_ test_the_local_peaks_settings_are_the_ones_the_peaks_are_measured_with_and_the_beat_is_not_measured_as_well _
+
+client = <starlette.testclient.TestClient object at 0x000001E32C4AEEC0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E32C4AF0D0>
+
+    def test_the_local_peaks_settings_are_the_ones_the_peaks_are_measured_with_and_the_beat_is_not_measured_as_well(client, monkeypatch):
+        from app.services.local_peaks import DEFAULT_MIN_DISTANCE, DEFAULT_PROMINENCE
+    
+        spy = Spy(monkeypatch)
+        assert rhythm(client, tiny(), peak_distance="700").status_code == 200
+        assert spy.calls == [(700, DEFAULT_PROMINENCE)]  # one measurement only: the beat of the other types is not measured
+        assert rhythm(client, tiny()).status_code == 200
+        assert spy.calls == [(700, DEFAULT_PROMINENCE), (DEFAULT_MIN_DISTANCE, DEFAULT_PROMINENCE)]
+>       assert (DEFAULT_MIN_DISTANCE, DEFAULT_PROMINENCE) == (350, 20)  # feature 040: the minimum distance defaults to 350 ms and the prominence is fixed at 20 percent
+E       assert (350.0, 15.0) == (350, 20)
+E         
+E         At index 1 diff: 15.0 != 20
+E         Use -v to get more diff
+
+tests\test_rhythm_circles_api.py:182: AssertionError
+_ test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[0] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32C7D99F0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E32C7D9300>
+text = '0'
+
+    @pytest.mark.parametrize("text", ["0", "20", "100", "101", "-1", "nan", "", "abc"])
+    def test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent(client, monkeypatch, text):
+        spy = Spy(monkeypatch)
+        r = rhythm(client, tiny(), peak_prominence=text)
+        assert r.status_code == 200, r.text
+        assert "peak_prominence" not in r.json()
+>       assert spy.calls == [(350, 20)]
+E       assert [(350.0, 15.0)] == [(350, 20)]
+E         
+E         At index 0 diff: (350.0, 15.0) != (350, 20)
+E         Use -v to get more diff
+
+tests\test_rhythm_circles_api.py:218: AssertionError
+_ test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[20] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32A9B0250>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E32A9B26B0>
+text = '20'
+
+    @pytest.mark.parametrize("text", ["0", "20", "100", "101", "-1", "nan", "", "abc"])
+    def test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent(client, monkeypatch, text):
+        spy = Spy(monkeypatch)
+        r = rhythm(client, tiny(), peak_prominence=text)
+        assert r.status_code == 200, r.text
+        assert "peak_prominence" not in r.json()
+>       assert spy.calls == [(350, 20)]
+E       assert [(350.0, 15.0)] == [(350, 20)]
+E         
+E         At index 0 diff: (350.0, 15.0) != (350, 20)
+E         Use -v to get more diff
+
+tests\test_rhythm_circles_api.py:218: AssertionError
+_ test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[100] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32C59F7C0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E32C59D1E0>
+text = '100'
+
+    @pytest.mark.parametrize("text", ["0", "20", "100", "101", "-1", "nan", "", "abc"])
+    def test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent(client, monkeypatch, text):
+        spy = Spy(monkeypatch)
+        r = rhythm(client, tiny(), peak_prominence=text)
+        assert r.status_code == 200, r.text
+        assert "peak_prominence" not in r.json()
+>       assert spy.calls == [(350, 20)]
+E       assert [(350.0, 15.0)] == [(350, 20)]
+E         
+E         At index 0 diff: (350.0, 15.0) != (350, 20)
+E         Use -v to get more diff
+
+tests\test_rhythm_circles_api.py:218: AssertionError
+_ test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[101] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32A8862C0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E32A8859F0>
+text = '101'
+
+    @pytest.mark.parametrize("text", ["0", "20", "100", "101", "-1", "nan", "", "abc"])
+    def test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent(client, monkeypatch, text):
+        spy = Spy(monkeypatch)
+        r = rhythm(client, tiny(), peak_prominence=text)
+        assert r.status_code == 200, r.text
+        assert "peak_prominence" not in r.json()
+>       assert spy.calls == [(350, 20)]
+E       assert [(350.0, 15.0)] == [(350, 20)]
+E         
+E         At index 0 diff: (350.0, 15.0) != (350, 20)
+E         Use -v to get more diff
+
+tests\test_rhythm_circles_api.py:218: AssertionError
+_ test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[-1] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32C1B4850>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E32C1B49D0>
+text = '-1'
+
+    @pytest.mark.parametrize("text", ["0", "20", "100", "101", "-1", "nan", "", "abc"])
+    def test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent(client, monkeypatch, text):
+        spy = Spy(monkeypatch)
+        r = rhythm(client, tiny(), peak_prominence=text)
+        assert r.status_code == 200, r.text
+        assert "peak_prominence" not in r.json()
+>       assert spy.calls == [(350, 20)]
+E       assert [(350.0, 15.0)] == [(350, 20)]
+E         
+E         At index 0 diff: (350.0, 15.0) != (350, 20)
+E         Use -v to get more diff
+
+tests\test_rhythm_circles_api.py:218: AssertionError
+_ test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[nan] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32C22EDA0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E32C22CAC0>
+text = 'nan'
+
+    @pytest.mark.parametrize("text", ["0", "20", "100", "101", "-1", "nan", "", "abc"])
+    def test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent(client, monkeypatch, text):
+        spy = Spy(monkeypatch)
+        r = rhythm(client, tiny(), peak_prominence=text)
+        assert r.status_code == 200, r.text
+        assert "peak_prominence" not in r.json()
+>       assert spy.calls == [(350, 20)]
+E       assert [(350.0, 15.0)] == [(350, 20)]
+E         
+E         At index 0 diff: (350.0, 15.0) != (350, 20)
+E         Use -v to get more diff
+
+tests\test_rhythm_circles_api.py:218: AssertionError
+_ test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32C731300>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E32C733970>
+text = ''
+
+    @pytest.mark.parametrize("text", ["0", "20", "100", "101", "-1", "nan", "", "abc"])
+    def test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent(client, monkeypatch, text):
+        spy = Spy(monkeypatch)
+        r = rhythm(client, tiny(), peak_prominence=text)
+        assert r.status_code == 200, r.text
+        assert "peak_prominence" not in r.json()
+>       assert spy.calls == [(350, 20)]
+E       assert [(350.0, 15.0)] == [(350, 20)]
+E         
+E         At index 0 diff: (350.0, 15.0) != (350, 20)
+E         Use -v to get more diff
+
+tests\test_rhythm_circles_api.py:218: AssertionError
+_ test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[abc] _
+
+client = <starlette.testclient.TestClient object at 0x000001E32C63F2B0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E32C63EAD0>
+text = 'abc'
+
+    @pytest.mark.parametrize("text", ["0", "20", "100", "101", "-1", "nan", "", "abc"])
+    def test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent(client, monkeypatch, text):
+        spy = Spy(monkeypatch)
+        r = rhythm(client, tiny(), peak_prominence=text)
+        assert r.status_code == 200, r.text
+        assert "peak_prominence" not in r.json()
+>       assert spy.calls == [(350, 20)]
+E       assert [(350.0, 15.0)] == [(350, 20)]
+E         
+E         At index 0 diff: (350.0, 15.0) != (350, 20)
+E         Use -v to get more diff
+
+tests\test_rhythm_circles_api.py:218: AssertionError
+============================== warnings summary ===============================
+.venv\lib\site-packages\fastapi\testclient.py:1
+  D:\github\music-visualizer\backend\.venv\lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_chromatic_decay_api.py::test_chromatic_decay_is_the_sixth_image_type_and_the_message_lists_it
+FAILED tests/test_chromatic_decay_api.py::test_the_beat_is_measured_for_this_type_with_the_local_peaks_settings_and_not_for_a_type_that_does_not_use_it
+FAILED tests/test_chromatic_wireframe_api.py::test_it_is_the_last_of_the_eight_image_types_and_the_message_lists_them
+FAILED tests/test_chromatic_wireframe_api.py::test_the_beat_is_measured_with_the_local_peaks_settings
+FAILED tests/test_contour_beat_wave_api.py::test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on[true]
+FAILED tests/test_contour_beat_wave_api.py::test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on[True]
+FAILED tests/test_contour_beat_wave_api.py::test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on[1]
+FAILED tests/test_decay_api.py::test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[None]
+FAILED tests/test_decay_api.py::test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[false]
+FAILED tests/test_decay_api.py::test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[true]
+FAILED tests/test_decay_exp_api.py::test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[None]
+FAILED tests/test_decay_exp_api.py::test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[false]
+FAILED tests/test_decay_exp_api.py::test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[true]
+FAILED tests/test_local_peaks.py::test_the_defaults_are_350_milliseconds_and_20_percent
+FAILED tests/test_peak_tile_colors_api.py::test_the_beat_is_measured_once_with_the_two_settings_when_the_box_is_on[contour]
+FAILED tests/test_polar_chords_api.py::test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[None]
+FAILED tests/test_polar_chords_api.py::test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[false]
+FAILED tests/test_polar_chords_api.py::test_the_beat_is_measured_once_with_the_two_settings_whatever_the_checkbox_says[true]
+FAILED tests/test_polychord.py::test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches[600-400]
+FAILED tests/test_polychord.py::test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches[300-200]
+FAILED tests/test_polychord.py::test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches[200-600]
+FAILED tests/test_polychord.py::test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches[1800-1200]
+FAILED tests/test_polychord.py::test_no_piece_is_ever_farther_from_the_center_than_the_straight_figure_reaches[100-100]
+FAILED tests/test_polychord.py::test_the_longest_figure_going_straight_on_reaches_the_room_forty_percent_over_squeezed_and_stays_inside
+FAILED tests/test_polychord.py::test_a_link_is_forty_percent_longer_than_the_room_over_the_notes_allowed
+FAILED tests/test_polychord_api.py::test_it_is_the_last_of_the_nine_image_types_and_the_message_lists_them
+FAILED tests/test_rhythm_circles_api.py::test_rhythm_circles_is_the_seventh_image_type_and_the_message_lists_all_eight
+FAILED tests/test_rhythm_circles_api.py::test_the_local_peaks_settings_are_the_ones_the_peaks_are_measured_with_and_the_beat_is_not_measured_as_well
+FAILED tests/test_rhythm_circles_api.py::test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[0]
+FAILED tests/test_rhythm_circles_api.py::test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[20]
+FAILED tests/test_rhythm_circles_api.py::test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[100]
+FAILED tests/test_rhythm_circles_api.py::test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[101]
+FAILED tests/test_rhythm_circles_api.py::test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[-1]
+FAILED tests/test_rhythm_circles_api.py::test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[nan]
+FAILED tests/test_rhythm_circles_api.py::test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[]
+FAILED tests/test_rhythm_circles_api.py::test_a_prominence_that_is_sent_is_ignored_and_the_measurement_uses_20_percent[abc]
+36 failed, 5399 passed, 1 warning in 700.29s (0:11:40)

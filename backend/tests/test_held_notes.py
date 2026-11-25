@@ -11,7 +11,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from app.services.held_notes import DEFAULT_EXTRA_NOTES, MAX_EXTRA_NOTES, MIN_EXTRA_NOTES, check_extra_notes, hold_loudest
+from app.services.held_notes import (
+    DEFAULT_EXTRA_NOTES,
+    HELD_NOTES_TYPES,
+    MAX_EXTRA_NOTES,
+    MIN_EXTRA_NOTES,
+    check_extra_notes,
+    hold_loudest,
+    notes_of,
+)
 
 _REFERENCE = Path(__file__).resolve().parents[2] / "specs" / "044-sustained-loudest-notes" / "tools" / "reference_selection.py"
 _spec = importlib.util.spec_from_file_location("reference_selection", _REFERENCE)
@@ -294,3 +302,28 @@ def test_thirty_thousand_frames_are_selected_in_a_few_seconds():
     elapsed = time.perf_counter() - start
     assert order.shape == (30000, 8)
     assert elapsed < 5, f"30,000 frames took {elapsed:.1f} s"
+
+
+# --- notes_of and Spirograph (feature 046) ----------------------------------------------------------------------------
+
+
+def test_spirograph_takes_the_smaller_of_its_notes_and_8_as_the_most_k_can_be():
+    assert notes_of("spirograph", 5, 6, 5) == 5
+    assert notes_of("spirograph", 5, 6, 8) == 8
+    assert notes_of("spirograph", 5, 6, 12) == 8
+    assert notes_of("spirograph", 5, 6) == MAX_EXTRA_NOTES  # the notes are not known: the widest k
+
+
+def test_the_other_types_do_not_depend_on_the_spirograph_notes():
+    for spirograph_notes in (5, 12):
+        assert notes_of("decay", 7, 6, spirograph_notes) == 5
+        assert notes_of("chromatic-wireframe", 7, 6, spirograph_notes) == 5
+        assert notes_of("polar-chords", 7, 6, spirograph_notes) == 7
+        assert notes_of("polychord", 7, 6, spirograph_notes) == 6
+        assert notes_of("contour", 7, 6, spirograph_notes) == MAX_EXTRA_NOTES
+    assert notes_of("polychord", 7, 6) == 6  # three arguments, as before
+
+
+def test_the_types_that_take_the_n_loudest_notes_are_seven_and_include_spirograph():
+    assert len(HELD_NOTES_TYPES) == 7
+    assert "spirograph" in HELD_NOTES_TYPES

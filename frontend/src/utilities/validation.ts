@@ -59,7 +59,8 @@ export function formatThresholdSummary(value: number): string {
  * The kinds of picture: Contour (the notes drawn as a filled contour map, the default), Decay (a circle for each of the 84 notes, each a disc that keeps points and fades into its
  * neighbours), Decay Exp (Decay with the points gained and lost along an exponential curve), Polar Chords (the loudest notes clockwise and the chord of the frame
  * counterclockwise as bars of a polar bar graph), Energy graphs, Chromatic Decay, Rhythm Circles, Chromatic Wireframe and Polychord (feature 042: the loudest notes as a rosette
- * of links that bend by the circle of fifths). (Tiles, Blended tiles, Circles, Circles paint and Concentric were removed in feature 040.)
+ * of links that bend by the circle of fifths) and Spirograph (feature 046: the loudest notes of the last frames as spirograph curves, a circle rolling inside a circle).
+ * (Tiles, Blended tiles, Circles, Circles paint and Concentric were removed in feature 040.)
  */
 export const IMAGE_TYPES = [
   { value: "contour", label: "Contour" },
@@ -71,6 +72,7 @@ export const IMAGE_TYPES = [
   { value: "rhythm-circles", label: "Rhythm Circles" },
   { value: "chromatic-wireframe", label: "Chromatic Wireframe" },
   { value: "polychord", label: "Polychord" },
+  { value: "spirograph", label: "Spirograph" },
 ] as const;
 export const DEFAULT_IMAGE_TYPE = "contour";
 
@@ -237,7 +239,12 @@ export function isPolychordType(imageType: string): boolean {
   return imageType === "polychord";
 }
 
-/** Whether Minimum distance is used: always by Decay, Decay Exp, Polar Chords, Chromatic Decay (the beat colors, charges or lengthens them), Rhythm Circles (the peaks turn its rings) and Polychord (the beat sets the copies, the tempo the color), by Contour with the Beat coloring box on, never by the others. */
+/** Whether the picture is Spirograph (feature 046): the loudest notes of the last frames as spirograph curves, a circle rolling inside a circle. The beat sets the turns of the small circle and the radius of the big one. */
+export function isSpirographType(imageType: string): boolean {
+  return imageType === "spirograph";
+}
+
+/** Whether Minimum distance is used: always by Decay, Decay Exp, Polar Chords, Chromatic Decay (the beat colors, charges or lengthens them), Rhythm Circles (the peaks turn its rings), Polychord (the beat sets the copies, the tempo the color) and Spirograph (the place in the peak sets the turns and the big circle), by Contour with the Beat coloring box on, never by the others. */
 export function peakSettingsShown(imageType: string, beatColoring: boolean): boolean {
   return (
     isRingsType(imageType) ||
@@ -245,6 +252,7 @@ export function peakSettingsShown(imageType: string, beatColoring: boolean): boo
     isChromaticType(imageType) ||
     isRhythmType(imageType) ||
     isPolychordType(imageType) ||
+    isSpirographType(imageType) ||
     (beatColoringApplies(imageType) && beatColoring)
   );
 }
@@ -267,20 +275,24 @@ export function formatPolarNotes(value: number): string {
 
 /**
  * Extra notes (feature 044, the user's k): how far down the ranking a note that is still sounding keeps its place among the n loudest notes of a frame: it is held while it is among the
- * loudest n + k. A whole number from 1 to n, the number of notes of the picture (at most 8). Used by the six pictures that take the n loudest notes.
+ * loudest n + k. A whole number from 1 to n, the number of notes of the picture (at most 8). Used by the seven pictures that take the n loudest notes.
  */
 export const EXTRA_NOTES_RANGE = { min: 1, max: 8, step: 1 } as const;
 export const DEFAULT_EXTRA_NOTES = 2;
 
-/** Whether the picture takes the n loudest notes of each frame and so has the Extra notes setting (feature 044): Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord. */
+/** Whether the picture takes the n loudest notes of each frame and so has the Extra notes setting (feature 044): Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord and Spirograph. */
 export function usesHeldNotes(imageType: string): boolean {
-  return ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"].includes(imageType);
+  return ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"].includes(imageType);
 }
 
-/** The number of notes n of a picture: 5, the Notes shown of Polar Chords, the Number of notes of Polychord; 8 (the most k can be) for a picture that does not use the setting. */
-export function heldNotesCount(imageType: string, polarNotes: number, polychordNotes: number): number {
+/**
+ * The number of notes n of a picture, the most k can be: 5, the Notes shown of Polar Chords, the Number of notes of Polychord, the smaller of the Number of notes of Spirograph and 8;
+ * 8 (the most k can be) for a picture that does not use the setting.
+ */
+export function heldNotesCount(imageType: string, polarNotes: number, polychordNotes: number, spirographNotes: number = EXTRA_NOTES_RANGE.max): number {
   if (imageType === "polar-chords") return polarNotes;
   if (imageType === "polychord") return polychordNotes;
+  if (imageType === "spirograph") return Math.min(spirographNotes, EXTRA_NOTES_RANGE.max);
   return usesHeldNotes(imageType) ? 5 : EXTRA_NOTES_RANGE.max;
 }
 
@@ -292,6 +304,20 @@ export function validateExtraNotes(value: string | number, notes: number): strin
 /** The readout beside the slider and the summary item: the number. */
 export function formatExtraNotes(value: number): string {
   return String(value);
+}
+
+/** The export of 3D files (feature 045): off by default, offered for Contour and Chromatic Wireframe only. */
+export const DEFAULT_EXPORT_OBJ = false;
+export const OBJ_EXPORT_TYPES = ["contour", "chromatic-wireframe"] as const;
+
+/** Whether the picture has the 3D export: Contour and Chromatic Wireframe. */
+export function usesObjExport(imageType: string): boolean {
+  return (OBJ_EXPORT_TYPES as readonly string[]).includes(imageType);
+}
+
+/** The readout beside the checkbox and the summary item: yes or no. */
+export function formatExportObj(value: boolean): string {
+  return value ? "yes" : "no";
 }
 
 /** Number of notes of Polychord (feature 042): the links in one figure, a whole number from 5 to 8. */
@@ -350,6 +376,53 @@ export function formatPolychordCopies(value: number): string {
 /** The readout of the rotation: "15 degrees/s", "-30 degrees/s", "Still" at 0. */
 export function formatPolychordRotation(value: number): string {
   return value === 0 ? "Still" : `${Number(value.toFixed(2))} degrees/s`;
+}
+
+/** Number of notes of Spirograph (feature 046): the loudest notes tracked in each frame, one curve each, a whole number from 5 to 12. */
+export const SPIROGRAPH_NOTES_RANGE = { min: 5, max: 12, step: 1 } as const;
+export const DEFAULT_SPIROGRAPH_NOTES = 8;
+
+/** History length of Spirograph: how many frames' notes make up a picture (the frame itself and the ones before it), a whole number from 5 to 12. */
+export const SPIROGRAPH_HISTORY_RANGE = { min: 5, max: 12, step: 1 } as const;
+export const DEFAULT_SPIROGRAPH_HISTORY = 8;
+
+/** History fade of Spirograph: each frame a history entry is older, its values are multiplied by this, a number from 0.4 (fades fast) to 0.85 (fades slowly), so the newest entry is the most prominent. */
+export const SPIROGRAPH_FADE_RANGE = { min: 0.4, max: 0.85, step: 0.05 } as const;
+export const DEFAULT_SPIROGRAPH_FADE = 0.7;
+
+const spirographNotesMessage = `The number of spirograph notes must be a whole number from ${SPIROGRAPH_NOTES_RANGE.min} to ${SPIROGRAPH_NOTES_RANGE.max}.`;
+const spirographFadeMessage = `The history fade must be a number from ${SPIROGRAPH_FADE_RANGE.min} to ${SPIROGRAPH_FADE_RANGE.max}.`;
+const spirographHistoryMessage = `The history length must be a whole number from ${SPIROGRAPH_HISTORY_RANGE.min} to ${SPIROGRAPH_HISTORY_RANGE.max}.`;
+
+/** Returns an error message, or null when Number of notes (Spirograph) is a whole number from 5 to 12. */
+export function validateSpirographNotes(value: string | number): string | null {
+  return validateWhole(value, SPIROGRAPH_NOTES_RANGE.min, SPIROGRAPH_NOTES_RANGE.max, spirographNotesMessage);
+}
+
+/** Returns an error message, or null when History length is a whole number from 5 to 12. */
+export function validateSpirographHistory(value: string | number): string | null {
+  return validateWhole(value, SPIROGRAPH_HISTORY_RANGE.min, SPIROGRAPH_HISTORY_RANGE.max, spirographHistoryMessage);
+}
+
+/** Returns an error message, or null when History fade is a number from 0.4 to 0.85. */
+export function validateSpirographFade(value: string | number): string | null {
+  const n = parseNumber(value);
+  return Number.isFinite(n) && n >= SPIROGRAPH_FADE_RANGE.min && n <= SPIROGRAPH_FADE_RANGE.max ? null : spirographFadeMessage;
+}
+
+/** The readout beside the slider and the summary item: "8 notes". */
+export function formatSpirographNotes(value: number): string {
+  return `${value} notes`;
+}
+
+/** The readout beside the slider and the summary item: "8 frames". */
+export function formatSpirographHistory(value: number): string {
+  return `${value} frames`;
+}
+
+/** The readout beside the slider and the summary item: "0.7 per frame". */
+export function formatSpirographFade(value: number): string {
+  return `${Number(value.toFixed(2))} per frame`;
 }
 
 /**

@@ -31,9 +31,10 @@ Order of operations:
        global state.
     3. For each frame to draw: if nothing differs in it (a silent file, every value equal) write one flat color -
        ``_flat_frame()`` - and go to the next frame.
-    4. Lay the frame out as a grid - ``write_contour_frames()`` - ``FrameGrid`` ``(rows, columns)``, the rows flipped so
+    4. Lay the frame out as a grid - ``smoothed_grid()`` - ``FrameGrid`` ``(rows, columns)``, the rows flipped so
        the first row of notes is at the top.
-    5. Smooth the grid in place, cell by cell - ``directionalSmoothing()`` - a cell is averaged with the cells before it
+    5. Smooth the grid in place, cell by cell - ``directionalSmoothing()``, called by ``smoothed_grid()`` (which the 3D
+       export of ``obj_export`` also uses) - a cell is averaged with the cells before it
        in the first direction (diagonal, then along the row, then down the column) in which the values change faster
        toward it than before it.
     6. (With a beat above 0) multiply the grid by the beat wave - ``beat_wave.wave_modifier()`` - ``FrameGrid`` times
@@ -51,7 +52,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .array_types import BeatPositions, FrameGrid, GridValues
+from .array_types import ArrayLike, BeatPositions, FrameGrid, GridValues
 from .beat_wave import DEFAULT_WAVE_COUNT, check_wave_count, wave_modifier
 from .colormaps import COLORMAP_STEPS, check_beat, check_colormap, lookup_table
 
@@ -111,6 +112,26 @@ def directionalSmoothing(Z: FrameGrid, xix: int, yix: int, rows: int, cols: int)
   if dx1 > dx2:
     Z[xix, yix] = (Zxy + Zdx1) / 2
     return
+
+def smoothed_grid(frame: ArrayLike, rows: int, columns: int) -> FrameGrid:
+    """One frame laid out as a grid and smoothed the way the picture smooths it: a new array, the input is not changed.
+
+    The frame (``rows * columns`` values, row by row) is reshaped to ``(rows, columns)``, the rows are flipped (so that row 0
+    is the last row of notes, drawn at the bottom of the picture) and every cell is smoothed in place by
+    :func:`directionalSmoothing`, in the order of ``np.ndindex``. The picture (``write_contour_frames``) and the 3D export
+    (``obj_export``) both use it, so that they show the same surface.
+
+    Arrays:
+        ``frame``: ``ArrayLike`` ``(rows * columns,)`` - one row of ``GridValues``: the value of each note of one frame.
+
+    Returns:
+        ``FrameGrid`` ``(rows, columns)`` - the smoothed values, row 0 at the bottom.
+    """
+    grid = np.asarray(frame, dtype=np.float64).reshape(rows, columns)[::-1].copy()
+    for ix in [idx for idx in np.ndindex(grid.shape)]:
+        directionalSmoothing(grid, ix[0], ix[1], rows, columns)
+    return grid
+
 
 def write_contour_frames(
     values: GridValues,
@@ -173,10 +194,8 @@ def write_contour_frames(
                 top = float(frame.max())
                 x = np.linspace(0, top, columns)
                 y = np.linspace(0, top, rows)
-                # a copy: the smoothing below works in place and must not change the caller's array
-                Z = frame.reshape(rows, columns)[::-1].copy()
-                for ix in [idx for idx in np.ndindex(Z.shape)]:
-                 directionalSmoothing(Z, ix[0], ix[1], rows, columns)
+                # a copy, smoothed: the caller's array is not changed
+                Z = smoothed_grid(frame, rows, columns)
                 k = 0.0 if beat is None else float(beat[i])
                 # the beat wave: at k = 0 the modifier is all 1, so nothing is multiplied and the frame is the plain one
                 if k > 0:

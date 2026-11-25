@@ -57,9 +57,9 @@ def spying(monkeypatch):
 # --- choosing it ----------------------------------------------------------------------------------------------------
 
 
-def test_it_is_the_last_of_the_nine_image_types_and_the_message_lists_them():
-    assert IMAGE_TYPES[-1] == TYPE and len(IMAGE_TYPES) == 9
-    assert TYPE_MESSAGE.endswith("rhythm-circles, chromatic-wireframe, polychord.")
+def test_it_is_the_ninth_of_the_ten_image_types_and_the_message_lists_them():
+    assert IMAGE_TYPES[-2] == TYPE and len(IMAGE_TYPES) == 10
+    assert TYPE_MESSAGE.endswith("rhythm-circles, chromatic-wireframe, polychord, spirograph.")
 
 
 @pytest.mark.parametrize("name", ["Polychord", "poly-chord", "poly_chord", "polychord ", "chord", "POLYCHORD", ""])

@@ -1,12 +1,14 @@
 """The job endpoints: ``POST /api/jobs`` turns an uploaded WAV file into the frames of an animation,
-``GET /api/jobs/{job_id}/frames/{index}`` serves one frame.
+``GET /api/jobs/{job_id}/frames/{index}`` serves one frame, ``GET /api/jobs/{job_id}/obj`` serves the ZIP of the 3D files
+of a job that was made with the 3D export (feature 045).
 
 These are the steps of ``create_job()``, the shared steps READ to SAVE of the pipeline overview in
 ``services/image_types.py``.
 
 Order of operations:
     1. Read and check every setting of the form - ``create_job()`` with the ``_parse_*`` functions (``_parse_extra_notes()``
-       checks the Extra notes k against the number of notes of the picture) - a setting that is
+       checks the Extra notes k against the number of notes of the picture; ``_parse_spirograph_settings()`` the three settings
+       of Spirograph) - a setting that is
        not sent takes its default and one that is wrong is refused (400) before the file is read.
     2. Save the upload - ``_save_upload()`` - into the audio folder, refused above the size limit.
     3. Read the file - ``note_analysis.read_wav()`` - two ``RawSamples`` ``(samples,)``; a file with no audio is
@@ -16,16 +18,20 @@ Order of operations:
        above ``max_frames`` and ``max_windows``.
     5. Analyze and apply the noise floor - ``note_analysis.analyze_channels()`` then ``noise_floor.floor_analysis()`` -
        ``NoteStrengths`` ``(windows, 88)``.
-    6. Measure, only for the image types that use it - ``local_peaks.measure_local_peaks()`` with ``frame_positions()``
+    6. Measure, only for the image types that use it (Spirograph, feature 046, uses the beat only: the turns and the
+       radius of its curves follow the place in the local energy peak) - ``local_peaks.measure_local_peaks()`` with ``frame_positions()``
        (the beat: ``BeatPositions`` ``(frames,)``), for Polychord also ``polychord.frame_tempos()`` (``FrameTempos``
        ``(frames,)``, from the same measurement) or ``rhythm_circles.rhythm_angles()`` (``CircleAngles``
        ``(frames, 4)``).
     7. Average the windows into frames and draw them - ``frame_rendering.average_frames()`` then
        ``frame_rendering.write_frames()`` (for Energy Graphs ``energy_graphs.frame_energy()`` is made in the same call,
-       after the averaging) - one PNG for each frame in the frames folder of the job.
+       after the averaging) - one PNG for each frame in the frames folder of the job, and with ``export_obj`` (Contour and
+       Chromatic Wireframe only) one OBJ file for each frame in its ``obj`` folder.
     8. Record the frame rate - ``render.json`` in the same folder - for the video that is made later.
     9. On any failure remove everything the job made (``_remove_job()``) and answer with the message; on success answer
-       with the settings used and the address of the frames.
+       with the settings used and the address of the frames (and of the 3D files, when they were made).
+    10. (Later, ``get_obj()``) pack the OBJ files of a job into one ZIP - ``obj_export.zip_obj_files()`` - in the output
+       folder, on the first request.
 """
 
 import json
@@ -43,6 +49,7 @@ from fastapi.responses import FileResponse
 from ..config import settings
 from ..services.buffer_interval import buffer_step
 from ..services.colormaps import COLORMAPS, DEFAULT_COLORMAP
+from ..services.obj_export import NOT_AVAILABLE_MESSAGE, OBJ_EXPORT_TYPES, OBJ_FOLDER, zip_obj_files
 from ..services.held_notes import DEFAULT_EXTRA_NOTES, MAX_EXTRA_NOTES, check_extra_notes, notes_of
 from ..services.frame_rendering import (
     DEFAULT_THRESHOLD,
@@ -92,6 +99,18 @@ from ..services.local_peaks import (
 )
 from ..services.energy_graphs import frame_energy
 from ..services.rhythm_circles import rhythm_angles
+from ..services.spirograph import (
+    DEFAULT_FADE as DEFAULT_SPIROGRAPH_FADE,
+    DEFAULT_HISTORY as DEFAULT_SPIROGRAPH_HISTORY,
+    DEFAULT_NOTES as DEFAULT_SPIROGRAPH_NOTES,
+    FADE_MESSAGE as SPIROGRAPH_FADE_MESSAGE,
+    HISTORY_MESSAGE as SPIROGRAPH_HISTORY_MESSAGE,
+    NOTES_MESSAGE as SPIROGRAPH_NOTES_MESSAGE,
+    SpirographSettings,
+    check_spirograph_fade,
+    check_spirograph_history,
+    check_spirograph_notes,
+)
 from ..services.image_types import DEFAULT_IMAGE_TYPE, IMAGE_TYPES
 from ..services.noise_floor import floor_analysis
 from ..services.note_analysis import AudioAnalysisError, analyze_channels, read_wav, window_count
@@ -103,6 +122,7 @@ log = logging.getLogger(__name__)
 
 _JOB_ID = re.compile(r"^[0-9a-f]{32}$")
 _FRAME_CACHE = "public, max-age=31536000, immutable"
+OBJ_ARCHIVE = "obj.zip"  # the name of the ZIP of the 3D files, in the output folder of the job and as downloaded
 _COPY_CHUNK = 1024 * 1024
 
 
@@ -173,6 +193,21 @@ def _parse_beat_coloring(text: str | None, sent: bool) -> bool:
     if word in ("false", "0"):
         return False
     raise HTTPException(status_code=400, detail="The beat coloring must be true or false.")
+
+
+def _parse_export_obj(text: str | None, sent: bool, image_type: str) -> bool:
+    """Whether the 3D export is on (feature 045). Not sent means off; anything sent must be true, false, 1 or 0 (any case); on is
+    refused for every picture but Contour and Chromatic Wireframe."""
+    if text is None and not sent:
+        return False
+    word = (text or "").strip().lower()
+    if word in ("true", "1"):
+        if image_type not in OBJ_EXPORT_TYPES:
+            raise HTTPException(status_code=400, detail=NOT_AVAILABLE_MESSAGE)
+        return True
+    if word in ("false", "0"):
+        return False
+    raise HTTPException(status_code=400, detail="The 3D export must be true or false.")
 
 
 def _parse_peak_setting(text: str | None, sent: bool, default: float, check: Callable[[object], float]) -> float:
@@ -259,16 +294,17 @@ def _parse_polar_notes(text: str | None, sent: bool) -> int:
         raise HTTPException(status_code=400, detail=POLAR_NOTES_MESSAGE) from None
 
 
-def _parse_extra_notes(text: str | None, sent: bool, image_type: str, polar_notes: int, polychord_notes: int) -> int:
+def _parse_extra_notes(text: str | None, sent: bool, image_type: str, polar_notes: int, polychord_notes: int, spirograph_notes: int) -> int:
     """The requested Extra notes (k, feature 044). Not sent means the default (2); anything sent must be a whole number 1..8, and for a picture that takes the n loudest notes
-    also at most its n (5, the Notes shown of Polar Chords or the Number of notes of Polychord); the other pictures accept 1..8 and ignore it."""
+    also at most its n (5, the Notes shown of Polar Chords, the Number of notes of Polychord or the smaller of the Number of notes of Spirograph and 8); the other pictures accept
+    1..8 and ignore it."""
     if text is None and not sent:
         return DEFAULT_EXTRA_NOTES
     try:
         value = check_extra_notes(float(text or ""), MAX_EXTRA_NOTES)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"The extra notes must be a whole number from 1 to {MAX_EXTRA_NOTES}.") from None
-    limit = notes_of(image_type, polar_notes, polychord_notes)
+    limit = notes_of(image_type, polar_notes, polychord_notes, spirograph_notes)
     if value > limit:
         raise HTTPException(status_code=400, detail=f"The extra notes must be a whole number from 1 to {limit}.")
     return value
@@ -298,6 +334,24 @@ def _parse_polychord_settings(notes: str | None, min_copies: str | None, max_cop
         return check_polychord_settings(PolychordSettings(notes_value, min_value, max_value, rotation_value))
     except ValueError as error:  # the maximum under the minimum
         raise HTTPException(status_code=400, detail=str(error)) from None
+
+
+def _parse_spirograph_settings(notes: str | None, history: str | None, fade: str | None, sent: set[str]) -> SpirographSettings:
+    """The three settings of Spirograph. A setting that is not sent takes its default (8, 8 and 0.7); anything sent must be allowed (the number of
+    notes and the history length whole numbers 5..12, the history fade a number 0.4..0.85), or the answer is a 400 with the message of that setting."""
+    try:
+        notes_value = check_spirograph_notes(float(notes or "")) if notes is not None or "spirograph_notes" in sent else DEFAULT_SPIROGRAPH_NOTES
+    except ValueError:
+        raise HTTPException(status_code=400, detail=SPIROGRAPH_NOTES_MESSAGE) from None
+    try:
+        history_value = check_spirograph_history(float(history or "")) if history is not None or "spirograph_history" in sent else DEFAULT_SPIROGRAPH_HISTORY
+    except ValueError:
+        raise HTTPException(status_code=400, detail=SPIROGRAPH_HISTORY_MESSAGE) from None
+    try:
+        fade_value = check_spirograph_fade(float(fade or "")) if fade is not None or "spirograph_fade" in sent else DEFAULT_SPIROGRAPH_FADE
+    except ValueError:
+        raise HTTPException(status_code=400, detail=SPIROGRAPH_FADE_MESSAGE) from None
+    return SpirographSettings(notes_value, history_value, fade_value)
 
 
 def _parse_wave_count(text: str | None, sent: bool) -> int:
@@ -422,11 +476,15 @@ def create_job(
     polychord_min_copies: str | None = Form(None),
     polychord_max_copies: str | None = Form(None),
     polychord_rotation: str | None = Form(None),
+    spirograph_notes: str | None = Form(None),
+    spirograph_history: str | None = Form(None),
+    spirograph_fade: str | None = Form(None),
     decay_low: str | None = Form(None),
     decay_medium: str | None = Form(None),
     decay_high: str | None = Form(None),
     decay_saturated: str | None = Form(None),
     extra_notes: str | None = Form(None),
+    export_obj: str | None = Form(None),
     sent: set[str] = Depends(_sent_fields),
 ) -> dict:
     window = _parse_window_size(window_size)
@@ -445,7 +503,11 @@ def create_job(
     wave_count_value = _parse_wave_count(wave_count, "wave_count" in sent)
     polar_notes_value = _parse_polar_notes(polar_notes, "polar_notes" in sent)
     polychord_settings_value = _parse_polychord_settings(polychord_notes, polychord_min_copies, polychord_max_copies, polychord_rotation, sent)
-    extra_notes_value = _parse_extra_notes(extra_notes, "extra_notes" in sent, image_type_value, polar_notes_value, polychord_settings_value.notes)
+    spirograph_settings_value = _parse_spirograph_settings(spirograph_notes, spirograph_history, spirograph_fade, sent)
+    extra_notes_value = _parse_extra_notes(
+        extra_notes, "extra_notes" in sent, image_type_value, polar_notes_value, polychord_settings_value.notes, spirograph_settings_value.notes
+    )
+    export_obj_value = _parse_export_obj(export_obj, "export_obj" in sent, image_type_value)
     decay_amounts_value = tuple(
         _parse_decay_amount(text, name in sent, index)
         for index, (name, text) in enumerate(
@@ -495,7 +557,7 @@ def create_job(
         result = floor_analysis(analyze_channels(left, right, file_rate, window, step=step))
         # the beat: the position of the middle of each frame in the local energy peak of the whole file, from the local
         # peaks measurement. Decay, Decay Exp, Polar Chords, Chromatic Decay and Chromatic Wireframe are always colored
-        # by it; contour (its beat wave) only with the beat coloring box on; the other pictures and the box off never
+        # by it, and Spirograph's curves are turned and sized by it; contour (its beat wave) only with the beat coloring box on; the other pictures and the box off never
         # measure it. Polychord (feature 042) takes both the beat (the number of copies) and the current tempo (the
         # color) from one measurement of the local peaks
         beat = None
@@ -504,7 +566,7 @@ def create_job(
             peaks = measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE)
             beat = peaks.frame_positions(fps, frames)
             polychord = PolychordData(frame_tempos(peaks, fps, frames), fps)
-        elif image_type_value in ("decay", "decay-exp", "polar-chords", *CHROMATIC_TYPES) or (beat_coloring_value and image_type_value == "contour"):
+        elif image_type_value in ("decay", "decay-exp", "polar-chords", "spirograph", *CHROMATIC_TYPES) or (beat_coloring_value and image_type_value == "contour"):
             beat = measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE).frame_positions(fps, frames)
         # Rhythm Circles (features 038 and 040) turns its rings with the local peaks themselves (and the current tempo
         # found from them), not with the beat: one measurement, with the minimum distance of the request. The prominence
@@ -536,7 +598,9 @@ def create_job(
             rhythm=rhythm,
             polychord=polychord,
             polychord_settings=polychord_settings_value,
+            spirograph_settings=spirograph_settings_value,
             extra_notes=extra_notes_value,
+            export_obj=export_obj_value,
         )
         # The video made from these frames later (feature 029) needs the frame rate, and the frames do not hold it.
         (frames_dir / "render.json").write_text(json.dumps({"frame_rate": fps}), encoding="utf-8")
@@ -576,7 +640,12 @@ def create_job(
         "polychord_min_copies": polychord_settings_value.min_copies,
         "polychord_max_copies": polychord_settings_value.max_copies,
         "polychord_rotation": polychord_settings_value.rotation,
+        "spirograph_notes": spirograph_settings_value.notes,
+        "spirograph_history": spirograph_settings_value.history,
+        "spirograph_fade": spirograph_settings_value.fade,
         "extra_notes": extra_notes_value,
+        "export_obj": export_obj_value,
+        "obj_url": f"/api/jobs/{job_id}/obj" if export_obj_value else None,
         "decay_low": decay_amounts_value[0],
         "decay_medium": decay_amounts_value[1],
         "decay_high": decay_amounts_value[2],
@@ -595,3 +664,19 @@ def get_frame(job_id: str, index: str) -> FileResponse:
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Frame not found.")
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": _FRAME_CACHE})
+
+
+@router.get("/{job_id}/obj")
+def get_obj(job_id: str) -> FileResponse:
+    """The ZIP of the 3D files (feature 045) of a job made with the 3D export: one ``frame_<index>.obj`` for each frame. It is
+    packed into the output folder on the first request and reused while no file is newer."""
+    if not _JOB_ID.fullmatch(job_id):
+        raise HTTPException(status_code=404, detail="Render not found.")
+    folder = settings.frames_temp_dir / job_id / OBJ_FOLDER
+    files = list(folder.glob("*.obj")) if folder.is_dir() else []
+    if not files:
+        raise HTTPException(status_code=404, detail="No 3D export was made for this render.")
+    archive = settings.output_dir / job_id / OBJ_ARCHIVE
+    if not archive.is_file() or archive.stat().st_mtime < max(path.stat().st_mtime for path in files):
+        zip_obj_files(folder, archive)
+    return FileResponse(archive, media_type="application/zip", filename=OBJ_ARCHIVE)

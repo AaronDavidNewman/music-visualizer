@@ -86,7 +86,7 @@ def test_the_same_request_twice_gives_identical_frames(client):
         assert frame_bytes(client, a, i) == frame_bytes(client, b, i)
 
 
-@pytest.mark.parametrize("name", ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"])
+@pytest.mark.parametrize("name", ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"])
 def test_served_pictures_have_the_right_format_size_and_headers(client, name):
     job = post_type(client, chord_wav(2), image_type=name).json()
     response = client.get(job["frame_url_template"].replace("{index}", "5"))

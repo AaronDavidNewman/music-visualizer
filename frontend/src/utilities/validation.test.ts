@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_EXPORT_OBJ,
+  OBJ_EXPORT_TYPES,
+  formatExportObj,
+  usesObjExport,
   DEFAULT_EXTRA_NOTES,
   EXTRA_NOTES_RANGE,
   formatExtraNotes,
@@ -128,7 +132,7 @@ describe("threshold", () => {
 describe("image type", () => {
   const values = IMAGE_TYPES.map((t) => t.value as string);
 
-  it("offers Contour, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay, Rhythm Circles, Chromatic Wireframe and Polychord in that order and starts at contour", () => {
+  it("offers Contour, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay, Rhythm Circles, Chromatic Wireframe, Polychord and Spirograph in that order and starts at contour", () => {
     expect(IMAGE_TYPES.map((t) => [t.value, t.label])).toEqual([
       ["contour", "Contour"],
       ["decay", "Decay"],
@@ -139,6 +143,7 @@ describe("image type", () => {
       ["rhythm-circles", "Rhythm Circles"],
       ["chromatic-wireframe", "Chromatic Wireframe"],
       ["polychord", "Polychord"],
+      ["spirograph", "Spirograph"],
     ]);
     expect(DEFAULT_IMAGE_TYPE).toBe("contour");
     expect(imageTypeLabel("contour")).toBe("Contour");
@@ -157,7 +162,7 @@ describe("image type", () => {
   });
 
   it.each(["", "Contour", "contour ", " contour", "contours", "gradient", "contour,decay", "Decay", "decay ", "decays", "decay_exp", "decayexp", "Decay-Exp", "decay-exp ", "decay-", "polar_chords", "polarchords", "Polar-Chords", "polar-chords ", "polar-", "energy_graphs", "energygraphs", "Energy-Graphs", "energy-graphs ", "energy-", "chromatic_decay", "chromaticdecay", "Chromatic-Decay", "chromatic-decay ", "chromatic", "rhythm_circles", "rhythm-circles ", "Rhythm-Circles"])("rejects %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.");
+    expect(validateImageType(v)).toBe("The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord, spirograph.");
   });
 
   it.each(["tiles", "blended", "circles", "circles_paint", "concentric"])("rejects %j, one of the five kinds of picture that were removed", (v) => {
@@ -633,12 +638,12 @@ describe("Rhythm Circles (feature 038)", () => {
 describe("Chromatic Wireframe (feature 039)", () => {
   it("is the eighth image type, with the label Chromatic Wireframe, and is accepted", () => {
     expect(IMAGE_TYPES[7]).toEqual({ value: "chromatic-wireframe", label: "Chromatic Wireframe" });
-    expect(IMAGE_TYPES).toHaveLength(9);
+    expect(IMAGE_TYPES).toHaveLength(10);
     expect(validateImageType("chromatic-wireframe")).toBeNull();
   });
 
   it.each(["chromatic_wireframe", "chromaticwireframe", "Chromatic-Wireframe", "chromatic-wireframe ", " chromatic-wireframe", "wireframe", "chromatic-wire", "CHROMATIC-WIREFRAME"])("refuses the near miss %j", (v) => {
-    expect(validateImageType(v)).toBe("The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.");
+    expect(validateImageType(v)).toBe("The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord, spirograph.");
   });
 
   it("uses the settings of Chromatic Decay: the Local peaks always, and none of the grid, layout, beat, decay, wave or blend settings", () => {
@@ -674,15 +679,15 @@ import {
 } from "./validation";
 
 describe("Polychord (feature 042)", () => {
-  it("is the last of the nine image types, with the label Polychord, and is accepted", () => {
-    expect(IMAGE_TYPES[IMAGE_TYPES.length - 1]).toEqual({ value: "polychord", label: "Polychord" });
-    expect(IMAGE_TYPES).toHaveLength(9);
+  it("is the ninth of the ten image types, with the label Polychord, and is accepted", () => {
+    expect(IMAGE_TYPES[IMAGE_TYPES.length - 2]).toEqual({ value: "polychord", label: "Polychord" });
+    expect(IMAGE_TYPES).toHaveLength(10);
     expect(validateImageType("polychord")).toBeNull();
   });
 
   it.each(["Polychord", "poly-chord", "poly_chord", "polychord ", " polychord", "chord", "POLYCHORD"])("refuses the near miss %j", (v) => {
     expect(validateImageType(v)).toBe(
-      "The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.",
+      "The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord, spirograph.",
     );
   });
 
@@ -748,15 +753,15 @@ describe("Polychord (feature 042)", () => {
 });
 
 describe("extra notes (feature 044)", () => {
-  const SIX = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"];
+  const SEVEN = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"];
 
   it("is a whole number from 1 to 8 in steps of 1, defaulting to 2", () => {
     expect(EXTRA_NOTES_RANGE).toEqual({ min: 1, max: 8, step: 1 });
     expect(DEFAULT_EXTRA_NOTES).toBe(2);
   });
 
-  it("is used by exactly the six pictures that take the n loudest notes", () => {
-    for (const type of IMAGE_TYPES.map((t) => t.value as string)) expect(usesHeldNotes(type), type).toBe(SIX.includes(type));
+  it("is used by exactly the seven pictures that take the n loudest notes", () => {
+    for (const type of IMAGE_TYPES.map((t) => t.value as string)) expect(usesHeldNotes(type), type).toBe(SEVEN.includes(type));
     expect(usesHeldNotes("nonsense")).toBe(false);
   });
 
@@ -765,6 +770,12 @@ describe("extra notes (feature 044)", () => {
     expect(heldNotesCount("polar-chords", 7, 8)).toBe(7);
     expect(heldNotesCount("polychord", 7, 8)).toBe(8);
     for (const type of ["contour", "energy-graphs", "rhythm-circles"]) expect(heldNotesCount(type, 7, 8), type).toBe(8);
+  });
+
+  it("has, for Spirograph, the smaller of its Number of notes and 8 (k stops at 8 even for 12 notes)", () => {
+    for (const [notes, want] of [[5, 5], [6, 6], [8, 8], [9, 8], [12, 8]]) expect(heldNotesCount("spirograph", 7, 6, notes), String(notes)).toBe(want);
+    expect(heldNotesCount("spirograph", 7, 6)).toBe(8); // the notes are not given: the widest k
+    expect(heldNotesCount("polychord", 7, 6, 12)).toBe(6); // the other pictures do not depend on it
   });
 
   it.each([[1, 5], [5, 5], [3, 5], ["2", 8], [8, 8], [" 4 ", 6]])("accepts %j with %j notes", (value, notes) => {
@@ -777,5 +788,103 @@ describe("extra notes (feature 044)", () => {
 
   it("formats the readout as the number", () => {
     expect(formatExtraNotes(2)).toBe("2");
+  });
+});
+
+describe("the export of 3D files (feature 045)", () => {
+  it("is off by default and offered for Contour and Chromatic Wireframe only", () => {
+    expect(DEFAULT_EXPORT_OBJ).toBe(false);
+    expect([...OBJ_EXPORT_TYPES]).toEqual(["contour", "chromatic-wireframe"]);
+    for (const type of IMAGE_TYPES.map((t) => t.value as string)) expect(usesObjExport(type), type).toBe(type === "contour" || type === "chromatic-wireframe");
+    expect(usesObjExport("nonsense")).toBe(false);
+  });
+
+  it("is shown as yes or no", () => {
+    expect(formatExportObj(true)).toBe("yes");
+    expect(formatExportObj(false)).toBe("no");
+  });
+});
+
+import {
+  DEFAULT_SPIROGRAPH_FADE,
+  DEFAULT_SPIROGRAPH_HISTORY,
+  DEFAULT_SPIROGRAPH_NOTES,
+  SPIROGRAPH_FADE_RANGE,
+  SPIROGRAPH_HISTORY_RANGE,
+  SPIROGRAPH_NOTES_RANGE,
+  formatSpirographFade,
+  formatSpirographHistory,
+  formatSpirographNotes,
+  isSpirographType,
+  validateSpirographFade,
+  validateSpirographHistory,
+  validateSpirographNotes,
+} from "./validation";
+
+describe("Spirograph (feature 046)", () => {
+  it("is the last of the ten image types, with the label Spirograph, and is accepted", () => {
+    expect(IMAGE_TYPES[IMAGE_TYPES.length - 1]).toEqual({ value: "spirograph", label: "Spirograph" });
+    expect(IMAGE_TYPES).toHaveLength(10);
+    expect(validateImageType("spirograph")).toBeNull();
+    expect(imageTypeLabel("spirograph")).toBe("Spirograph");
+  });
+
+  it.each(["Spirograph", "spiro", "spirograph ", " spirograph", "spiro-graph", "SPIROGRAPH"])("refuses the near miss %j", (v) => {
+    expect(validateImageType(v)).toBe(
+      "The image type must be one of contour, decay, decay-exp, polar-chords, energy-graphs, chromatic-decay, rhythm-circles, chromatic-wireframe, polychord, spirograph.",
+    );
+  });
+
+  it("is the Spirograph type only for spirograph, and uses the beat (Minimum distance) and none of the other types' settings", () => {
+    expect(isSpirographType("spirograph")).toBe(true);
+    for (const type of IMAGE_TYPES.map((t) => t.value as string).filter((t) => t !== "spirograph")) expect(isSpirographType(type), type).toBe(false);
+    for (const box of [true, false]) expect(peakSettingsShown("spirograph", box), String(box)).toBe(true); // the place in the peak sets its turns and big circle
+    expect(gridSettingsApply("spirograph")).toBe(false);
+    expect(isChromaticType("spirograph")).toBe(false);
+    expect(isRingsType("spirograph")).toBe(false);
+    expect(isPolarType("spirograph")).toBe(false);
+    expect(isEnergyType("spirograph")).toBe(false);
+    expect(isRhythmType("spirograph")).toBe(false);
+    expect(beatColoringApplies("spirograph")).toBe(false);
+    expect(noteLayoutApplies("spirograph")).toBe(false);
+    expect(decayRateApplies("spirograph")).toBe(false);
+    expect(waveCountApplies("spirograph")).toBe(false);
+    expect(usesObjExport("spirograph")).toBe(false);
+  });
+
+  it("has the limits and the defaults of the two settings", () => {
+    expect(SPIROGRAPH_NOTES_RANGE).toEqual({ min: 5, max: 12, step: 1 });
+    expect(SPIROGRAPH_HISTORY_RANGE).toEqual({ min: 5, max: 12, step: 1 });
+    expect([DEFAULT_SPIROGRAPH_NOTES, DEFAULT_SPIROGRAPH_HISTORY]).toEqual([8, 8]);
+  });
+
+  it.each([5, 8, 12, "7", " 6 ", "12.0"])("accepts %j for both settings", (v) => {
+    expect(validateSpirographNotes(v)).toBeNull();
+    expect(validateSpirographHistory(v)).toBeNull();
+  });
+
+  it.each([4, 13, 7.5, 0, -8, "abc", "", " ", NaN, Infinity, "1e2"])("refuses %j with the messages of the server", (v) => {
+    expect(validateSpirographNotes(v)).toBe("The number of spirograph notes must be a whole number from 5 to 12.");
+    expect(validateSpirographHistory(v)).toBe("The history length must be a whole number from 5 to 12.");
+  });
+
+  it("has the limits and the default of the history fade", () => {
+    expect(SPIROGRAPH_FADE_RANGE).toEqual({ min: 0.4, max: 0.85, step: 0.05 });
+    expect(DEFAULT_SPIROGRAPH_FADE).toBe(0.7);
+  });
+
+  it.each([0.4, 0.7, 0.85, "0.5", " 0.65 "])("accepts %j as a history fade", (v) => {
+    expect(validateSpirographFade(v)).toBeNull();
+  });
+
+  it.each([0.39, 0.86, 0, 1, -0.5, "abc", "", " ", NaN, Infinity])("refuses %j as a history fade with the message of the server", (v) => {
+    expect(validateSpirographFade(v)).toBe("The history fade must be a number from 0.4 to 0.85.");
+  });
+
+  it("formats the readouts", () => {
+    expect(formatSpirographFade(0.7)).toBe("0.7 per frame");
+    expect(formatSpirographFade(0.85)).toBe("0.85 per frame");
+    expect(formatSpirographNotes(8)).toBe("8 notes");
+    expect(formatSpirographHistory(12)).toBe("12 frames");
   });
 });

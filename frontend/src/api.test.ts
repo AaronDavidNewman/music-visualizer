@@ -20,7 +20,11 @@ const SETTINGS: JobSettings = {
   polychordMinCopies: 2,
   polychordMaxCopies: 9,
   polychordRotation: -22.5,
+  spirographNotes: 10,
+  spirographHistory: 6,
+  spirographFade: 0.6,
   extraNotes: 3,
+  exportObj: true,
   waveCount: 7,
   decayLow: 1.5,
   decayMedium: 2,
@@ -64,7 +68,11 @@ describe("the request that submitJob sends", () => {
       polychord_min_copies: "2",
       polychord_max_copies: "9",
       polychord_rotation: "-22.5",
+      spirograph_notes: "10",
+      spirograph_history: "6",
+      spirograph_fade: "0.6",
       extra_notes: "3",
+      export_obj: "true",
       wave_count: "7",
       decay_low: "1.5",
       decay_medium: "2",
@@ -281,9 +289,37 @@ describe("the request for Polychord (feature 042)", () => {
 
 describe("the Extra notes setting (feature 044)", () => {
   it("is sent as extra_notes for every picture, as text", async () => {
-    for (const imageType of ["decay", "contour", "polychord", "energy-graphs"]) {
+    for (const imageType of ["decay", "contour", "polychord", "spirograph", "energy-graphs"]) {
       const fields = await posted({ ...SETTINGS, imageType, extraNotes: 5 });
       expect(fields.extra_notes, imageType).toBe("5");
     }
+  });
+});
+
+describe("the Export 3D files setting (feature 045)", () => {
+  it("is sent as export_obj for every picture, as text", async () => {
+    for (const imageType of ["contour", "chromatic-wireframe", "decay", "energy-graphs"]) {
+      for (const exportObj of [true, false]) {
+        const fields = await posted({ ...SETTINGS, imageType, exportObj });
+        expect(fields.export_obj, imageType).toBe(String(exportObj));
+      }
+    }
+  });
+});
+
+describe("the request for Spirograph (feature 046)", () => {
+  it("sends the image type and the three settings as text, with the same fields as any other type", async () => {
+    const spirograph = await posted({ ...SETTINGS, imageType: "spirograph", spirographNotes: 12, spirographHistory: 5, spirographFade: 0.85 });
+    const decay = await posted({ ...SETTINGS, imageType: "decay-exp" });
+    expect(spirograph.image_type).toBe("spirograph");
+    expect([spirograph.spirograph_notes, spirograph.spirograph_history, spirograph.spirograph_fade]).toEqual(["12", "5", "0.85"]);
+    expect(Object.keys(spirograph).sort()).toEqual(Object.keys(decay).sort());
+  });
+
+  it("sends the two settings with every other type too (the server checks and ignores them)", async () => {
+    const fields = await posted({ ...SETTINGS, imageType: "contour" });
+    expect(fields.spirograph_notes).toBe("10");
+    expect(fields.spirograph_history).toBe("6");
+    expect(fields.spirograph_fade).toBe("0.6");
   });
 });

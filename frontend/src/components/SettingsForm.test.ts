@@ -9,11 +9,15 @@ import {
   decayAmountHelp,
   decayExpRateHelp,
   decayRateHelp,
+  peakDistanceHelp,
   polarNotesHelp,
   polychordMaxCopiesHelp,
   polychordMinCopiesHelp,
   polychordNotesHelp,
   polychordRotationHelp,
+  spirographFadeHelp,
+  spirographHistoryHelp,
+  spirographNotesHelp,
   thresholdHelp,
 } from "../utilities/help";
 
@@ -87,9 +91,9 @@ describe("the settings removed by feature 043 (window spacing, smoothing, smooth
 });
 
 describe("the image type controls", () => {
-  it("offer Contour, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay, Rhythm Circles, Chromatic Wireframe and Polychord in a dropdown that starts at Contour, with a label and an info button", async () => {
+  it("offer Contour, Decay, Decay Exp, Polar Chords, Energy graphs, Chromatic Decay, Rhythm Circles, Chromatic Wireframe, Polychord and Spirograph in a dropdown that starts at Contour, with a label and an info button", async () => {
     const html = await render();
-    expect(options(html, "image-type")).toEqual(["Contour", "Decay", "Decay Exp", "Polar Chords", "Energy graphs", "Chromatic Decay", "Rhythm Circles", "Chromatic Wireframe", "Polychord"]);
+    expect(options(html, "image-type")).toEqual(["Contour", "Decay", "Decay Exp", "Polar Chords", "Energy graphs", "Chromatic Decay", "Rhythm Circles", "Chromatic Wireframe", "Polychord", "Spirograph"]);
     const select = html.match(new RegExp(`<select id="image-type"[^>]*>([^]*?)</select>`));
     expect(select![1]).toMatch(/<option value="contour"[^>]*selected/);
     for (const removed of ["tiles", "blended", "circles", "circles_paint", "concentric"]) expect(select![1]).not.toContain(`<option value="${removed}"`);
@@ -284,6 +288,7 @@ const EXPECTED_GROUPS: Record<string, [string, string, string[]][]> = {
     ["colormap", "Colormap", ["colormap"]],
     ["image-type", "Image type", ["image-type"]],
     ["contour", "Contour", ["threshold", "notes", "wave-count"]],
+    ["obj-export", "3D export", ["export-obj"]],
     ["local-peaks", "Local peaks", BEAT_CONTROLS],
     ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
   ],
@@ -323,11 +328,11 @@ describe("the form is a list of titled groups (Story 1)", () => {
     }
   });
 
-  it("ties the open state and the problem flag of each of each of the eight groups (the Local peaks group is one of them for either id) to the form", () => {
-    expect((formSource.match(/<SettingsGroup\b/g) ?? []).length).toBe(8); // top, Colormap, Image type, the type's group, Held notes, Note layout, Local peaks, Image smoothing
-    expect((formSource.match(/:open="isOpen\(/g) ?? []).length).toBe(8);
-    expect((formSource.match(/:problem="/g) ?? []).length).toBe(8);
-    expect((formSource.match(/@toggle="/g) ?? []).length).toBe(8);
+  it("ties the open state and the problem flag of each of each of the nine groups (the Local peaks group is one of them for either id) to the form", () => {
+    expect((formSource.match(/<SettingsGroup\b/g) ?? []).length).toBe(9); // top, Colormap, Image type, the type's group, Held notes, 3D export, Note layout, Local peaks, Image smoothing
+    expect((formSource.match(/:open="isOpen\(/g) ?? []).length).toBe(9);
+    expect((formSource.match(/:problem="/g) ?? []).length).toBe(9);
+    expect((formSource.match(/@toggle="/g) ?? []).length).toBe(9);
   });
 
   it("collapses with the open state that the group reports, so that no value is touched by it", () => {
@@ -364,7 +369,7 @@ describe("the groups of the chosen image type (Story 2)", () => {
 
 
   it("keeps the groups of the types in one list, shown by the group model", () => {
-    expect(formSource).toContain('TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"]');
+    expect(formSource).toContain('TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"]');
     for (const removed of ["circleUnit", "circleRadius", "circleResize", "circleMemory", "circleNotes", "blendWidth"]) expect(formSource, removed).not.toContain(removed);
   });
 
@@ -620,6 +625,7 @@ describe("the page for Contour: the beat wave (feature 028)", () => {
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["contour", "Contour", ["threshold", "notes", "wave-count"]],
+      ["obj-export", "3D export", ["export-obj"]],
       ["local-peaks", "Local peaks", ["beat-coloring", "peak-distance"]],
       ["image-smoothing", "Image smoothing", ["resolution", "interpolate", "gaussian"]],
     ]);
@@ -881,7 +887,7 @@ describe("the page for Chromatic Decay (feature 035)", () => {
     expect(formSource).toContain("validateChromaticRate(chromaticRate.value)");
     expect(formSource).toMatch(/!decayRateError\.value &&\s+!chromaticRateError\.value &&/); // an invalid rate blocks Create frames
     expect(formSource).toContain('(inTypeGroup("chromatic-decay-rate") && !!chromaticRateError.value)');
-    expect(formSource).toContain('"decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"]');
+    expect(formSource).toContain('"decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"]');
   });
 });
 
@@ -953,6 +959,7 @@ describe("the page for Chromatic Wireframe (feature 039)", () => {
       ["image-type", "Image type", ["image-type"]],
       ["chromatic-wireframe", "Chromatic Wireframe", ["threshold", "chromatic-decay-rate"]],
       ["held-notes", "Held notes", ["extra-notes"]],
+      ["obj-export", "3D export", ["export-obj"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
     ]);
   });
@@ -1076,10 +1083,10 @@ describe("the page for Polychord (feature 042)", () => {
 
 
 describe("the Extra notes (k) control (feature 044)", () => {
-  const SIX = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"];
+  const SEVEN = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"];
   const slider = (html: string) => html.match(/<input id="extra-notes"[^>]*>/)?.[0] ?? "";
 
-  it.each(SIX)("is a slider from 1 to the number of notes, starting at 2, with a label and an info button, for %s", async (type) => {
+  it.each(SEVEN)("is a slider from 1 to the number of notes, starting at 2, with a label and an info button, for %s", async (type) => {
     const html = await renderType(type);
     const tag = slider(html);
     expect(tag).toContain('type="range"');
@@ -1096,6 +1103,7 @@ describe("the Extra notes (k) control (feature 044)", () => {
     expect(slider(await renderType("chromatic-wireframe"))).toContain('max="5"');
     expect(slider(await renderType("polar-chords"))).toContain('max="5"'); // Notes shown starts at 5
     expect(slider(await renderType("polychord"))).toContain('max="6"'); // Number of notes starts at 6
+    expect(slider(await renderType("spirograph"))).toContain('max="8"'); // Number of notes starts at 8, and k stops at 8
   });
 
   it.each(["contour", "energy-graphs", "rhythm-circles"])("is not shown for %s", async (type) => {
@@ -1114,5 +1122,124 @@ describe("the Extra notes (k) control (feature 044)", () => {
     expect(formSource.slice(at, formSource.indexOf("</script>", at))).toContain("extraNotes: extraNotes.value");
     expect(formSource).toMatch(/usesHeldNotes\(imageType\.value\) \? validateExtraNotes\(extraNotes\.value, heldCount\.value\) : null/);
     expect(formSource).toMatch(/!extraNotesError\.value/);
+  });
+});
+
+
+describe("the Export 3D files control (feature 045)", () => {
+  const TWO = ["contour", "chromatic-wireframe"];
+  const box = (html: string) => html.match(/<input id="export-obj"[^>]*>/)?.[0] ?? "";
+
+  it.each(TWO)("is an unchecked checkbox with a label, a readout and an info button, in the group 3D export, for %s", async (type) => {
+    const html = await renderType(type);
+    const tag = box(html);
+    expect(tag).toContain('type="checkbox"');
+    expect(tag).not.toContain("checked");
+    expect(html).toContain(">Export 3D files (.obj)</label>");
+    expect(html).toContain('aria-label="About 3D export"');
+    expect(html).toContain('data-group="obj-export"');
+    expect(html).toContain(">no</output>");
+  });
+
+  it.each(["decay", "decay-exp", "polar-chords", "chromatic-decay", "polychord", "energy-graphs", "rhythm-circles"])("is not shown for %s", async (type) => {
+    const html = await renderType(type);
+    expect(html).not.toContain('id="export-obj"');
+    expect(html).not.toContain('data-group="obj-export"');
+  });
+
+  it("is disabled only while a job is running", async () => {
+    expect(await renderType("contour")).not.toMatch(/<input id="export-obj"[^>]*disabled/);
+    expect(box(await renderType("contour", true))).toContain("disabled");
+  });
+
+  it("is sent with the settings, true only for the two pictures", () => {
+    const at = formSource.indexOf("function onSubmit");
+    expect(formSource.slice(at, formSource.indexOf("</script>", at))).toContain("exportObj: usesObjExport(imageType.value) && exportObj.value");
+  });
+});
+
+describe("the page for Spirograph (feature 046)", () => {
+  it("shows Analysis, Colormap, Image type, Spirograph (the three settings), Held notes and Local peaks (Minimum distance), in this order", async () => {
+    const groups = groupsOf(await renderType("spirograph"));
+    expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
+      ["analysis", "Analysis", TOP],
+      ["colormap", "Colormap", ["colormap"]],
+      ["image-type", "Image type", ["image-type"]],
+      ["spirograph", "Spirograph", ["spirograph-notes", "spirograph-history", "spirograph-fade"]],
+      ["held-notes", "Held notes", ["extra-notes"]],
+      ["concentric-peaks", "Local peaks", ["peak-distance"]],
+    ]);
+  });
+
+  it("has the Minimum distance slider of the Local peaks, after the Spirograph settings, with its help", async () => {
+    const html = await renderType("spirograph");
+    expect(html).toMatch(/<label[^>]*for="peak-distance"[^>]*>Minimum distance<\/label>/);
+    expect(html).toContain(peakDistanceHelp);
+    expect(html).toContain("Spirograph");
+    expect(html.indexOf('id="spirograph-fade"')).toBeLessThan(html.indexOf('for="peak-distance"'));
+    expect(html).not.toContain('id="beat-coloring"'); // the checkbox is Contour's
+  });
+
+  it("has the two sliders with their limits, defaults, readouts and help", async () => {
+    const html = await renderType("spirograph");
+    const tag = (id: string) => html.match(new RegExp(`<input id="${id}"[^>]*>`))?.[0] ?? "";
+    for (const id of ["spirograph-notes", "spirograph-history"]) {
+      expect(tag(id), id).toContain('type="range"');
+      expect(tag(id), id).toContain('min="5"');
+      expect(tag(id), id).toContain('max="12"');
+      expect(tag(id), id).toContain('step="1"');
+      expect(tag(id), id).toContain('value="8"');
+    }
+    expect(html).toMatch(/<label[^>]*for="spirograph-notes"[^>]*>Number of notes<\/label>/);
+    expect(html).toMatch(/<label[^>]*for="spirograph-history"[^>]*>History length<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="spirograph-notes"[^>]*>8 notes<\/output>/);
+    expect(html).toMatch(/<output[^>]*for="spirograph-history"[^>]*>8 frames<\/output>/);
+    for (const help of [spirographNotesHelp, spirographHistoryHelp, spirographFadeHelp]) expect(html).toContain(help);
+    expect(html.indexOf('id="spirograph-notes"')).toBeLessThan(html.indexOf('id="spirograph-history"'));
+    // History fade: a slider from 0.4 to 0.85 in steps of 0.05, default 0.7
+    const fade = tag("spirograph-fade");
+    for (const piece of ['type="range"', 'min="0.4"', 'max="0.85"', 'step="0.05"', 'value="0.7"']) expect(fade, piece).toContain(piece);
+    expect(html).toMatch(/<label[^>]*for="spirograph-fade"[^>]*>History fade<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="spirograph-fade"[^>]*>0.7 per frame<\/output>/);
+    expect(html.indexOf('id="spirograph-history"')).toBeLessThan(html.indexOf('id="spirograph-fade"'));
+  });
+
+  it("has none of the controls of the other types and no Beat coloring, Note layout, 3D export or Image smoothing", async () => {
+    const html = await renderType("spirograph");
+    for (const id of ["threshold", "chromatic-decay-rate", "decay-rate", "note-layout", "polar-notes", "beat-coloring", "notes", "resolution", "interpolate", "gaussian", "wave-count", "export-obj", "polychord-notes"]) {
+      expect(html, id).not.toContain(`id="${id}"`);
+    }
+    for (const group of ["image-smoothing", "local-peaks", "note-layout", "obj-export"]) expect(html).not.toContain(`data-group="${group}"`);
+  });
+
+  it("is not shown for the other types", async () => {
+    for (const type of ["contour", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles", "chromatic-wireframe", "polychord"]) {
+      const html = await renderType(type);
+      expect(html, type).not.toContain('id="spirograph-notes"');
+      expect(html, type).not.toContain('data-group="spirograph"');
+    }
+  });
+
+  it("keeps the two values, checks them, blocks Create frames on a wrong one, sends them, and limits k by the notes", () => {
+    for (const piece of [
+      "const spirographNotes = ref<number>(DEFAULT_SPIROGRAPH_NOTES)",
+      "const spirographHistory = ref<number>(DEFAULT_SPIROGRAPH_HISTORY)",
+      "const spirographFade = ref<number>(DEFAULT_SPIROGRAPH_FADE)",
+      "validateSpirographFade(spirographFade.value)",
+      "!spirographFadeError.value",
+      'inTypeGroup("spirograph-fade") && !!spirographFadeError.value',
+      "spirographFade: spirographFade.value",
+      "validateSpirographNotes(spirographNotes.value)",
+      "validateSpirographHistory(spirographHistory.value)",
+      "!spirographNotesError.value",
+      "!spirographHistoryError.value",
+      'inTypeGroup("spirograph-notes") && !!spirographNotesError.value',
+      'inTypeGroup("spirograph-history") && !!spirographHistoryError.value',
+      "spirographNotes: spirographNotes.value",
+      "spirographHistory: spirographHistory.value",
+      "heldNotesCount(imageType.value, polarNotes.value, polychordNotes.value, spirographNotes.value)",
+    ]) {
+      expect(formSource, piece).toContain(piece);
+    }
   });
 });

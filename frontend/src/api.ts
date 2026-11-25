@@ -35,8 +35,16 @@ export interface JobResult {
   polychord_min_copies: number;
   polychord_max_copies: number;
   polychord_rotation: number;
-  /** Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord: the extra notes k, 1 to the number of notes of the picture (feature 044); sent and echoed for every picture. */
+  /** Spirograph: the notes tracked in each frame and the history length (frames) of a picture, 5 to 12 each (feature 046); sent and echoed for every picture. */
+  spirograph_notes: number;
+  spirograph_history: number;
+  spirograph_fade: number;
+  /** Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord and Spirograph: the extra notes k, 1 to the number of notes of the picture (feature 044); sent and echoed for every picture. */
   extra_notes: number;
+  /** Contour and Chromatic Wireframe: one .obj file for each frame was made besides the pictures (feature 045); false for the other pictures. */
+  export_obj: boolean;
+  /** The address of the ZIP of the .obj files, or null when there is no export. */
+  obj_url: string | null;
   /** Decay: the points a circle gives to each neighbour per frame at the low, medium, high and saturated levels (0.5 to 3 each). */
   decay_low: number;
   decay_medium: number;
@@ -79,8 +87,14 @@ export interface JobSettings {
   polychordMinCopies: number;
   polychordMaxCopies: number;
   polychordRotation: number;
+  /** Spirograph (feature 046): 5 to 12 notes and a history of 5 to 12 frames. */
+  spirographNotes: number;
+  spirographHistory: number;
+  spirographFade: number;
   /** 1 to n, the number of notes of the picture (5, or Notes shown / Number of notes); 1 to 8 for the pictures that do not use it (feature 044). */
   extraNotes: number;
+  /** Export 3D files (.obj) on or off (feature 045); sent for every picture, true only for Contour and Chromatic Wireframe. */
+  exportObj: boolean;
   decayLow: number;
   decayMedium: number;
   decayHigh: number;
@@ -110,7 +124,11 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("polychord_min_copies", String(settings.polychordMinCopies));
   body.append("polychord_max_copies", String(settings.polychordMaxCopies));
   body.append("polychord_rotation", String(settings.polychordRotation));
+  body.append("spirograph_notes", String(settings.spirographNotes));
+  body.append("spirograph_history", String(settings.spirographHistory));
+  body.append("spirograph_fade", String(settings.spirographFade));
   body.append("extra_notes", String(settings.extraNotes));
+  body.append("export_obj", String(settings.exportObj));
   body.append("decay_low", String(settings.decayLow));
   body.append("decay_medium", String(settings.decayMedium));
   body.append("decay_high", String(settings.decayHigh));

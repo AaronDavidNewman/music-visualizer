@@ -12,7 +12,7 @@ below 84 builds the picture from only the notes with the most energy in the file
 neighbors with Pillow (see ``frame_interpolation``). A threshold can hide faint notes: a note below it is 0 (see
 ``hidden_below``). The other image types draw circles, bars, a histogram, rings or lines from the note values or from
 the measurements of the whole file (``decay``, ``decay_exp``, ``polar_chords``, ``energy_graphs``, ``chromatic_decay``,
-``rhythm_circles``, ``chromatic_wireframe``, ``polychord``).
+``rhythm_circles``, ``chromatic_wireframe``, ``polychord``, ``spirograph``).
 
 These are the shared steps AVERAGE and DRAW of the pipeline overview in ``image_types``; the job does steps 1 to 3 and
 calls ``write_frames()`` for the rest.
@@ -24,8 +24,8 @@ Order of operations:
     3. Average the windows into frames - ``average_frames()`` - ``NoteStrengths`` ``(frames, 88)``: the mean of the
        windows a frame owns (or the last earlier window).
     4. Check every setting before anything is written - ``write_frames()`` - colormap, threshold, image type, resolution,
-       note count, interpolate, gaussian, note layout, decay rate and amounts, wave count, polar notes, extra notes
-       (k, 0 to the number of notes of the picture) and ``beat`` (``BeatPositions`` ``(frames,)`` or ``None``).
+       note count, interpolate, gaussian, note layout, decay rate and amounts, wave count, polar notes, the Polychord and
+       Spirograph settings, extra notes (k, 0 to the number of notes of the picture) and ``beat`` (``BeatPositions`` ``(frames,)`` or ``None``).
     5. Find the largest note value of the whole file - ``write_frames()`` - the ``peak`` that the threshold and the
        colors are measured against.
     6. Draw, by image type (each type's own steps are in its module and in the overview of ``image_types``):
@@ -36,12 +36,16 @@ Order of operations:
            ``rhythm-circles``: draw from the measurements the job made (``energy``, ``rhythm``), which must have one
            frame for each row; ``polychord``: draw from the note values, the beat and the tempos the job measured
            (``polychord``, which must have one tempo for each row) with the four settings
-           (``polychord.write_polychord_frames()``);
+           (``polychord.write_polychord_frames()``); ``spirograph``: draw from the note values and the beat (the loudest notes
+           of the last frames as spirograph curves, ``spirograph.write_spirograph_frames()``, with the three settings);
          * ``contour``: keep the 84 drawn notes and spread the ``note_count`` loudest over them
            (``note_selection.spread_notes()``) - make the grid finer (``resolution.interpolate_grid()``) - hide the
            faint values (``hidden_below()``) - draw the drawn frames (``contour.write_contour_frames()``) - blur them
            (``gaussian.blur_frames()``) - make the in-between frames
            (``frame_interpolation.write_interpolated_frames()``).
+    7. (``export_obj``, for ``contour`` and ``chromatic-wireframe`` only, after the pictures) write the 3D files - the
+       12 x 7 notes with the threshold applied, ``obj_export.write_contour_obj()``, or the points of the wireframe,
+       ``obj_export.write_wireframe_obj()`` - one ``frame_<index>.obj`` for each frame in ``<directory>/obj``.
 """
 
 import math
@@ -60,9 +64,11 @@ from .decay_exp import circle_points as decay_exp_points
 from .energy_graphs import EnergyGraphData, write_energy_frames
 from .polychord import DEFAULT_POLYCHORD_SETTINGS, PolychordData, PolychordSettings, check_polychord_settings, write_polychord_frames
 from .rhythm_circles import RhythmData, write_rhythm_frames
+from .spirograph import DEFAULT_SPIROGRAPH_SETTINGS, SpirographSettings, check_spirograph_settings, write_spirograph_frames
 from .polar_chords import DEFAULT_POLAR_NOTES, check_polar_notes, polar_bars, write_polar_frames
 from .held_notes import check_extra_notes, notes_of
 from .contour import write_contour_frames
+from .obj_export import NOT_AVAILABLE_MESSAGE, OBJ_EXPORT_TYPES, OBJ_FOLDER, write_contour_obj, write_wireframe_obj
 from .gaussian import DEFAULT_GAUSSIAN, blur_frames, check_gaussian
 from .frame_interpolation import DEFAULT_INTERPOLATE, check_interpolate, key_frames, write_interpolated_frames
 from .image_types import DEFAULT_IMAGE_TYPE, check_image_type
@@ -171,18 +177,34 @@ def hidden_below(values: ArrayLike, peak: float, threshold: float = DEFAULT_THRE
     return np.asarray(values, dtype=np.float64) < threshold / 100.0 * float(peak)
 
 
-def _check_extra_notes(value: object, image_type: str, polar_notes: int, polychord_settings: PolychordSettings) -> int:
+def _check_extra_notes(
+    value: object, image_type: str, polar_notes: int, polychord_settings: PolychordSettings, spirograph_settings: SpirographSettings
+) -> int:
     """The Extra notes setting k for ``write_frames``: 0 (off) or a whole number from 1 to the number of notes of the picture.
 
-    The number of notes n is 5 for ``decay``, ``decay-exp``, ``chromatic-decay`` and ``chromatic-wireframe``, ``polar_notes`` for ``polar-chords`` and the notes of
-    ``polychord_settings`` for ``polychord``; a picture that does not take the n loudest notes accepts 0 to 8 and ignores it.
+    The number of notes n is 5 for ``decay``, ``decay-exp``, ``chromatic-decay`` and ``chromatic-wireframe``, ``polar_notes`` for ``polar-chords``, the notes of
+    ``polychord_settings`` for ``polychord`` and the smaller of the notes of ``spirograph_settings`` and 8 for ``spirograph``; a picture that does not take the n loudest notes
+    accepts 0 to 8 and ignores it.
 
     Returns:
         The number as an ``int``.
     """
     if isinstance(value, numbers.Real) and not isinstance(value, bool) and value == 0:
         return 0
-    return check_extra_notes(value, notes_of(image_type, polar_notes, polychord_settings.notes))
+    return check_extra_notes(value, notes_of(image_type, polar_notes, polychord_settings.notes, spirograph_settings.notes))
+
+
+def _check_export_obj(value: object, image_type: str) -> bool:
+    """The 3D export switch for ``write_frames``: a bool, true only for ``contour`` and ``chromatic-wireframe``.
+
+    Returns:
+        The switch as a ``bool``.
+    """
+    if not isinstance(value, bool):
+        raise ValueError("The 3D export must be true or false.")
+    if value and image_type not in OBJ_EXPORT_TYPES:
+        raise ValueError(NOT_AVAILABLE_MESSAGE)
+    return value
 
 
 def write_frames(
@@ -205,7 +227,9 @@ def write_frames(
     rhythm: RhythmData | None = None,
     polychord: PolychordData | None = None,
     polychord_settings: PolychordSettings = DEFAULT_POLYCHORD_SETTINGS,
+    spirograph_settings: SpirographSettings = DEFAULT_SPIROGRAPH_SETTINGS,
     extra_notes: int = 0,
+    export_obj: bool = False,
 ) -> None:
     """Save one PNG per row of ``frames`` (averaged note values) as ``frame_000000.png`` and up.
 
@@ -216,8 +240,8 @@ def write_frames(
     note below it is 0 in that frame (``hidden_below``), whatever the colormap is.
 
     ``image_type`` is ``contour`` (the default, see below), ``decay``, ``decay-exp``, ``polar-chords``,
-    ``energy-graphs``, ``chromatic-decay``, ``rhythm-circles``, ``chromatic-wireframe`` or ``polychord`` (see
-    ``image_types``).
+    ``energy-graphs``, ``chromatic-decay``, ``rhythm-circles``, ``chromatic-wireframe``, ``polychord`` or ``spirograph``
+    (see ``image_types``).
 
     ``image_type="contour"`` draws the grid of values (the 84 drawn notes, or the finer interpolated grid; the values
     the threshold hides are 0) as a filled contour map in the ``colormap``, with matplotlib (see ``contour``): the
@@ -248,7 +272,7 @@ def write_frames(
 
     ``beat`` (feature 024; ``None`` or one number from 0 to 1 for each frame, the frame's place in the local energy
     peak, see ``local_peaks``) is used by ``contour`` (its beat wave, see ``wave_count``), ``decay``, ``decay-exp``,
-    ``polar-chords``, ``chromatic-decay`` and ``chromatic-wireframe``. The other image types ignore it.
+    ``polar-chords``, ``chromatic-decay``, ``chromatic-wireframe``, ``polychord`` and ``spirograph``. The other image types ignore it.
 
     ``note_layout`` (``"rows"``, the default, or ``"spiral"``, see ``note_layout``) says which note is drawn in which
     cell of the 12 x 7 grid for ``decay``, ``decay-exp`` and ``polar-chords``; the other image types check it and ignore
@@ -300,6 +324,14 @@ def write_frames(
     frame has one color from its tempo. The colormap and ``beat`` apply; the threshold, ``note_layout``,
     ``decay_amounts`` and every other setting are checked and ignored.
 
+    ``image_type="spirograph"`` draws, for each of the ``spirograph_settings.notes`` loudest notes of each of the last
+    ``spirograph_settings.history`` frames (the frame's own the newest), one spirograph curve, a circle rolling inside a
+    circle, whose size, loops and one of 13 colors of the colormap follow the note's value and index, on black (see
+    ``spirograph``). ``spirograph_settings`` (a ``spirograph.SpirographSettings``: the number of notes and the history length,
+    5 to 12 each, and the history fade, 0.4 to 0.85) is checked for every image type and used by this one only. The ``beat`` (``None``: every frame at the top of a
+    peak) sets the turns and the big circle's radius of the curves of each frame's entry (``spirograph.peak_percents()``). The colormap, ``beat`` and
+    ``extra_notes`` apply; every other setting is checked and ignored.
+
     ``image_type="rhythm-circles"`` draws four concentric notched rings turned by the current tempo found from the local
     peaks, the tempo of the latest local peak and the rates of change of both (see ``rhythm_circles``), from ``rhythm``,
     the angles of every frame made by ``rhythm_circles.rhythm_angles`` (required for this type, ignored by the others;
@@ -320,11 +352,17 @@ def write_frames(
     the grid; a frame at beat 0 (and every frame with ``beat=None``) is the plain contour. It is checked for every image
     type and has no effect on the others.
 
-    ``extra_notes`` (feature 044; 0, the default, to the number of notes of the picture: 5, ``polar_notes`` or the notes of
-    ``polychord_settings``; 0 to 8 for the other types, which ignore it) is the Extra notes setting k of the pictures that take the
-    n loudest notes (``decay``, ``decay-exp``, ``polar-chords``, ``chromatic-decay``, ``chromatic-wireframe``, ``polychord``): a note
+    ``extra_notes`` (feature 044; 0, the default, to the number of notes of the picture: 5, ``polar_notes``, the notes of
+    ``polychord_settings`` or the smaller of the notes of ``spirograph_settings`` and 8; 0 to 8 for the other types, which ignore it) is the Extra notes setting k of the pictures that take the
+    n loudest notes (``decay``, ``decay-exp``, ``polar-chords``, ``chromatic-decay``, ``chromatic-wireframe``, ``polychord``, ``spirograph``): a note
     that was among the n loudest in the frame before keeps its place while it is among the loudest n + k (see ``held_notes``). With 0 the
     n loudest notes are chosen as before. A job passes 1 to n (2 when the request does not say).
+
+    ``export_obj`` (feature 045, default ``False``; ``True`` only for ``contour`` and ``chromatic-wireframe``, otherwise
+    ``ValueError``) writes, after the pictures, one Wavefront OBJ file for each frame into ``directory / "obj"`` (see
+    ``obj_export``): for ``contour`` the 12 x 7 grid of the notes (the number of notes and the threshold applied; the
+    resolution, the Gaussian blur and the interpolation of frames change the pictures only) as 84 points and 66 faces, for
+    ``chromatic-wireframe`` the line of the frame and of the 11 frames before it. The pictures are the same with it on and off.
 
     Every argument is checked before anything is written.
 
@@ -348,7 +386,9 @@ def write_frames(
     wave_count = check_wave_count(wave_count)
     polar_notes = check_polar_notes(polar_notes)
     polychord_settings = check_polychord_settings(polychord_settings)
-    extra_notes = _check_extra_notes(extra_notes, image_type, polar_notes, polychord_settings)
+    spirograph_settings = check_spirograph_settings(spirograph_settings)
+    extra_notes = _check_extra_notes(extra_notes, image_type, polar_notes, polychord_settings, spirograph_settings)
+    export_obj = _check_export_obj(export_obj, image_type)
     if beat is not None:
         # checked for every image type, used by contour, decay, decay-exp, polar-chords, chromatic-decay and
         # chromatic-wireframe
@@ -378,6 +418,8 @@ def write_frames(
         points = chromatic_points(frames, beat, decay_rate, threshold, extra_notes)
         # the beat decides the color of every line
         write_wireframe_frames(points, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, beat=beat)
+        if export_obj:  # the 3D files of the same points (feature 045)
+            write_wireframe_obj(points, colormap, directory / OBJ_FOLDER, beat)
         return
     # a histogram of two data sets, made from ``energy`` (the rest of the settings above are checked and not used)
     if image_type == "energy-graphs":
@@ -395,6 +437,11 @@ def write_frames(
         if polychord.tempos.shape != (len(frames),):
             raise ValueError(f"The polychord data has {polychord.tempos.size} tempos but {len(frames)} frames were given.")
         write_polychord_frames(frames, beat, polychord.tempos, polychord_settings, polychord.frame_rate, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, extra_notes)
+        return
+    # the spirograph curves of the loudest notes of the last frames, from the note values and the beat (the rest of the settings
+    # above are checked and not used; there is no tempo or other measurement)
+    if image_type == "spirograph":
+        write_spirograph_frames(frames, spirograph_settings, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, extra_notes, beat)
         return
     # four notched rings turned by ``rhythm`` (the rest of the settings above are checked and not used)
     if image_type == "rhythm-circles":
@@ -431,3 +478,7 @@ def write_frames(
     # the drawn frames only: an in-between frame is a blend of blurred frames
     blur_frames(directory, frames_to_draw, gaussian)
     write_interpolated_frames(directory, values.shape[0], interpolate)
+    if export_obj:  # the 12 x 7 grid of the notes, not the finer grid of the picture (feature 045)
+        grid = spread_notes(frames[:, :SHOWN_NOTES], note_count)
+        grid[hidden_below(grid, peak, threshold)] = 0
+        write_contour_obj(grid, peak, colormap, directory / OBJ_FOLDER, beat, wave_count)

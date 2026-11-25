@@ -15,10 +15,13 @@ of both (``rhythm_circles.py``). ``chromatic-wireframe`` draws the points of ``c
 three dimensions: one line for each frame across the 12 letters, the newest in front, each in the color of its place in
 the beat (``chromatic_wireframe.py``). ``polychord`` draws the loudest notes of each frame as a chain of tapering links
 that starts at the center and bends by the circle of fifths, repeated as copies turned 30 degrees (as many as the beat
-says), the whole picture turning, every link in one color taken from the current tempo (``polychord.py``). (Tiles,
+says), the whole picture turning, every link in one color taken from the current tempo (``polychord.py``). ``spirograph``
+draws the loudest notes of the last few frames as spirograph curves, a circle rolling inside a circle, one curve for each
+note of each frame (their value and place in the pitch range set its size, loops and one of 13 colors), on black
+(``spirograph.py``). (Tiles,
 blended tiles, circles, circles paint and concentric, the first five kinds of picture, were removed in feature 040.)
 
-No data processing: this module only holds the names of the nine kinds of picture (``IMAGE_TYPES``), the default and
+No data processing: this module only holds the names of the ten kinds of picture (``IMAGE_TYPES``), the default and
 the check of a name; the map of how each kind is made from an uploaded file is the pipeline overview below.
 
 Pipeline overview:
@@ -55,7 +58,7 @@ Pipeline overview:
                ``render.json`` records the frame rate; the job answers with the settings used and the address of the
                frames.
     contour (default) - MEASURE: BEAT only when Beat coloring is on, else none. Settings that apply: Threshold, Notes,
-    Oversampling, Interpolate, Gaussian smoothing, Wave count.
+    Oversampling, Interpolate, Gaussian smoothing, Wave count, Export 3D files.
       DRAW:
         1. ``note_selection.spread_notes()`` (Notes) - ``NoteStrengths`` ``(frames, 84)``: only the loudest notes of
            the file, spread over the 84 places.
@@ -69,6 +72,11 @@ Pipeline overview:
         6. ``gaussian.blur_frames()`` (Gaussian smoothing) - the drawn frames blurred.
         7. ``frame_interpolation.write_interpolated_frames()`` - the in-between frames made from their drawn
            neighbours.
+      EXPORT (only with Export 3D files, after DRAW, feature 045):
+        8. ``obj_export.write_contour_obj()`` - the 12 x 7 notes (Notes and Threshold applied, no Oversampling): for
+           each frame ``contour.smoothed_grid()`` (``FrameGrid`` ``(7, 12)``), with a beat above 0 multiplied by
+           ``beat_wave.wave_modifier()``, then ``obj_export.contour_mesh()`` (``MeshVertices`` ``(84, 6)``,
+           ``MeshFaces`` ``(66, 4)``) and ``obj_export.format_obj()``: ``frame_<index>.obj`` in the ``obj`` folder.
     decay - MEASURE: BEAT. Settings that apply: Decay rate, the four decay amounts, Note layout, Extra notes (k).
       DRAW:
         1. ``decay.circle_points()`` - ``CirclePoints`` ``(frames, 84)``: it first asks ``decay.gains()`` for
@@ -110,13 +118,19 @@ Pipeline overview:
       DRAW: ``rhythm_circles.write_rhythm_frames()`` - ``rhythm_circles.ring_colors_rows()`` and
             ``rhythm_circles._geometry()`` once, then ``rhythm_circles._frame()`` for each frame: four rings with a
             notch turned by ``CircleAngles``: ``Pictures``.
-    chromatic-wireframe - MEASURE: BEAT. Settings that apply: Threshold, Decay rate (whole numbers 1 to 10), Extra notes (k).
+    chromatic-wireframe - MEASURE: BEAT. Settings that apply: Threshold, Decay rate (whole numbers 1 to 10), Extra notes (k), Export 3D files.
       DRAW:
         1. ``chromatic_decay.circle_points()`` - as chromatic-decay: ``CirclePoints`` ``(frames, 12)``.
         2. ``chromatic_wireframe.write_wireframe_frames()`` - ``chromatic_wireframe.line_colors()`` (``LineColors``
            ``(frames, 3)``), the line of each frame (``chromatic_wireframe.line_heights()``, which uses ``line_sums()``
            and ``line_angles()``: ``LineHeights`` ``(frames, n)``), then ``chromatic_wireframe._frame()`` for each
            frame: the lines of the frame and the frames before it, oldest first: ``Pictures``.
+      EXPORT (only with Export 3D files, after DRAW, feature 045):
+        3. ``obj_export.write_wireframe_obj()`` - from the same ``CirclePoints`` and ``chromatic_wireframe.line_colors()``:
+           ``obj_export.amplitude_share()`` (``LetterAmplitudes`` ``(frames, 12)``), then for each frame
+           ``obj_export.wireframe_mesh()`` (the frame and the 11 before it: ``MeshVertices`` ``(12 * lines, 6)``,
+           ``MeshFaces`` ``(11 * (lines - 1), 4)``) and ``obj_export.format_obj()``: ``frame_<index>.obj`` in the
+           ``obj`` folder.
     polychord - MEASURE: BEAT and the tempo, from one measurement of the local peaks (``frame_tempos()``). Settings that
     apply: Number of notes, Copies (minimum), Copies (maximum), Rotation, Extra notes (k).
       DRAW:
@@ -132,11 +146,30 @@ Pipeline overview:
         5. ``polychord.write_polychord_frames()`` - ``polychord._frame()`` for each frame, with the pieces of every copy
            from ``polychord.figure_segments()`` (``LinkSegments`` ``(segments, 2, 2)``, ``LinkWidths``
            ``(segments,)``) in one ``LineCollection``: ``Pictures``.
+    spirograph - MEASURE: the beat (``local_peaks.measure_local_peaks()`` with ``frame_positions()``: ``BeatPositions`` ``(frames,)``),
+    no tempo. Settings that apply: Number of notes (5 to 12), History length (5 to 12), History fade (0.4 to 0.85), Extra notes (k),
+    Minimum distance (the peaks of the beat).
+      DRAW:
+        1. ``spirograph.tracked_notes()`` - ``TrackedValues`` ``(frames, count)`` and ``LoudestIndices`` ``(frames, count)``:
+           the value (0 to 1: the square root of the strength over the largest of the file) and the index (0 to 83) of each of the loudest notes of
+           each frame (chosen by ``held_notes.hold_loudest()``), loudest first; one frame's row is a history entry.
+        2. ``spirograph.peak_percents()`` - ``PeakPercents`` ``(frames,)``: ``1 - chromatic_decay.beat_distances()``, 1 at the top
+           of the local energy peak, 0 at the bottom (1 for every frame when there is no beat).
+        3. ``spirograph.reduced_colors()`` - ``ReducedColors`` ``(13, 3)``: 13 colors of the colormap at ``sqrt(k / 12) * 256``.
+        4. ``spirograph.file_extent()`` then ``spirograph.pixels_per_unit()`` - the farthest any curve reaches in the whole
+           file (with the big circle's radius of its frame), and the one scale (pixels a unit) that makes it fill the room
+           (``spirograph.full_radius()``).
+        5. ``spirograph.write_spirograph_frames()`` - for each frame ``spirograph.window_curves()`` (the last History length
+           entries, oldest first, each entry's values multiplied by the History fade once for every frame it is older,
+           the notes whose value is above 0, each made by ``spirograph.spiro_curves()`` with the turns and the big circle's
+           radius of its own entry's ``PeakPercents``: ``SpiroCurves`` ``(curves, 1000, 2)``, with ``ColorNumbers`` ``(curves,)``
+           from ``spirograph.color_numbers()`` and ``CurveWidths`` ``(curves,)``),
+           then ``spirograph._frame()``: all the curves in one ``LineCollection`` on black: ``Pictures``.
 
-    The six types that take the n loudest notes (decay, decay-exp, polar-chords, chromatic-decay, chromatic-wireframe and
-    polychord) choose them with ``held_notes.hold_loudest()`` (feature 044): a note that was among the n loudest of the frame
-    before keeps its place while it is among the loudest n + k and still sounds, k being the Extra notes setting (1 to n; the
-    job passes 2 when the request does not say). A louder note that is not held waits for a free place.
+    The seven types that take the n loudest notes (decay, decay-exp, polar-chords, chromatic-decay, chromatic-wireframe,
+    polychord and spirograph) choose them with ``held_notes.hold_loudest()`` (feature 044): a note that was among the n loudest
+    of the frame before keeps its place while it is among the loudest n + k and still sounds, k being the Extra notes setting
+    (1 to n, at most 8; the job passes 2 when the request does not say). A louder note that is not held waits for a free place.
 
     When an image type is added or changed, its block here is changed in the same piece of work.
 
@@ -153,6 +186,7 @@ IMAGE_TYPES = (
     "rhythm-circles",
     "chromatic-wireframe",
     "polychord",
+    "spirograph",
 )
 DEFAULT_IMAGE_TYPE = "contour"
 

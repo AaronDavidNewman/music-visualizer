@@ -63,8 +63,8 @@ def spying(monkeypatch):
 
 
 def test_it_is_the_last_of_the_eight_image_types_and_the_message_lists_them():
-    assert IMAGE_TYPES[7] == TYPE and len(IMAGE_TYPES) == 9
-    assert TYPE_MESSAGE.endswith("chromatic-decay, rhythm-circles, chromatic-wireframe, polychord.")
+    assert IMAGE_TYPES[7] == TYPE and len(IMAGE_TYPES) == 10
+    assert TYPE_MESSAGE.endswith("chromatic-decay, rhythm-circles, chromatic-wireframe, polychord, spirograph.")
 
 
 def test_the_chromatic_types_are_exactly_the_two_that_share_the_points_and_the_settings():

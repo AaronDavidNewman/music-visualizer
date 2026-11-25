@@ -62,7 +62,7 @@ def test_the_constants():
 
 
 def test_polar_chords_is_the_fourth_image_type():
-    assert IMAGE_TYPES[3] == "polar-chords" and len(IMAGE_TYPES) == 9  # Energy Graphs, Chromatic Decay, Rhythm Circles and Chromatic Wireframe and Polychord follow
+    assert IMAGE_TYPES[3] == "polar-chords" and len(IMAGE_TYPES) == 10  # Energy Graphs, Chromatic Decay, Rhythm Circles and Chromatic Wireframe and Polychord follow
     assert IMAGE_TYPES[2] == "decay-exp"
 
 

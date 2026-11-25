@@ -1,4 +1,4 @@
-import { beatColoringApplies, gridSettingsApply, isChromaticType, isEnergyType, isPolarType, isPolychordType, isRhythmType, isRingsType, noteLayoutApplies, usesHeldNotes } from "./validation";
+import { beatColoringApplies, gridSettingsApply, isChromaticType, isEnergyType, isPolarType, isPolychordType, isRhythmType, isRingsType, isSpirographType, noteLayoutApplies, usesHeldNotes, usesObjExport } from "./validation";
 
 /**
  * The groups of the settings form (feature 020): which groups there are, what is in each, which are shown for an image type, and
@@ -31,8 +31,12 @@ export const GROUPS: readonly GroupDefinition[] = [
   { id: "chromatic-wireframe", title: "Chromatic Wireframe", controls: ["threshold", "chromatic-decay-rate"] },
   // Polychord (feature 042): the links in a figure, the fewest and the most copies of it, and how fast the picture turns
   { id: "polychord", title: "Polychord", controls: ["polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation"] },
-  // the Extra notes (feature 044) of the six pictures that take the n loudest notes: one setting, in a group of its own after the group of the type
+  // Spirograph (feature 046): the notes tracked in each frame, the history of frames in a picture and how fast it fades; the beat sets the turns and the big circle, so the Local peaks group (Minimum distance) follows
+  { id: "spirograph", title: "Spirograph", controls: ["spirograph-notes", "spirograph-history", "spirograph-fade"] },
+  // the Extra notes (feature 044) of the seven pictures that take the n loudest notes: one setting, in a group of its own after the group of the type
   { id: "held-notes", title: "Held notes", controls: ["extra-notes"] },
+  // the export of 3D files (feature 045) of Contour and Chromatic Wireframe: one checkbox, in a group of its own after the group of the type (and after Held notes)
+  { id: "obj-export", title: "3D export", controls: ["export-obj"] },
   // which note is in which cell (feature 026), for the pictures with one shape for each note
   { id: "note-layout", title: "Note layout", controls: ["note-layout"] },
   // the beat coloring of Contour, its beat wave (feature 028): its own group, after the group of the type
@@ -43,7 +47,7 @@ export const GROUPS: readonly GroupDefinition[] = [
 ];
 
 /** The ids of the groups that belong to one image type: exactly one of them follows the Image type group. */
-const TYPE_GROUPS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord"];
+const TYPE_GROUPS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"];
 
 const byId = new Map(GROUPS.map((g) => [g.id, g]));
 
@@ -57,18 +61,19 @@ export function controlsIn(id: string): readonly string[] {
 
 /**
  * The ids of the groups shown for an image type, top to bottom: the top group, Colormap, Image type, the group of the type
- * (none for Energy graphs and Rhythm Circles, which have no controls of their own, nor for a type that is not one of the eight), Held notes for the six pictures that take the n loudest notes
- * (Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord), Note layout for Decay, Decay Exp and Polar Chords,
- * Local peaks for Contour (with the checkbox) and for Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe and Polychord (without it), and Image smoothing when the type draws a grid (Contour). Energy graphs has
+ * (none for Energy graphs and Rhythm Circles, which have no controls of their own, nor for a type that is not one of the ten), Held notes for the seven pictures that take the n loudest notes
+ * (Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord and Spirograph), Note layout for Decay, Decay Exp and Polar Chords,
+ * Local peaks for Contour (with the checkbox) and for Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord and Spirograph (without it), and Image smoothing when the type draws a grid (Contour). Energy graphs has
  * no group of its own: only the top group, Colormap and Image type. Rhythm Circles has none either, and adds only Local peaks (without the checkbox) to those three.
  */
 export function groupsFor(imageType: string): string[] {
   const ids = ["analysis", "colormap", "image-type"];
   if (TYPE_GROUPS.includes(imageType)) ids.push(imageType);
   if (usesHeldNotes(imageType)) ids.push("held-notes");
+  if (usesObjExport(imageType)) ids.push("obj-export");
   if (noteLayoutApplies(imageType)) ids.push("note-layout");
   if (beatColoringApplies(imageType)) ids.push("local-peaks");
-  if (isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || isRhythmType(imageType) || isPolychordType(imageType)) ids.push("concentric-peaks");
+  if (isRingsType(imageType) || isPolarType(imageType) || isChromaticType(imageType) || isRhythmType(imageType) || isPolychordType(imageType) || isSpirographType(imageType)) ids.push("concentric-peaks");
   if (gridSettingsApply(imageType)) ids.push("image-smoothing");
   return ids;
 }

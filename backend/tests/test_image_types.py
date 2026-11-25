@@ -8,7 +8,7 @@ from app.services.note_grid import GRID_COLUMNS, GRID_ROWS, NOTES, RINGS, _check
 
 
 def test_the_kinds_of_picture_are_the_nine_that_are_left_and_the_default_is_the_contour():
-    assert IMAGE_TYPES == ("contour", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles", "chromatic-wireframe", "polychord")
+    assert IMAGE_TYPES == ("contour", "decay", "decay-exp", "polar-chords", "energy-graphs", "chromatic-decay", "rhythm-circles", "chromatic-wireframe", "polychord", "spirograph")
     assert DEFAULT_IMAGE_TYPE == "contour" and DEFAULT_IMAGE_TYPE in IMAGE_TYPES
 
 

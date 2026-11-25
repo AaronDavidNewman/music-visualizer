@@ -16,12 +16,18 @@ import {
   formatPolychordCopies,
   formatPolychordNotes,
   formatPolychordRotation,
+  formatSpirographFade,
+  formatSpirographHistory,
+  formatSpirographNotes,
   isPolarType,
   isPolychordType,
+  isSpirographType,
   formatWaveCount,
   formatBeatColoring,
   formatExtraNotes,
   usesHeldNotes,
+  formatExportObj,
+  usesObjExport,
   formatGaussian,
   formatPeakDistance,
   beatColoringApplies,
@@ -70,6 +76,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
         <section v-if="result" class="results">
           <FramePlayer :result="result" />
           <VideoExport :result="result" />
+          <p v-if="result.obj_url" class="obj-download"><a :href="result.obj_url" download>Download 3D files (.zip)</a></p>
           <h2>{{ result.file_name }}</h2>
           <ul class="summary">
             <li>Duration: {{ result.duration_seconds.toFixed(2) }} s</li>
@@ -94,7 +101,11 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li v-if="isPolychordType(result.image_type)">Number of notes: {{ formatPolychordNotes(result.polychord_notes) }}</li>
             <li v-if="isPolychordType(result.image_type)">Copies: {{ formatPolychordCopies(result.polychord_min_copies) }} to {{ formatPolychordCopies(result.polychord_max_copies) }}</li>
             <li v-if="isPolychordType(result.image_type)">Rotation: {{ formatPolychordRotation(result.polychord_rotation) }}</li>
+            <li v-if="isSpirographType(result.image_type)">Number of notes: {{ formatSpirographNotes(result.spirograph_notes) }}</li>
+            <li v-if="isSpirographType(result.image_type)">History length: {{ formatSpirographHistory(result.spirograph_history) }}</li>
+            <li v-if="isSpirographType(result.image_type)">History fade: {{ formatSpirographFade(result.spirograph_fade) }}</li>
             <li v-if="usesHeldNotes(result.image_type)">Extra notes (k): {{ formatExtraNotes(result.extra_notes) }}</li>
+            <li v-if="usesObjExport(result.image_type)">3D export: {{ formatExportObj(result.export_obj) }}</li>
             <li v-if="noteLayoutApplies(result.image_type)">Note layout: {{ noteLayoutLabel(result.note_layout) }}</li>
             <li v-if="beatColoringApplies(result.image_type)">Beat coloring: {{ formatBeatColoring(result.beat_coloring) }}</li>
             <li v-if="peakSettingsShown(result.image_type, result.beat_coloring)">Minimum distance: {{ formatPeakDistance(result.peak_distance) }}</li>
