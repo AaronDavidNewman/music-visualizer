@@ -17,10 +17,12 @@ import {
   formatPolychordNotes,
   formatPolychordRotation,
   formatSpirographFade,
+  formatVoteLimit,
   formatSpirographHistory,
   formatSpirographNotes,
   isPolarType,
   isPolychordType,
+  isRhythmType,
   isSpirographType,
   formatWaveCount,
   formatBeatColoring,
@@ -104,6 +106,7 @@ async function onSubmit(chosen: File, settings: JobSettings) {
             <li v-if="isSpirographType(result.image_type)">Number of notes: {{ formatSpirographNotes(result.spirograph_notes) }}</li>
             <li v-if="isSpirographType(result.image_type)">History length: {{ formatSpirographHistory(result.spirograph_history) }}</li>
             <li v-if="isSpirographType(result.image_type)">History fade: {{ formatSpirographFade(result.spirograph_fade) }}</li>
+            <li v-if="isRhythmType(result.image_type)">Vote limit: {{ formatVoteLimit(result.vote_limit) }}</li>
             <li v-if="usesHeldNotes(result.image_type)">Extra notes (k): {{ formatExtraNotes(result.extra_notes) }}</li>
             <li v-if="usesObjExport(result.image_type)">3D export: {{ formatExportObj(result.export_obj) }}</li>
             <li v-if="noteLayoutApplies(result.image_type)">Note layout: {{ noteLayoutLabel(result.note_layout) }}</li>

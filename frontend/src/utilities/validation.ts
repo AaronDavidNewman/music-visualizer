@@ -229,7 +229,7 @@ export function isChromaticType(imageType: string): boolean {
   return imageType === "chromatic-decay" || imageType === "chromatic-wireframe";
 }
 
-/** Whether the picture is Rhythm Circles (feature 038): four notched rings turned by the current tempo (60 to 156 beats per minute) found from the peaks and the local peak, each with its rate of change. Its only setting is Minimum distance. */
+/** Whether the picture is Rhythm Circles (feature 038): six notched rings turned by the two best-voted tempos (76 to 144 beats per minute) of the starts of the sustained loudest notes and by the local peak, each with its rate of change (feature 047). Its settings are Vote limit, Extra notes and Minimum distance. */
 export function isRhythmType(imageType: string): boolean {
   return imageType === "rhythm-circles";
 }
@@ -280,9 +280,9 @@ export function formatPolarNotes(value: number): string {
 export const EXTRA_NOTES_RANGE = { min: 1, max: 8, step: 1 } as const;
 export const DEFAULT_EXTRA_NOTES = 2;
 
-/** Whether the picture takes the n loudest notes of each frame and so has the Extra notes setting (feature 044): Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord and Spirograph. */
+/** Whether the picture takes the n loudest notes of each frame and so has the Extra notes setting (feature 044): Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord, Spirograph and Rhythm Circles (feature 047, for the starts of its voted tempos). */
 export function usesHeldNotes(imageType: string): boolean {
-  return ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"].includes(imageType);
+  return ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"].includes(imageType);
 }
 
 /**
@@ -408,6 +408,22 @@ export function validateSpirographHistory(value: string | number): string | null
 export function validateSpirographFade(value: string | number): string | null {
   const n = parseNumber(value);
   return Number.isFinite(n) && n >= SPIROGRAPH_FADE_RANGE.min && n <= SPIROGRAPH_FADE_RANGE.max ? null : spirographFadeMessage;
+}
+
+/** Vote limit of Rhythm Circles (feature 047): the most votes a tempo can have, a whole number from 1 to 100; a low limit lets the tempos change quickly. */
+export const VOTE_LIMIT_RANGE = { min: 1, max: 100, step: 1 } as const;
+export const DEFAULT_VOTE_LIMIT = 20;
+
+const voteLimitMessage = `The vote limit must be a whole number from ${VOTE_LIMIT_RANGE.min} to ${VOTE_LIMIT_RANGE.max}.`;
+
+/** Returns an error message, or null when Vote limit is a whole number from 1 to 100. */
+export function validateVoteLimit(value: string | number): string | null {
+  return validateWhole(value, VOTE_LIMIT_RANGE.min, VOTE_LIMIT_RANGE.max, voteLimitMessage);
+}
+
+/** The readout beside the slider and the summary item: the number. */
+export function formatVoteLimit(value: number): string {
+  return String(value);
 }
 
 /** The readout beside the slider and the summary item: "8 notes". */

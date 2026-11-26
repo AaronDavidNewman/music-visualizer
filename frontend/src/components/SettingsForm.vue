@@ -21,9 +21,11 @@ import {
   POLYCHORD_NOTES_RANGE,
   POLYCHORD_ROTATION_RANGE,
   DEFAULT_SPIROGRAPH_FADE,
+  DEFAULT_VOTE_LIMIT,
   DEFAULT_SPIROGRAPH_HISTORY,
   DEFAULT_SPIROGRAPH_NOTES,
   SPIROGRAPH_FADE_RANGE,
+  VOTE_LIMIT_RANGE,
   SPIROGRAPH_HISTORY_RANGE,
   SPIROGRAPH_NOTES_RANGE,
   DEFAULT_NOTE_LAYOUT,
@@ -64,6 +66,7 @@ import {
   formatPolychordNotes,
   formatPolychordRotation,
   formatSpirographFade,
+  formatVoteLimit,
   formatSpirographHistory,
   formatSpirographNotes,
   formatWaveCount,
@@ -83,6 +86,7 @@ import {
   validatePolychordNotes,
   validatePolychordRotation,
   validateSpirographFade,
+  validateVoteLimit,
   validateSpirographHistory,
   validateSpirographNotes,
   validateWaveCount,
@@ -118,6 +122,7 @@ import {
   polychordNotesHelp,
   polychordRotationHelp,
   spirographFadeHelp,
+  voteLimitHelp,
   spirographHistoryHelp,
   spirographNotesHelp,
   waveCountHelp,
@@ -159,6 +164,7 @@ const polychordRotation = ref<number>(DEFAULT_POLYCHORD_ROTATION);
 const spirographNotes = ref<number>(DEFAULT_SPIROGRAPH_NOTES);
 const spirographHistory = ref<number>(DEFAULT_SPIROGRAPH_HISTORY);
 const spirographFade = ref<number>(DEFAULT_SPIROGRAPH_FADE);
+const voteLimit = ref<number>(DEFAULT_VOTE_LIMIT); // the most votes of a tempo of Rhythm Circles (feature 047)
 const extraNotes = ref<number>(DEFAULT_EXTRA_NOTES); // the Extra notes k of the seven pictures that take the n loudest notes (feature 044)
 const exportObj = ref<boolean>(DEFAULT_EXPORT_OBJ); // the export of 3D files of Contour and Chromatic Wireframe (feature 045)
 const beatColoring = ref<boolean>(DEFAULT_BEAT_COLORING);
@@ -186,6 +192,7 @@ const polychordRotationError = computed(() => validatePolychordRotation(polychor
 const spirographNotesError = computed(() => validateSpirographNotes(spirographNotes.value));
 const spirographHistoryError = computed(() => validateSpirographHistory(spirographHistory.value));
 const spirographFadeError = computed(() => validateSpirographFade(spirographFade.value));
+const voteLimitError = computed(() => validateVoteLimit(voteLimit.value));
 // n, the number of notes of the chosen picture, limits k; the error only counts for the pictures that use the setting
 const heldCount = computed(() => heldNotesCount(imageType.value, polarNotes.value, polychordNotes.value, spirographNotes.value));
 const extraNotesError = computed(() => (usesHeldNotes(imageType.value) ? validateExtraNotes(extraNotes.value, heldCount.value) : null));
@@ -215,13 +222,14 @@ const canSubmit = computed(
     !spirographNotesError.value &&
     !spirographHistoryError.value &&
     !spirographFadeError.value &&
+    !voteLimitError.value &&
     !extraNotesError.value &&
     !peakDistanceError.value,
 );
 
 // The groups (feature 020). The group of the chosen image type follows the Image type group; a control the type does not use is not
 // shown. Every value stays in its ref, so it is kept when a group is folded or the type is changed, and is still sent.
-const TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"];
+const TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"];
 const shownGroups = computed(() => groupsFor(imageType.value));
 const typeGroup = computed(() => shownGroups.value.find((id) => TYPE_GROUP_IDS.includes(id)));
 const showImageSmoothing = computed(() => shownGroups.value.includes("image-smoothing"));
@@ -259,6 +267,7 @@ const typeGroupProblem = computed(
     (inTypeGroup("spirograph-notes") && !!spirographNotesError.value) ||
     (inTypeGroup("spirograph-history") && !!spirographHistoryError.value) ||
     (inTypeGroup("spirograph-fade") && !!spirographFadeError.value) ||
+    (inTypeGroup("vote-limit") && !!voteLimitError.value) ||
     (inTypeGroup("wave-count") && !!waveCountError.value),
 );
 const noteLayoutProblem = computed(() => !!noteLayoutError.value);
@@ -293,6 +302,7 @@ function onSubmit() {
     spirographNotes: spirographNotes.value,
     spirographHistory: spirographHistory.value,
     spirographFade: spirographFade.value,
+    voteLimit: voteLimit.value,
     extraNotes: extraNotes.value,
     exportObj: usesObjExport(imageType.value) && exportObj.value, // a stale check is never sent as true for a picture without the export
     beatColoring: beatColoring.value,
@@ -556,6 +566,24 @@ function onSubmit() {
           :disabled="busy"
         />
         <small v-if="spirographFadeError" class="error">{{ spirographFadeError }}</small>
+      </div>
+
+      <div v-if="inTypeGroup('vote-limit')" class="field">
+        <div class="field-head">
+          <label for="vote-limit">Vote limit</label>
+          <InfoPopover label="vote limit" :text="voteLimitHelp" />
+          <output class="slider-value" for="vote-limit">{{ formatVoteLimit(voteLimit) }}</output>
+        </div>
+        <input
+          id="vote-limit"
+          v-model.number="voteLimit"
+          type="range"
+          :min="VOTE_LIMIT_RANGE.min"
+          :max="VOTE_LIMIT_RANGE.max"
+          :step="VOTE_LIMIT_RANGE.step"
+          :disabled="busy"
+        />
+        <small v-if="voteLimitError" class="error">{{ voteLimitError }}</small>
       </div>
 
       <div v-if="inTypeGroup('decay-rate')" class="field">

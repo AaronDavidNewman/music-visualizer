@@ -1,0 +1,33 @@
+﻿sonata.wav: 5721 frames, 1729 starts, target 116 bpm, time resolution 60 ms
+   limit   5: first or second within 10% of target   59%, first alone   58%, first tempo changes  509, votes hash 2fa2c9c039c8, second run identical: True
+   limit  20: first or second within 10% of target   65%, first alone   64%, first tempo changes  439, votes hash d9d92fb8961f, second run identical: True
+   limit 100: first or second within 10% of target   65%, first alone   64%, first tempo changes  439, votes hash d9d92fb8961f, second run identical: True
+         0 s: first   120, second   120
+        15 s: first   120, second   120
+        30 s: first   124, second    80
+        45 s: first   132, second   136
+        60 s: first   124, second   132
+        75 s: first   116, second   120
+        90 s: first    76, second    80
+       105 s: first   124, second   128
+       120 s: first    92, second   132
+       135 s: first    92, second    96
+       150 s: first   116, second   120
+       165 s: first   124, second   128
+       180 s: first   116, second   120
+almost2.wav: 5040 frames, 1862 starts, target 90 bpm, time resolution 60 ms
+   limit   5: first or second within 10% of target   20%, first alone   14%, first tempo changes  610, votes hash 987c05de9a62, second run identical: True
+   limit  20: first or second within 10% of target   19%, first alone   14%, first tempo changes  594, votes hash d4929b414e3c, second run identical: True
+   limit 100: first or second within 10% of target   19%, first alone   14%, first tempo changes  594, votes hash d4929b414e3c, second run identical: True
+         0 s: first   120, second   120
+        15 s: first   104, second   108
+        30 s: first    80, second    84
+        45 s: first   116, second   120
+        60 s: first    92, second    96
+        75 s: first   120, second   120
+        90 s: first   116, second   120
+       105 s: first    92, second    96
+       120 s: first    80, second    84
+       135 s: first   120, second   120
+       150 s: first   120, second   120
+       165 s: first   108, second   120

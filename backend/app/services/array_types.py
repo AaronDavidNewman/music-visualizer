@@ -262,17 +262,69 @@ BeatPositions = npt.NDArray[np.float64]
 
 # --- Rhythm Circles ---------------------------------------------------------------------------------------------------
 
-# CircleSeries: the speeds of the four rings of Rhythm Circles after each local peak.
-#   Shape: ``(peaks, 4)``: one row for each local peak; the columns are the rings from the outer one to the innermost:
-#          the current tempo, its rate of change, the local peak's own rate, its rate of change.
+# CircleSeries: the speeds of some rings of Rhythm Circles after each event.
+#   Shape: ``(events, circles)``: one row for each event (a note start for the four rings of the voted tempos, a local peak
+#          for the two rings of the local peak), one column for each ring in the group, outer to inner. The vote rings
+#          ``(starts, 4)``: the average tempo, its rate of change, the first (raw) tempo, its rate of change; the peak rings
+#          ``(peaks, 2)``: the local peak's own rate, its rate of change.
 #   Meaning: revolutions per minute (the levels are beats per minute; a rate of change is beats per minute per second,
 #            drawn as revolutions per minute); negative turns the ring counterclockwise.
-#   Made by: ``rhythm_circles.peak_series``.
+#   Made by: ``tempo_votes.vote_series`` (the vote rings), ``rhythm_circles.peak_series`` (the peak rings).
 CircleSeries = npt.NDArray[np.float64]
 
-# CircleAngles: the angle of the four rings of Rhythm Circles in each frame.
-#   Shape: ``(frames, 4)``: one row for each frame (or for each moment asked about, ``(moments, 4)``; ``(4,)`` for one
-#          frame); the columns are the rings in the same order as ``CircleSeries``.
+# StartTimes: when a sustained loudest note starts.
+#   Shape: ``(starts,)``: one entry for each start, in time order.
+#   Meaning: seconds from the start of the file of the middle of each frame in which a sounding note enters the selection of
+#            the loudest notes (the held notes); strictly increasing; notes that enter in the same frame are one start. The
+#            first start only begins the run, each later one is a cycle of the voting.
+#   Made by: ``tempo_votes.note_starts``.
+StartTimes = npt.NDArray[np.float64]
+
+# FitMatrix: which tempos a note length can be a note of.
+#   Shape: ``(cycles, 18)`` (``(cycles, 18, 10)`` inside ``tempo_votes``, before the 10 note values are combined): one row for each
+#          cycle (each start after the first); the columns are the 18 tempos ``72 + 4n`` (76, 80 ... 144 beats per minute) in
+#          ascending order.
+#   Meaning: true where the time between two starts can be one of the note values (a half, quarter, eighth or sixteenth note,
+#            each dotted, or a triplet) at that tempo, within the tolerance.
+#   Made by: ``tempo_votes.fitting_tempos``.
+FitMatrix = npt.NDArray[np.bool_]
+
+# TempoPoints: the points that a note length gives to each tempo.
+#   Shape: ``(cycles, 18)``: one row for each cycle (each start after the first); the columns are the 18 tempos
+#          ``72 + 4n`` (76, 80 ... 144 beats per minute) in ascending order.
+#   Meaning: 0 where no note value fits the tempo for the time between two starts, else the points of the best note value that
+#            does: 2 for a half, quarter, eighth or sixteenth note, 1 for a dotted note or a triplet.
+#   Made by: ``tempo_votes.tempo_points``.
+TempoPoints = npt.NDArray[np.int64]
+
+# TempoVotes: the votes of the 18 tempos after each start.
+#   Shape: ``(starts, 18)``: one row for each start (row 0, the first start, is all 0); the columns are the 18 tempos
+#          ``72 + 4n`` in ascending order.
+#   Meaning: the votes of each tempo, a whole number from 0 to the vote limit: at every start after the first one vote is
+#            taken from every tempo (never below 0) and each tempo gets its ``TempoPoints`` for the time since the previous
+#            start, 2 or 1 (never above the limit).
+#   Made by: ``tempo_votes.vote_tempos``.
+TempoVotes = npt.NDArray[np.int64]
+
+# RankedTempos: the two best-voted tempos after each start.
+#   Shape: ``(starts, 2)``: one row for each start; column 0 the tempo with the most votes, column 1 the next.
+#   Meaning: beats per minute, from 76 to 144, or 120 for a place whose tempo has no votes; a tie goes to the lower tempo.
+#   Made by: ``tempo_votes.ranked_tempos``.
+RankedTempos = npt.NDArray[np.float64]
+
+# AveragedTempos: the straight average of the last few first tempos after each start.
+#   Shape: ``(starts,)``: one entry for each start.
+#   Meaning: beats per minute: the mean of the first tempo (column 0 of ``RankedTempos``) after this start and after the 4 starts
+#            before it, fewer at the beginning of the file (the mean of all there are); not a metronome marking, so it can be any
+#            number from 76 to 144.
+#   Made by: ``tempo_votes.average_tempos``.
+AveragedTempos = npt.NDArray[np.float64]
+
+# CircleAngles: the angle of the rings of Rhythm Circles in each frame.
+#   Shape: ``(frames, 6)``: one row for each frame (or for each moment asked about, ``(moments, circles)``; ``(6,)`` for one
+#          frame); the columns are the rings from the outer one to the innermost: the average tempo, its rate of change, the
+#          first (raw) tempo, its rate of change, the local peak, its rate of change. A group of rings alone (the four vote rings or
+#          the two peak rings) has the width of its ``CircleSeries``.
 #   Meaning: the angle of the notch of each ring at the middle of the frame, in turns (1.0 is a full turn), clockwise
 #            positive, not wrapped to one turn.
 #   Made by: ``rhythm_circles.rhythm_angles``, ``rhythm_circles.circle_angles``.
@@ -687,11 +739,11 @@ EnergyTotals = npt.NDArray[np.number]
 #   Made by: ``energy_graphs.softmax_shares``, ``energy_graphs.above_smallest``.
 BarShares = npt.NDArray[np.float64]
 
-# CircleSpeeds: the speed of the four rings of Rhythm Circles at each moment.
-#   Shape: ``(moments, 4)``: one row for each moment asked about; the columns are the rings in the same order as
-#          ``CircleSeries``.
-#   Meaning: revolutions per minute (clockwise positive): the row of ``CircleSeries`` of the latest peak at or before
-#            the moment, or the default speeds before the first peak.
+# CircleSpeeds: the speed of the rings of Rhythm Circles at each moment.
+#   Shape: ``(moments, circles)``: one row for each moment asked about; the columns are the rings in the same order as
+#          the ``CircleSeries`` it comes from (4 for the vote rings, 2 for the peak rings).
+#   Meaning: revolutions per minute (clockwise positive): the row of ``CircleSeries`` of the latest event (a start or a peak)
+#            at or before the moment, or the default speeds before the first event.
 #   Made by: ``rhythm_circles.circle_speeds``.
 CircleSpeeds = npt.NDArray[np.float64]
 

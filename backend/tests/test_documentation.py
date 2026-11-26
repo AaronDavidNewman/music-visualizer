@@ -46,6 +46,7 @@ PROCESSING_MODULES = {
     "services/resolution.py",
     "services/rhythm_circles.py",
     "services/spirograph.py",
+    "services/tempo_votes.py",
     "services/tempo_finder.py",
     "services/video.py",
     "routers/jobs.py",

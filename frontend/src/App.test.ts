@@ -295,3 +295,18 @@ describe("the result summary for Spirograph (feature 046)", () => {
     expect(line("History fade:")).toContain("formatSpirographFade(result.spirograph_fade)");
   });
 });
+
+describe("the result summary for Rhythm Circles (feature 047)", () => {
+  const summary = appSource.slice(appSource.indexOf('<ul class="summary">'), appSource.indexOf("</ul>", appSource.indexOf('<ul class="summary">')));
+  const line = (label: string) => summary.split("\n").find((l) => l.includes(label)) ?? "";
+
+  it("shows the Vote limit for Rhythm Circles only, before Extra notes", () => {
+    expect(line("Vote limit:")).toContain("isRhythmType(result.image_type)");
+    expect(line("Vote limit:")).toContain("formatVoteLimit(result.vote_limit)");
+    expect(summary.indexOf("Vote limit:")).toBeLessThan(summary.indexOf("Extra notes (k):"));
+  });
+
+  it("shows the Extra notes line for Rhythm Circles too, as one of the pictures that use it", () => {
+    expect(line("Extra notes (k):")).toContain("usesHeldNotes(result.image_type)");
+  });
+});

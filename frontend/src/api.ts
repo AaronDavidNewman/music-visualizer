@@ -39,7 +39,9 @@ export interface JobResult {
   spirograph_notes: number;
   spirograph_history: number;
   spirograph_fade: number;
-  /** Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord and Spirograph: the extra notes k, 1 to the number of notes of the picture (feature 044); sent and echoed for every picture. */
+  /** Rhythm Circles: the most votes a tempo can have, 1 to 100 (feature 047); sent and echoed for every picture. */
+  vote_limit: number;
+  /** Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord, Spirograph and Rhythm Circles: the extra notes k, 1 to the number of notes of the picture (feature 044); sent and echoed for every picture. */
   extra_notes: number;
   /** Contour and Chromatic Wireframe: one .obj file for each frame was made besides the pictures (feature 045); false for the other pictures. */
   export_obj: boolean;
@@ -91,6 +93,8 @@ export interface JobSettings {
   spirographNotes: number;
   spirographHistory: number;
   spirographFade: number;
+  /** Rhythm Circles (feature 047): the vote limit, 1 to 100. */
+  voteLimit: number;
   /** 1 to n, the number of notes of the picture (5, or Notes shown / Number of notes); 1 to 8 for the pictures that do not use it (feature 044). */
   extraNotes: number;
   /** Export 3D files (.obj) on or off (feature 045); sent for every picture, true only for Contour and Chromatic Wireframe. */
@@ -127,6 +131,7 @@ export async function submitJob(file: File, settings: JobSettings): Promise<JobR
   body.append("spirograph_notes", String(settings.spirographNotes));
   body.append("spirograph_history", String(settings.spirographHistory));
   body.append("spirograph_fade", String(settings.spirographFade));
+  body.append("vote_limit", String(settings.voteLimit));
   body.append("extra_notes", String(settings.extraNotes));
   body.append("export_obj", String(settings.exportObj));
   body.append("decay_low", String(settings.decayLow));

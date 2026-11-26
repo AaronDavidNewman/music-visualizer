@@ -295,45 +295,52 @@ describe("the Threshold help for Chromatic Decay (feature 037)", () => {
   });
 });
 
-describe("the image type help for Rhythm Circles (feature 038)", () => {
-  const text = () => imageTypeHelp.slice(imageTypeHelp.indexOf("Rhythm Circles:"));
+describe("the image type help for Rhythm Circles (features 038 and 047)", () => {
+  const text = () => {
+    const from = imageTypeHelp.indexOf("Rhythm Circles:");
+    return imageTypeHelp.slice(from, imageTypeHelp.indexOf("Chromatic Wireframe:", from));
+  };
 
   it("comes after Chromatic Decay, keeps the paragraphs before it, and is followed only by Chromatic Wireframe", () => {
     expect(imageTypeHelp.indexOf("Rhythm Circles:")).toBeGreaterThan(imageTypeHelp.indexOf("Chromatic Decay:"));
     expect(imageTypeHelp).toContain("Energy graphs:");
+    expect(imageTypeHelp.indexOf("Chromatic Wireframe:")).toBeGreaterThan(imageTypeHelp.indexOf("Rhythm Circles:"));
   });
 
-  it("names the eight circles, the four layers and what turns each of them", () => {
-    expect(text()).toContain("four concentric circles");
-    expect(text()).toContain("two layers");
+  it("names the six circles, the three layers and what turns each of them", () => {
+    expect(text()).toContain("six concentric circles");
+    expect(text()).toContain("three layers");
     expect(text()).toContain("beats per minute");
     expect(text()).toContain("its rate of change");
     expect(text()).toContain("the difference between the last two peak tempos divided by the time between them");
   });
 
-  it("says how a peak nudges the current tempo: matched to the tempo, its half or its two thirds, within one standard deviation or moved by one", () => {
-    expect(text()).toContain("half of it, two thirds of it, twice it and one and a half times it");
-    expect(text()).toContain("the nearest of them is what the peak stands for, as long as the peak is within 15 percent of it");
-    expect(text()).toContain("a peak that is not near any of them stands for itself");
-    expect(text()).toContain("within one standard deviation of the last 5 such tempos");
-    expect(text()).toContain("moves by one standard deviation toward it");
-    expect(text()).toContain("above 156 it becomes 78 and below 60 it becomes 120");
+  it("says how the notes vote: the starts of the loudest notes, the note values, 18 tempos, 2 votes won and 1 lost, the limit", () => {
+    const t = text();
+    for (const piece of [
+      "every time a new one of the loudest notes starts",
+      "a half, a quarter, an eighth or a sixteenth note, any of those dotted, or a triplet note",
+      "18 tempos (76 to 144 beats per minute in steps of 4",
+      "the metronome markings",
+      "gets 2 votes (1 if it fits only as a dotted note or a triplet), and every tempo loses 1 vote",
+      "never below 0, and never above the Vote limit",
+      "A tempo with no votes is shown as 120",
+      "Extra notes setting keeps a sustained note as one note",
+    ]) expect(t, piece).toContain(piece);
   });
 
-  it("puts the current tempo on the outside and the local peak on the inside", () => {
+  it("puts the average of the best-voted tempos on the outside, then the best-voted tempo itself, and the local peak on the inside", () => {
     const t = text();
-    const order = ["The outer circle turns at the current tempo", "the second at its rate of change", "The third turns at the local peak", "the fourth, the innermost"];
+    const order = ["as the average of the best-voted tempos of the last 5 note starts and, inside it, as the best-voted tempo itself", "and on the inside the local peak", "The local peak, found from the peaks"];
     const places = order.map((phrase) => t.indexOf(phrase));
     expect(places.every((p) => p >= 0)).toBe(true);
-    expect([...places].sort((a, b) => a - b)).toEqual(places); // in the order of the rings, from the outside in
+    expect([...places].sort((a, b) => a - b)).toEqual(places); // in the order of the layers, from the outside in
   });
 
-  it("does not describe the circles of the earlier versions of the feature", () => {
-    expect(imageTypeHelp.slice(imageTypeHelp.indexOf("Rhythm Circles:"))).not.toContain("second rate of change");
-    expect(text()).not.toContain("averaged"); // the first version of the circles averaged the tempos
-    expect(text()).not.toContain("six concentric");
-    expect(text()).not.toContain("eight concentric");
-    expect(text()).not.toContain("four layers"); // the circles of half and two thirds of the tempo were dropped
+  it("does not describe the tempo finder or the circles of the earlier versions of the feature", () => {
+    for (const gone of ["second rate of change", "averaged", "eight concentric", "four concentric", "four layers", "two layers", "standard deviation", "from 60 to 156", "starts at 120"]) {
+      expect(text(), gone).not.toContain(gone);
+    }
   });
 
   it("says which way they turn and what the notch is", () => {
@@ -343,16 +350,10 @@ describe("the image type help for Rhythm Circles (feature 038)", () => {
     expect(text()).toContain("an eighth");
   });
 
-  it("names Minimum distance as the only setting that applies", () => {
-    expect(text()).toContain("Only Minimum distance applies");
+  it("names the settings that apply: Extra notes, Vote limit and Minimum distance, and says the others are ignored", () => {
+    expect(text()).toContain("Extra notes, Vote limit and Minimum distance (for the peaks) apply to it");
     expect(text()).not.toContain("Prominence");
-    expect(text()).toContain("the others are ignored");
-  });
-
-  it("describes the current tempo and its limits", () => {
-    expect(text()).toContain("starts at 120");
-    expect(text()).toContain("from 60 to 156");
-    expect(text()).not.toContain("the last 8 peaks");
+    expect(text()).toContain("the other settings are ignored");
   });
 
   it("has nothing the page would have to escape", () => {

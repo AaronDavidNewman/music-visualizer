@@ -1,13 +1,13 @@
 """Held notes: which notes a picture counts as the loudest ones of a frame, when a note that is still sounding keeps its place (feature 044).
 
-The pictures that take the n loudest notes of a frame (Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord and Spirograph) used to rank the notes of each frame by
+The pictures that take the n loudest notes of a frame (Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord, Spirograph and, for the starts of its voted tempos, Rhythm Circles) used to rank the notes of each frame by
 strength and take the first n. That forgets how long a note lasts, which has a lot to do with how loud it is heard: most notes start louder (the attack) and then fade, and a note
 that starts later can be louder than a note that is still ringing. A **held note** is a note that was in the selection of the frame before and is still among the loudest **n + k** of
 this frame (and still sounds): it keeps one of the n places. A note that is not held is a **newcomer** and can only take a **free place**, which is a place that no held note occupies:
 at the start, when fewer than n notes sound, or when a held note has fallen below the loudest n + k. ``k`` is the *Extra notes* setting, 1 to n. With ``k = 0`` a note is held only
 while it is among the loudest n, which is exactly the old selection: the library functions default to 0 and so change nothing for a caller that does not pass ``k``.
 
-The same rule serves two kinds of unit: the 84 notes (Decay, Decay Exp, Polar Chords, Polychord, Spirograph) and the 12 letters (Chromatic Decay, Chromatic Wireframe, whose letter energy is the loudest octave
+The same rule serves two kinds of unit: the 84 notes (Decay, Decay Exp, Polar Chords, Polychord, Spirograph, Rhythm Circles) and the 12 letters (Chromatic Decay, Chromatic Wireframe, whose letter energy is the loudest octave
 of each letter). Ties in strength go to the lower note (letter), as in every picture.
 
 This module knows nothing about the audio, the pictures or the job: it takes an array of strengths and answers with an array of places.
@@ -33,12 +33,12 @@ from .array_types import ArrayLike, LoudestIndices, NoteStrengths
 MIN_EXTRA_NOTES = 1  # the least k the user can choose
 MAX_EXTRA_NOTES = 8  # the most: the largest n of Polar Chords and Polychord (up to 8 notes); Spirograph takes up to 12 notes but its k also stops at 8 (feature 046)
 DEFAULT_EXTRA_NOTES = 2  # k when a job does not say
-LOUDEST_COUNT = 5  # n for the pictures that always take the five loudest notes (Decay, Decay Exp, Chromatic Decay, Chromatic Wireframe)
-HELD_NOTES_TYPES = ("decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph")  # the image types that take the n loudest notes
+LOUDEST_COUNT = 5  # n for the pictures that always take the five loudest notes (Decay, Decay Exp, Chromatic Decay, Chromatic Wireframe, Rhythm Circles)
+HELD_NOTES_TYPES = ("decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles")  # the image types that take the n loudest notes
 
 
 def notes_of(image_type: str, polar_notes: int, polychord_notes: int, spirograph_notes: int = MAX_EXTRA_NOTES) -> int:
-    """The number of notes n of a picture, which is the largest value of k that the picture accepts: ``LOUDEST_COUNT`` for Decay, Decay Exp, Chromatic Decay and Chromatic Wireframe,
+    """The number of notes n of a picture, which is the largest value of k that the picture accepts: ``LOUDEST_COUNT`` for Decay, Decay Exp, Chromatic Decay, Chromatic Wireframe and Rhythm Circles,
     ``polar_notes`` for Polar Chords, ``polychord_notes`` for Polychord, the smaller of ``spirograph_notes`` (5 to 12) and ``MAX_EXTRA_NOTES`` for Spirograph (k stops at 8 even for
     12 notes), and ``MAX_EXTRA_NOTES`` for a picture that does not take the n loudest notes (the widest value its Extra notes can have).
 
@@ -59,7 +59,7 @@ def notes_of(image_type: str, polar_notes: int, polychord_notes: int, spirograph
 def check_extra_notes(value: object, limit: int = MAX_EXTRA_NOTES) -> int:
     """The *Extra notes* setting as a whole number: ``value`` must be a whole number from 1 to ``limit`` (a bool, a string, a fraction or a non-finite number is refused).
 
-    ``limit`` is 8 for any picture and the picture's own n (5, or the Notes shown / Number of notes setting, at most 8) for the seven that use it.
+    ``limit`` is 8 for any picture and the picture's own n (5, or the Notes shown / Number of notes setting, at most 8) for the eight that use it.
 
     Returns:
         The number as an ``int``, from ``MIN_EXTRA_NOTES`` to ``limit``.

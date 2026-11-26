@@ -324,6 +324,12 @@ def test_the_other_types_do_not_depend_on_the_spirograph_notes():
     assert notes_of("polychord", 7, 6) == 6  # three arguments, as before
 
 
-def test_the_types_that_take_the_n_loudest_notes_are_seven_and_include_spirograph():
-    assert len(HELD_NOTES_TYPES) == 7
+def test_the_types_that_take_the_n_loudest_notes_are_eight_and_include_spirograph_and_rhythm_circles():
+    assert len(HELD_NOTES_TYPES) == 8
     assert "spirograph" in HELD_NOTES_TYPES
+    assert "rhythm-circles" in HELD_NOTES_TYPES  # feature 047: its voted tempos follow the starts of the sustained loudest notes
+
+
+def test_rhythm_circles_takes_the_five_loudest_notes_whatever_the_other_notes_settings():
+    for polar, polychord, spirograph in ((5, 5, 5), (8, 8, 12)):
+        assert notes_of("rhythm-circles", polar, polychord, spirograph) == 5

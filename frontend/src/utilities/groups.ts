@@ -33,7 +33,9 @@ export const GROUPS: readonly GroupDefinition[] = [
   { id: "polychord", title: "Polychord", controls: ["polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation"] },
   // Spirograph (feature 046): the notes tracked in each frame, the history of frames in a picture and how fast it fades; the beat sets the turns and the big circle, so the Local peaks group (Minimum distance) follows
   { id: "spirograph", title: "Spirograph", controls: ["spirograph-notes", "spirograph-history", "spirograph-fade"] },
-  // the Extra notes (feature 044) of the seven pictures that take the n loudest notes: one setting, in a group of its own after the group of the type
+  // Rhythm Circles (feature 047): the Vote limit of the tempos voted from the starts of the loudest notes; Held notes (Extra notes) and Local peaks (Minimum distance) follow
+  { id: "rhythm-circles", title: "Rhythm Circles", controls: ["vote-limit"] },
+  // the Extra notes (feature 044) of the eight pictures that take the n loudest notes: one setting, in a group of its own after the group of the type
   { id: "held-notes", title: "Held notes", controls: ["extra-notes"] },
   // the export of 3D files (feature 045) of Contour and Chromatic Wireframe: one checkbox, in a group of its own after the group of the type (and after Held notes)
   { id: "obj-export", title: "3D export", controls: ["export-obj"] },
@@ -47,7 +49,7 @@ export const GROUPS: readonly GroupDefinition[] = [
 ];
 
 /** The ids of the groups that belong to one image type: exactly one of them follows the Image type group. */
-const TYPE_GROUPS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"];
+const TYPE_GROUPS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"];
 
 const byId = new Map(GROUPS.map((g) => [g.id, g]));
 
@@ -61,10 +63,10 @@ export function controlsIn(id: string): readonly string[] {
 
 /**
  * The ids of the groups shown for an image type, top to bottom: the top group, Colormap, Image type, the group of the type
- * (none for Energy graphs and Rhythm Circles, which have no controls of their own, nor for a type that is not one of the ten), Held notes for the seven pictures that take the n loudest notes
- * (Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord and Spirograph), Note layout for Decay, Decay Exp and Polar Chords,
+ * (none for Energy graphs, which has no controls of its own, nor for a type that is not one of the ten; Rhythm Circles has the Vote limit), Held notes for the eight pictures that take the n loudest notes
+ * (Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord, Spirograph and Rhythm Circles), Note layout for Decay, Decay Exp and Polar Chords,
  * Local peaks for Contour (with the checkbox) and for Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord and Spirograph (without it), and Image smoothing when the type draws a grid (Contour). Energy graphs has
- * no group of its own: only the top group, Colormap and Image type. Rhythm Circles has none either, and adds only Local peaks (without the checkbox) to those three.
+ * no group of its own: only the top group, Colormap and Image type. Rhythm Circles has the Rhythm Circles group (Vote limit), Held notes and Local peaks (without the checkbox).
  */
 export function groupsFor(imageType: string): string[] {
   const ids = ["analysis", "colormap", "image-type"];

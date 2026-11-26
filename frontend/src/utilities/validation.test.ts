@@ -305,6 +305,7 @@ describe("gaussian smoothing", () => {
 
 import { DECAY_AMOUNT_RANGE, DECAY_LEVELS, DEFAULT_DECAY_AMOUNTS, formatDecayAmount, validateDecayAmount } from "./validation";
 import { DEFAULT_WAVE_COUNT, WAVE_COUNT_RANGE, formatWaveCount, validateWaveCount, waveCountApplies } from "./validation";
+import { DEFAULT_VOTE_LIMIT, VOTE_LIMIT_RANGE, formatVoteLimit, validateVoteLimit } from "./validation";
 import { DECAY_RATE_RANGE, DEFAULT_DECAY_RATE, decayRateApplies, formatDecayRate, isRingsType, validateDecayRate } from "./validation";
 import {
   DEFAULT_BEAT_COLORING,
@@ -753,23 +754,23 @@ describe("Polychord (feature 042)", () => {
 });
 
 describe("extra notes (feature 044)", () => {
-  const SEVEN = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"];
+  const EIGHT = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"]; // Rhythm Circles since feature 047
 
   it("is a whole number from 1 to 8 in steps of 1, defaulting to 2", () => {
     expect(EXTRA_NOTES_RANGE).toEqual({ min: 1, max: 8, step: 1 });
     expect(DEFAULT_EXTRA_NOTES).toBe(2);
   });
 
-  it("is used by exactly the seven pictures that take the n loudest notes", () => {
-    for (const type of IMAGE_TYPES.map((t) => t.value as string)) expect(usesHeldNotes(type), type).toBe(SEVEN.includes(type));
+  it("is used by exactly the eight pictures that take the n loudest notes", () => {
+    for (const type of IMAGE_TYPES.map((t) => t.value as string)) expect(usesHeldNotes(type), type).toBe(EIGHT.includes(type));
     expect(usesHeldNotes("nonsense")).toBe(false);
   });
 
   it("has the number of notes n of the picture: 5, Notes shown, Number of notes, and 8 for a picture that does not use it", () => {
-    for (const type of ["decay", "decay-exp", "chromatic-decay", "chromatic-wireframe"]) expect(heldNotesCount(type, 7, 8), type).toBe(5);
+    for (const type of ["decay", "decay-exp", "chromatic-decay", "chromatic-wireframe", "rhythm-circles"]) expect(heldNotesCount(type, 7, 8), type).toBe(5);
     expect(heldNotesCount("polar-chords", 7, 8)).toBe(7);
     expect(heldNotesCount("polychord", 7, 8)).toBe(8);
-    for (const type of ["contour", "energy-graphs", "rhythm-circles"]) expect(heldNotesCount(type, 7, 8), type).toBe(8);
+    for (const type of ["contour", "energy-graphs"]) expect(heldNotesCount(type, 7, 8), type).toBe(8);
   });
 
   it("has, for Spirograph, the smaller of its Number of notes and 8 (k stops at 8 even for 12 notes)", () => {
@@ -886,5 +887,31 @@ describe("Spirograph (feature 046)", () => {
     expect(formatSpirographFade(0.85)).toBe("0.85 per frame");
     expect(formatSpirographNotes(8)).toBe("8 notes");
     expect(formatSpirographHistory(12)).toBe("12 frames");
+  });
+});
+
+describe("the Vote limit of Rhythm Circles (feature 047)", () => {
+  it("is a whole number from 1 to 100 in steps of 1, defaulting to 20", () => {
+    expect(VOTE_LIMIT_RANGE).toEqual({ min: 1, max: 100, step: 1 });
+    expect(DEFAULT_VOTE_LIMIT).toBe(20);
+  });
+
+  it.each([1, 20, 100, "20", " 7 ", 50.0, "5.0"])("accepts %j", (value) => {
+    expect(validateVoteLimit(value)).toBeNull();
+  });
+
+  it.each([0, 101, 2.5, "abc", "", "nan", "  ", -1, "1e3", Infinity, NaN])("refuses %j with the message", (value) => {
+    expect(validateVoteLimit(value)).toBe("The vote limit must be a whole number from 1 to 100.");
+  });
+
+  it("is shown as the number", () => {
+    expect(formatVoteLimit(20)).toBe("20");
+    expect(formatVoteLimit(100)).toBe("100");
+  });
+
+  it("is used with the other Rhythm Circles settings: Extra notes (5) and Minimum distance", () => {
+    expect(isRhythmType("rhythm-circles")).toBe(true);
+    expect(usesHeldNotes("rhythm-circles")).toBe(true);
+    expect(peakSettingsShown("rhythm-circles", false)).toBe(true);
   });
 });

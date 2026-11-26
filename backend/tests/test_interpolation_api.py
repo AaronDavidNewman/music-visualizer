@@ -95,7 +95,7 @@ def test_the_response_has_the_usual_keys_and_the_interpolate_value(client):
     assert set(job) == {
         "job_id", "file_name", "sample_rate", "duration_seconds", "window_size", "frame_rate", "frame_count",
         "threshold", "image_type", "colormap", "resolution", "note_count",
-        "interpolate", "gaussian", "beat_coloring", "peak_distance", "note_layout", "decay_rate", "wave_count", "polar_notes", "polychord_notes", "polychord_min_copies", "polychord_max_copies", "polychord_rotation", "spirograph_notes", "spirograph_history", "spirograph_fade", "extra_notes", "export_obj", "obj_url", "decay_low", "decay_medium", "decay_high", "decay_saturated", "step_samples", "window_count", "frame_url_template",
+        "interpolate", "gaussian", "beat_coloring", "peak_distance", "note_layout", "decay_rate", "wave_count", "polar_notes", "polychord_notes", "polychord_min_copies", "polychord_max_copies", "polychord_rotation", "spirograph_notes", "spirograph_history", "spirograph_fade", "vote_limit", "extra_notes", "export_obj", "obj_url", "decay_low", "decay_medium", "decay_high", "decay_saturated", "step_samples", "window_count", "frame_url_template",
     }  # fmt: skip
     for key in REMOVED:
         assert key not in job

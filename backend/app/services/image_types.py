@@ -9,9 +9,9 @@ loudest notes (clockwise) and the chord of the frame (counterclockwise) (``polar
 running histogram of the 84 notes with two data sets, which notes have been loudest (rank points) and their accumulated
 amplitude (quasi-decibels), each softmaxed (``energy_graphs.py``). ``chromatic-decay`` is ``decay-exp`` for the 12
 chromatic tones only: 12 circles on a ring in circle-of-fifths order, charged by the loudest octave of each letter,
-whose points decay to the letters 5 and 7 above (``chromatic_decay.py``). ``rhythm-circles`` is four concentric notched
-rings that turn with the current tempo found from the local peaks, the tempo of the latest peak and the rates of change
-of both (``rhythm_circles.py``). ``chromatic-wireframe`` draws the points of ``chromatic-decay`` as a ridge plot in
+whose points decay to the letters 5 and 7 above (``chromatic_decay.py``). ``rhythm-circles`` is six concentric notched
+rings that turn with the average of the last 5 best-voted tempos and the best-voted tempo itself, found from the starts of the sustained loudest
+notes (``tempo_votes.py``), the tempo of the latest local peak and the rates of change of the three (``rhythm_circles.py``). ``chromatic-wireframe`` draws the points of ``chromatic-decay`` as a ridge plot in
 three dimensions: one line for each frame across the 12 letters, the newest in front, each in the color of its place in
 the beat (``chromatic_wireframe.py``). ``polychord`` draws the loudest notes of each frame as a chain of tapering links
 that starts at the center and bends by the circle of fifths, repeated as copies turned 30 degrees (as many as the beat
@@ -43,15 +43,18 @@ Pipeline overview:
                * BEAT: ``local_peaks.measure_local_peaks()`` then ``LocalPeaks.frame_positions()`` - ``BeatPositions``
                  ``(frames,)``: the place of each frame in the local energy peak, 0 to 1. Done before AVERAGE.
                * RHYTHM: ``local_peaks.measure_local_peaks()`` then ``rhythm_circles.rhythm_angles()`` (which asks
-                 ``tempo_finder.find_tempo()`` for the current tempo) - ``CircleAngles`` ``(frames, 4)``: the angle of
-                 each ring in each frame. Done before AVERAGE.
+                 ``tempo_votes.note_starts()`` for the starts of the sustained loudest notes in the 60 ms ANALYZE windows,
+                 then ``vote_tempos()``, ``ranked_tempos()``, ``average_tempos()`` and ``vote_series()`` for the average and the raw best-voted tempo) -
+                 ``CircleAngles`` ``(frames, 6)``: the angle of each ring in each frame. Needs only the ANALYZE windows
+                 (the voted tempos do not depend on the frame rate).
                * ENERGY: ``energy_graphs.frame_energy()`` - two ``EnergyTotals`` ``(frames, 84)``: the running rank
                  points and quasi-decibel values of each note. Made in the same call as AVERAGE, right after it.
     AVERAGE  - ``frame_rendering.average_frames()`` - ``NoteStrengths`` ``(frames, 88)``: the mean of the windows each
                frame owns (the windows that start in its period; the latest earlier window when none does). This is
                the only smoothing of the note data: the frame rate decides how many windows each frame averages, and
                the frames are not blended with each other. Energy Graphs and Rhythm Circles draw from their
-               measurement and do not use these values.
+               measurement and do not draw from these values (Rhythm Circles finds the starts of its voted
+               tempos in the windows, before averaging).
     DRAW     - the type's own stages (below) - ``Pictures`` ``(height, width, 3)`` for each frame, 400 rows by 600
                columns.
     SAVE     - each picture is written as ``frame_<index>.png`` (a few threads, ``frame_saving.SAVE_WORKERS``) and
@@ -114,10 +117,18 @@ Pipeline overview:
         2. ``chromatic_decay.write_chromatic_frames()`` - the target of the beat (``ring_levels()``,
            ``ring_colors_of()``), then ``chromatic_decay._frame()`` for each frame: the 12 circles on a ring in
            circle-of-fifths order: ``Pictures``.
-    rhythm-circles - MEASURE: RHYTHM (no beat). Settings that apply: none (only the colormap).
-      DRAW: ``rhythm_circles.write_rhythm_frames()`` - ``rhythm_circles.ring_colors_rows()`` and
-            ``rhythm_circles._geometry()`` once, then ``rhythm_circles._frame()`` for each frame: four rings with a
-            notch turned by ``CircleAngles``: ``Pictures``.
+    rhythm-circles - MEASURE: RHYTHM (no beat; the local peaks for the two inner rings, the held loudest notes for the voting). Settings that
+      apply: Extra notes (k, 1 to 5), Vote limit (1 to 100, default 20), Minimum distance (the peaks), the colormap.
+      DRAW:
+        1. ``tempo_votes.note_starts()`` - ``StartTimes`` ``(starts,)`` (the starts of the held 5 loudest notes, made with
+           ``held_notes.hold_loudest()``: ``LoudestIndices`` ``(frames, 5)``), then ``tempo_votes.vote_tempos()`` -
+           ``TempoVotes`` ``(starts, 18)`` (with ``fitting_tempos()``: ``FitMatrix`` ``(cycles, 18)``),
+           ``tempo_votes.ranked_tempos()`` - ``RankedTempos`` ``(starts, 2)``, ``tempo_votes.average_tempos()`` -
+           ``AveragedTempos`` ``(starts,)`` and ``tempo_votes.vote_series()`` - ``CircleSeries`` ``(starts, 4)``; ``rhythm_circles.peak_series()`` - ``CircleSeries`` ``(peaks, 2)``; both turned
+           into angles by ``rhythm_circles.circle_angles()`` and joined: ``CircleAngles`` ``(frames, 6)``.
+        2. ``rhythm_circles.write_rhythm_frames()`` - ``rhythm_circles.ring_colors_rows()`` and
+           ``rhythm_circles._geometry()`` once, then ``rhythm_circles._frame()`` for each frame: six rings with a
+           notch turned by ``CircleAngles``: ``Pictures``.
     chromatic-wireframe - MEASURE: BEAT. Settings that apply: Threshold, Decay rate (whole numbers 1 to 10), Extra notes (k), Export 3D files.
       DRAW:
         1. ``chromatic_decay.circle_points()`` - as chromatic-decay: ``CirclePoints`` ``(frames, 12)``.
@@ -166,8 +177,8 @@ Pipeline overview:
            from ``spirograph.color_numbers()`` and ``CurveWidths`` ``(curves,)``),
            then ``spirograph._frame()``: all the curves in one ``LineCollection`` on black: ``Pictures``.
 
-    The seven types that take the n loudest notes (decay, decay-exp, polar-chords, chromatic-decay, chromatic-wireframe,
-    polychord and spirograph) choose them with ``held_notes.hold_loudest()`` (feature 044): a note that was among the n loudest
+    The eight types that take the n loudest notes (decay, decay-exp, polar-chords, chromatic-decay, chromatic-wireframe,
+    polychord, spirograph and rhythm-circles, the last for the starts of its voted tempos: 5 notes) choose them with ``held_notes.hold_loudest()`` (feature 044): a note that was among the n loudest
     of the frame before keeps its place while it is among the loudest n + k and still sounds, k being the Extra notes setting
     (1 to n, at most 8; the job passes 2 when the request does not say). A louder note that is not held waits for a free place.
 

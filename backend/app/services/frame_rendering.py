@@ -332,11 +332,12 @@ def write_frames(
     peak) sets the turns and the big circle's radius of the curves of each frame's entry (``spirograph.peak_percents()``). The colormap, ``beat`` and
     ``extra_notes`` apply; every other setting is checked and ignored.
 
-    ``image_type="rhythm-circles"`` draws four concentric notched rings turned by the current tempo found from the local
-    peaks, the tempo of the latest local peak and the rates of change of both (see ``rhythm_circles``), from ``rhythm``,
-    the angles of every frame made by ``rhythm_circles.rhythm_angles`` (required for this type, ignored by the others;
-    it must have one frame for each row of ``frames``). Only the colormap applies; every other setting is checked and
-    ignored.
+    ``image_type="rhythm-circles"`` draws six concentric notched rings turned by the two best-voted tempos of the starts of the
+    sustained loudest notes, the tempo of the latest local peak and the rates of change of the three (see ``rhythm_circles``
+    and ``tempo_votes``), from ``rhythm``, the angles ``(frames, 6)`` of every frame made by ``rhythm_circles.rhythm_angles``
+    (required for this type, ignored by the others; it must have one frame for each row of ``frames``). The voting (the Extra
+    notes and the Vote limit) is done before this call, in ``rhythm_angles``. Only the colormap applies; ``extra_notes`` is
+    checked against the 5 notes of the picture and ignored; every other setting is checked and ignored.
 
     ``image_type="polar-chords"`` draws a polar bar graph (see ``polar_chords``): the ``polar_notes`` loudest notes of a
     frame (a whole number from 5 to 8, default 5, checked for every image type and used by this one only) as bars
@@ -354,7 +355,8 @@ def write_frames(
 
     ``extra_notes`` (feature 044; 0, the default, to the number of notes of the picture: 5, ``polar_notes``, the notes of
     ``polychord_settings`` or the smaller of the notes of ``spirograph_settings`` and 8; 0 to 8 for the other types, which ignore it) is the Extra notes setting k of the pictures that take the
-    n loudest notes (``decay``, ``decay-exp``, ``polar-chords``, ``chromatic-decay``, ``chromatic-wireframe``, ``polychord``, ``spirograph``): a note
+    n loudest notes (``decay``, ``decay-exp``, ``polar-chords``, ``chromatic-decay``, ``chromatic-wireframe``, ``polychord``, ``spirograph``, and
+    ``rhythm-circles``, whose job uses it for the starts and ``write_frames`` only checks it): a note
     that was among the n loudest in the frame before keeps its place while it is among the loudest n + k (see ``held_notes``). With 0 the
     n loudest notes are chosen as before. A job passes 1 to n (2 when the request does not say).
 
@@ -443,7 +445,7 @@ def write_frames(
     if image_type == "spirograph":
         write_spirograph_frames(frames, spirograph_settings, colormap, directory, IMAGE_WIDTH, IMAGE_HEIGHT, extra_notes, beat)
         return
-    # four notched rings turned by ``rhythm`` (the rest of the settings above are checked and not used)
+    # six notched rings turned by ``rhythm`` (the rest of the settings above are checked and not used)
     if image_type == "rhythm-circles":
         if rhythm is None:
             raise ValueError("Rhythm Circles needs the rhythm data.")

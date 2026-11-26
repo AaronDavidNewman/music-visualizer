@@ -3,7 +3,10 @@ import { renderToString } from "vue/server-renderer";
 import { describe, expect, it } from "vitest";
 import SettingsForm from "./SettingsForm.vue";
 import formSource from "./SettingsForm.vue?raw";
-import { COLORMAPS, DEFAULT_COLORMAP } from "../utilities/validation";
+import { COLORMAPS, DEFAULT_COLORMAP, IMAGE_TYPES as ALL_IMAGE_TYPES } from "../utilities/validation";
+import { voteLimitHelp } from "../utilities/help";
+
+const IMAGE_TYPE_VALUES = ALL_IMAGE_TYPES.map((t) => t.value as string);
 import {
   chromaticRateHelp,
   decayAmountHelp,
@@ -369,7 +372,7 @@ describe("the groups of the chosen image type (Story 2)", () => {
 
 
   it("keeps the groups of the types in one list, shown by the group model", () => {
-    expect(formSource).toContain('TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"]');
+    expect(formSource).toContain('TYPE_GROUP_IDS = ["contour", "decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"]');
     for (const removed of ["circleUnit", "circleRadius", "circleResize", "circleMemory", "circleNotes", "blendWidth"]) expect(formSource, removed).not.toContain(removed);
   });
 
@@ -887,7 +890,7 @@ describe("the page for Chromatic Decay (feature 035)", () => {
     expect(formSource).toContain("validateChromaticRate(chromaticRate.value)");
     expect(formSource).toMatch(/!decayRateError\.value &&\s+!chromaticRateError\.value &&/); // an invalid rate blocks Create frames
     expect(formSource).toContain('(inTypeGroup("chromatic-decay-rate") && !!chromaticRateError.value)');
-    expect(formSource).toContain('"decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"]');
+    expect(formSource).toContain('"decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"]');
   });
 });
 
@@ -921,18 +924,54 @@ describe("the Threshold of Chromatic Decay (feature 037)", () => {
   });
 });
 
-describe("the page for Rhythm Circles (feature 038)", () => {
-  it("shows Analysis, Colormap, Image type and Local peaks (the two settings, no checkbox), in this order", async () => {
+describe("the page for Rhythm Circles (features 038 and 047)", () => {
+  it("shows Analysis, Colormap, Image type, Rhythm Circles (the Vote limit), Held notes (Extra notes) and Local peaks (Minimum distance, no checkbox), in this order", async () => {
     const groups = groupsOf(await renderType("rhythm-circles"));
     expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
+      ["rhythm-circles", "Rhythm Circles", ["vote-limit"]],
+      ["held-notes", "Held notes", ["extra-notes"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
     ]);
   });
 
-  it("has none of the other controls and no group but those four", async () => {
+  it("has the Vote limit slider from 1 to 100 in steps of 1, starting at 20, with its label, readout and help, before Extra notes and Minimum distance", async () => {
+    const html = await renderType("rhythm-circles");
+    const slider = html.match(/<input id="vote-limit"[^>]*>/)?.[0] ?? "";
+    expect(slider).toContain('type="range"');
+    expect(slider).toContain('min="1"');
+    expect(slider).toContain('max="100"');
+    expect(slider).toContain('step="1"');
+    expect(slider).toContain('value="20"');
+    expect(html).toMatch(/<label[^>]*for="vote-limit"[^>]*>Vote limit<\/label>/);
+    expect(html).toMatch(/<output[^>]*for="vote-limit"[^>]*>20<\/output>/);
+    expect(html).toContain('aria-label="About vote limit"');
+    expect(html).toContain(voteLimitHelp);
+    expect(html.indexOf('id="vote-limit"')).toBeLessThan(html.indexOf('id="extra-notes"'));
+    expect(html.indexOf('id="extra-notes"')).toBeLessThan(html.indexOf('for="peak-distance"'));
+    expect(slider).not.toContain("disabled");
+    expect((await renderType("rhythm-circles", true)).match(/<input id="vote-limit"[^>]*>/)?.[0]).toContain("disabled");
+  });
+
+  it("keeps the value in a ref, sends it, checks it and lets an error mark the group and block Create frames", () => {
+    expect(formSource).toContain("const voteLimit = ref<number>(DEFAULT_VOTE_LIMIT)");
+    expect(formSource).toContain("voteLimit: voteLimit.value");
+    expect(formSource).toContain("validateVoteLimit(voteLimit.value)");
+    expect(formSource).toMatch(/!spirographFadeError\.value &&\s+!voteLimitError\.value &&/);
+    expect(formSource).toContain('(inTypeGroup("vote-limit") && !!voteLimitError.value)');
+  });
+
+  it("is shown for no other type", async () => {
+    for (const type of IMAGE_TYPE_VALUES.filter((t) => t !== "rhythm-circles")) {
+      const html = await renderType(type);
+      expect(html, type).not.toContain('id="vote-limit"');
+      expect(html, type).not.toContain('data-group="rhythm-circles"');
+    }
+  });
+
+  it("has none of the other controls and no group but those six", async () => {
     const html = await renderType("rhythm-circles");
     for (const id of ["smoothing", "smoothing-window", "threshold", "notes", "resolution", "interpolate", "gaussian", "note-layout", "decay-rate", "chromatic-decay-rate", "polar-notes", "beat-coloring", "blend-width", "wave-count", "circle-unit"]) {
       expect(html, id).not.toContain(`id="${id}"`);
@@ -1083,7 +1122,7 @@ describe("the page for Polychord (feature 042)", () => {
 
 
 describe("the Extra notes (k) control (feature 044)", () => {
-  const SEVEN = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"];
+  const SEVEN = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"]; // eight since feature 047 (the name is old)
   const slider = (html: string) => html.match(/<input id="extra-notes"[^>]*>/)?.[0] ?? "";
 
   it.each(SEVEN)("is a slider from 1 to the number of notes, starting at 2, with a label and an info button, for %s", async (type) => {
@@ -1104,9 +1143,10 @@ describe("the Extra notes (k) control (feature 044)", () => {
     expect(slider(await renderType("polar-chords"))).toContain('max="5"'); // Notes shown starts at 5
     expect(slider(await renderType("polychord"))).toContain('max="6"'); // Number of notes starts at 6
     expect(slider(await renderType("spirograph"))).toContain('max="8"'); // Number of notes starts at 8, and k stops at 8
+    expect(slider(await renderType("rhythm-circles"))).toContain('max="5"'); // feature 047: its n is 5
   });
 
-  it.each(["contour", "energy-graphs", "rhythm-circles"])("is not shown for %s", async (type) => {
+  it.each(["contour", "energy-graphs"])("is not shown for %s", async (type) => {
     const html = await renderType(type);
     expect(html).not.toContain('id="extra-notes"');
     expect(html).not.toContain('data-group="held-notes"');

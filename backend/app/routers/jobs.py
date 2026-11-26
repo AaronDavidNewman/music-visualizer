@@ -21,10 +21,10 @@ Order of operations:
     6. Measure, only for the image types that use it (Spirograph, feature 046, uses the beat only: the turns and the
        radius of its curves follow the place in the local energy peak) - ``local_peaks.measure_local_peaks()`` with ``frame_positions()``
        (the beat: ``BeatPositions`` ``(frames,)``), for Polychord also ``polychord.frame_tempos()`` (``FrameTempos``
-       ``(frames,)``, from the same measurement) or ``rhythm_circles.rhythm_angles()`` (``CircleAngles``
-       ``(frames, 4)``).
-    7. Average the windows into frames and draw them - ``frame_rendering.average_frames()`` then
-       ``frame_rendering.write_frames()`` (for Energy Graphs ``energy_graphs.frame_energy()`` is made in the same call,
+       ``(frames,)``, from the same measurement). Rhythm Circles (feature 047) calls
+       ``rhythm_circles.rhythm_angles()`` (``CircleAngles`` ``(frames, 6)``) with the local peaks and the 60 ms windows of step 5 (the starts of the
+       sustained loudest notes are found in the windows, not the frames, so they do not depend on the frame rate), Extra notes and the Vote limit.
+    7. Average the windows into frames and draw them - ``frame_rendering.average_frames()`` then ``frame_rendering.write_frames()`` (for Energy Graphs ``energy_graphs.frame_energy()`` is made in the same call,
        after the averaging) - one PNG for each frame in the frames folder of the job, and with ``export_obj`` (Contour and
        Chromatic Wireframe only) one OBJ file for each frame in its ``obj`` folder.
     8. Record the frame rate - ``render.json`` in the same folder - for the video that is made later.
@@ -99,6 +99,7 @@ from ..services.local_peaks import (
 )
 from ..services.energy_graphs import frame_energy
 from ..services.rhythm_circles import rhythm_angles
+from ..services.tempo_votes import DEFAULT_VOTE_LIMIT, VOTE_LIMIT_MESSAGE, check_vote_limit
 from ..services.spirograph import (
     DEFAULT_FADE as DEFAULT_SPIROGRAPH_FADE,
     DEFAULT_HISTORY as DEFAULT_SPIROGRAPH_HISTORY,
@@ -354,6 +355,17 @@ def _parse_spirograph_settings(notes: str | None, history: str | None, fade: str
     return SpirographSettings(notes_value, history_value, fade_value)
 
 
+def _parse_vote_limit(text: str | None, sent: bool) -> int:
+    """The requested Vote limit of Rhythm Circles (feature 047). Not sent means the default (20); anything sent must be a whole number from 1 to 100 (an empty text, a
+    word and ``nan`` are refused too), or the answer is a 400 with the message of the setting."""
+    if text is None and not sent:
+        return DEFAULT_VOTE_LIMIT
+    try:
+        return check_vote_limit(float(text or ""))
+    except ValueError:
+        raise HTTPException(status_code=400, detail=VOTE_LIMIT_MESSAGE) from None
+
+
 def _parse_wave_count(text: str | None, sent: bool) -> int:
     """The requested number of waves of the contour's beat wave. Not sent means the default; anything sent must be a
     whole number 2..10."""
@@ -479,6 +491,7 @@ def create_job(
     spirograph_notes: str | None = Form(None),
     spirograph_history: str | None = Form(None),
     spirograph_fade: str | None = Form(None),
+    vote_limit: str | None = Form(None),
     decay_low: str | None = Form(None),
     decay_medium: str | None = Form(None),
     decay_high: str | None = Form(None),
@@ -504,6 +517,7 @@ def create_job(
     polar_notes_value = _parse_polar_notes(polar_notes, "polar_notes" in sent)
     polychord_settings_value = _parse_polychord_settings(polychord_notes, polychord_min_copies, polychord_max_copies, polychord_rotation, sent)
     spirograph_settings_value = _parse_spirograph_settings(spirograph_notes, spirograph_history, spirograph_fade, sent)
+    vote_limit_value = _parse_vote_limit(vote_limit, "vote_limit" in sent)
     extra_notes_value = _parse_extra_notes(
         extra_notes, "extra_notes" in sent, image_type_value, polar_notes_value, polychord_settings_value.notes, spirograph_settings_value.notes
     )
@@ -568,18 +582,22 @@ def create_job(
             polychord = PolychordData(frame_tempos(peaks, fps, frames), fps)
         elif image_type_value in ("decay", "decay-exp", "polar-chords", "spirograph", *CHROMATIC_TYPES) or (beat_coloring_value and image_type_value == "contour"):
             beat = measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE).frame_positions(fps, frames)
-        # Rhythm Circles (features 038 and 040) turns its rings with the local peaks themselves (and the current tempo
-        # found from them), not with the beat: one measurement, with the minimum distance of the request. The prominence
-        # is not a setting (feature 040): every measurement uses 20 percent
+        # the windows averaged into the frames (the note strengths that every picture is drawn from): made once, for write_frames
+        values = average_frames(result, fps, frames)
+        # Rhythm Circles (features 038, 040 and 047) turns its two inner rings with the local peaks themselves (one
+        # measurement, with the minimum distance of the request; the prominence is not a setting (feature 040): every
+        # measurement uses 20 percent) and its four outer rings with the average and the raw best-voted tempo of the starts of the
+        # sustained loudest notes (Extra notes, Vote limit), not with the beat
         rhythm = None
         if image_type_value == "rhythm-circles":
-            rhythm = rhythm_angles(measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE), fps, frames)
+            peaks = measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE)
+            rhythm = rhythm_angles(peaks, fps, frames, result.frames, extra_notes_value, vote_limit_value)  # the starts come from the 60 ms windows, not the frames
         # write_frames draws the frames (the averaged note values) as the chosen image type; for the contour, a resolution
         # above 1 first interpolates the grid of note values to a finer one, a number of notes below 84 first builds the picture from the notes with the most
         # energy in the file only, and an interpolate value above 1 draws only every n-th frame and makes the others
         # from their neighbors with Pillow
         write_frames(
-            average_frames(result, fps, frames),
+            values,
             frames_dir,
             colormap=colormap_value,
             threshold=threshold_value,
@@ -643,6 +661,7 @@ def create_job(
         "spirograph_notes": spirograph_settings_value.notes,
         "spirograph_history": spirograph_settings_value.history,
         "spirograph_fade": spirograph_settings_value.fade,
+        "vote_limit": vote_limit_value,
         "extra_notes": extra_notes_value,
         "export_obj": export_obj_value,
         "obj_url": f"/api/jobs/{job_id}/obj" if export_obj_value else None,

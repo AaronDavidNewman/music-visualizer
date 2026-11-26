@@ -1,4 +1,5 @@
-"""The ``rhythm-circles`` image type through ``POST /api/jobs``: the type, the local peaks settings, a click track end to end, silence, the ignored settings (feature 038)."""
+"""The ``rhythm-circles`` image type through ``POST /api/jobs``: the type, the local peaks settings, a click track end to end, silence, the ignored settings (feature 038),
+and since feature 047 the six rings, the Vote limit and the Extra notes of the voted tempos."""
 
 import io
 
@@ -20,7 +21,7 @@ TYPE_MESSAGE = f"The image type must be one of {', '.join(IMAGE_TYPES)}."
 DISTANCE_MESSAGE = "The minimum distance must be a number from 100 to 2000 milliseconds."
 FPS = 10
 OUTER = HEIGHT / 2 - 10  # the outer radius of the first ring: 190
-RINGS = 4
+RINGS = 6
 RING = OUTER / RINGS  # a ring and its gap
 GAP = 4
 
@@ -49,7 +50,7 @@ def middle_radius(k):
 
 
 def notch_row(k):
-    return int(np.rint((1 - (k - 1) / 3) * 255))
+    return int(np.rint((1 - (k - 1) / 5) * 255))
 
 
 def notch_turns(image, k, colormap=COLORMAP):
@@ -72,13 +73,22 @@ def apart(a, b):
 
 
 class Spy:
-    """Keeps the local peaks the job measured and the arguments it measured them with."""
+    """Keeps the local peaks the job measured and the arguments it measured them with, and the arguments and the result of ``rhythm_angles``."""
 
     def __init__(self, monkeypatch):
         import app.routers.jobs as jobs
 
         self.calls, self.results = [], []
+        self.rhythm_calls, self.rhythm_results = [], []
         real = jobs.measure_local_peaks
+        real_rhythm = jobs.rhythm_angles
+
+        def spy_rhythm(*args):
+            self.rhythm_calls.append(args)
+            self.rhythm_results.append(real_rhythm(*args))
+            return self.rhythm_results[-1]
+
+        monkeypatch.setattr(jobs, "rhythm_angles", spy_rhythm)
 
         def spy(left, right, rate, distance, prominence):
             self.calls.append((distance, prominence))
@@ -88,8 +98,9 @@ class Spy:
         monkeypatch.setattr(jobs, "measure_local_peaks", spy)
 
 
-def expected_turns(peaks, job):
-    return rc.rhythm_angles(peaks, FPS, job["frame_count"]).angles % 1.0
+def expected_turns(spy, index=0):
+    """The angles (turns, one frame a row, six columns) that the job's own call of ``rhythm_angles`` made."""
+    return spy.rhythm_results[index].angles % 1.0
 
 
 # --- choosing it --------------------------------------------------------------------------------------------------------------
@@ -133,11 +144,12 @@ def test_the_frames_are_png_pictures_of_the_usual_size(client):
 def test_every_notch_of_every_frame_is_where_the_library_puts_it_for_the_peaks_the_job_measured(client, monkeypatch):
     spy = Spy(monkeypatch)
     job = rhythm(client, pulse_wav()).json()
-    assert len(spy.results) == 1
+    assert len(spy.results) == 1 and len(spy.rhythm_results) == 1
     peaks = spy.results[0]
     assert len(peaks.peaks) >= 8  # a click every half second for six seconds: the peaks are really there
     assert 100 < np.median([p.rate for p in peaks.peaks[1:]]) < 140  # about 120 beats per minute
-    want = expected_turns(peaks, job)
+    want = expected_turns(spy)
+    assert want.shape == (job["frame_count"], RINGS)
     for i in range(job["frame_count"]):
         image = picture(client, job, i)
         for k in range(1, RINGS + 1):
@@ -149,26 +161,20 @@ def test_the_notch_of_the_local_peak_advances_its_rate_in_turns_a_minute_from_on
     job = rhythm(client, pulse_wav()).json()
     peaks = spy.results[0]
     for first in (30, 40, 50):  # frames in the middle of the track, between peaks
-        tempo = float(peaks.rate_at_time((first + 1.0) / FPS))  # the speed of the innermost level circle (ring 3, the local peak) there: one turn a beat
+        tempo = float(peaks.rate_at_time((first + 1.0) / FPS))  # the speed of the local peak circle (ring 5) there: one turn a beat
         assert 100 < tempo < 140
-        gain = (notch_turns(picture(client, job, first + 1), 3) - notch_turns(picture(client, job, first), 3)) % 1.0
+        gain = (notch_turns(picture(client, job, first + 1), 5) - notch_turns(picture(client, job, first), 5)) % 1.0
         assert apart(gain, tempo / 60.0 / FPS) * 360 < 8, (first, gain, tempo)  # a frame is a tenth of a second: about 72 degrees
 
 
-def test_the_notch_of_the_outer_ring_advances_by_the_current_tempo(client, monkeypatch):
+def test_the_notch_of_the_first_and_second_tempo_rings_advances_by_a_tempo_from_76_to_144_beats_per_minute(client, monkeypatch):
     spy = Spy(monkeypatch)
     job = rhythm(client, pulse_wav()).json()
-    peaks = spy.results[0]
-    from app.services.tempo_finder import find_tempo
-
-    times = [p.sample / peaks.file_rate for p in peaks.peaks]
-    tempos = find_tempo(times).tempos
     for first in (30, 40, 50):
-        latest = int(np.searchsorted(times, (first + 1.0) / FPS, side="right")) - 1  # the tempo of the latest peak at or before the middle of the two frames
-        tempo = float(tempos[latest]) if latest >= 0 else 120.0
-        assert 60 <= tempo <= 156
-        gain = (notch_turns(picture(client, job, first + 1), 1) - notch_turns(picture(client, job, first), 1)) % 1.0  # ring 1 is the current tempo
-        assert apart(gain, tempo / 60.0 / FPS) * 360 < 8, (first, gain, tempo)
+        for ring in (1, 3):  # the average and the raw first voted tempo
+            gain = (notch_turns(picture(client, job, first + 1), ring) - notch_turns(picture(client, job, first), ring)) % 1.0
+            assert 76 / 60 / FPS - 0.02 <= gain <= 144 / 60 / FPS + 0.02, (first, ring, gain)  # the tempo is a voted one (76 to 144) or the starting 120
+    assert len(spy.rhythm_results) == 1
 
 
 def test_the_local_peaks_settings_are_the_ones_the_peaks_are_measured_with_and_the_beat_is_not_measured_as_well(client, monkeypatch):
@@ -203,10 +209,10 @@ def test_a_different_minimum_distance_gives_different_peaks_and_different_notche
     far = rhythm(client, pulse_wav(), peak_distance="2000").json()
     assert len(spy.results[0].peaks) > len(spy.results[1].peaks)  # clicks half a second apart cannot all stay at 2 seconds
     assert raws(client, near) != raws(client, far)
-    for job, peaks in ((near, spy.results[0]), (far, spy.results[1])):
-        want = expected_turns(peaks, job)
+    for job, index in ((near, 0), (far, 1)):
+        want = expected_turns(spy, index)
         for i in range(0, job["frame_count"], 7):
-            assert apart(notch_turns(picture(client, job, i), 1), want[i, 0]) * 360 < 3, i
+            assert apart(notch_turns(picture(client, job, i), 5), want[i, 4]) * 360 < 3, i  # the local peak circle follows the peaks
 
 
 @pytest.mark.parametrize("text", ["0", "20", "100", "101", "-1", "nan", "", "abc"])
@@ -230,15 +236,15 @@ def test_a_bad_peak_setting_is_refused_with_its_message_and_nothing_is_left_behi
 # --- no peaks, short and silent files -------------------------------------------------------------------------------------------------
 
 
-def test_a_silent_file_turns_the_two_levels_at_the_defaults_and_leaves_the_two_rate_circles_standing(client, monkeypatch):
+def test_a_silent_file_turns_the_three_levels_at_the_defaults_and_leaves_the_three_rate_circles_standing(client, monkeypatch):
     spy = Spy(monkeypatch)
     job = rhythm(client, wav_bytes(np.zeros(44100 * 4))).json()
     assert spy.results[0].peaks == ()
     for i in range(job["frame_count"]):
         image = picture(client, job, i)
-        for k, rpm in ((1, 120.0), (3, 60.0)):  # the starting tempo 120 and the default rate 60 of a peak: revolutions per minute
+        for k, rpm in ((1, 120.0), (3, 120.0), (5, 60.0)):  # the starting tempo 120 twice and the default rate 60 of a peak: revolutions per minute
             assert apart(notch_turns(image, k), (i + 0.5) / FPS * rpm / 60.0) * 360 < 3, (i, k)
-        for k in (2, 4):  # their rates of change
+        for k in (2, 4, 6):  # their rates of change
             assert apart(notch_turns(image, k), 0.0) * 360 < 3, (i, k)
 
 
@@ -294,7 +300,7 @@ def test_the_same_file_and_settings_give_identical_frames(client):
 
 
 def some_data(frames=6):
-    return rc.RhythmData(np.linspace(0.0, 1.7, frames * 4).reshape(frames, 4))
+    return rc.RhythmData(np.linspace(0.0, 1.7, frames * 6).reshape(frames, 6))
 
 
 def test_write_frames_draws_the_same_bytes_as_write_rhythm_frames(tmp_path):
@@ -326,3 +332,80 @@ def test_write_frames_ignores_the_data_for_another_type(tmp_path):
     write_frames(values, tmp_path / "without", colormap=COLORMAP, image_type="decay-exp")
     for i in range(3):
         assert (tmp_path / "with" / f"frame_{i:06d}.png").read_bytes() == (tmp_path / "without" / f"frame_{i:06d}.png").read_bytes()
+
+
+# --- the Vote limit and the Extra notes of the voted tempos (feature 047) -----------------------------------------------------------------
+
+VOTE_MESSAGE = "The vote limit must be a whole number from 1 to 100."
+
+
+def test_the_job_calls_rhythm_angles_with_the_60_ms_windows_the_extra_notes_and_the_vote_limit_and_measures_the_peaks_once(client, monkeypatch):
+    spy = Spy(monkeypatch)
+    job = rhythm(client, pulse_wav()).json()
+    assert len(spy.calls) == 1 and len(spy.rhythm_calls) == 1
+    peaks, fps, frames, values, extra, limit = spy.rhythm_calls[0]
+    assert peaks is spy.results[0] and fps == FPS and frames == job["frame_count"]
+    assert values.ndim == 2 and values.shape[1] == 88 and extra == 2 and limit == 20  # the defaults
+    assert values.shape[0] != frames  # the windows of the analysis (one every 60 ms), not the frames
+    assert job["extra_notes"] == 2 and job["vote_limit"] == 20
+
+
+def test_the_vote_limit_that_is_sent_is_used_and_echoed(client, monkeypatch):
+    spy = Spy(monkeypatch)
+    job = rhythm(client, tiny(), vote_limit="5").json()
+    assert job["vote_limit"] == 5 and spy.rhythm_calls[0][5] == 5
+    job = rhythm(client, tiny(), vote_limit="100", extra_notes="5").json()
+    assert job["vote_limit"] == 100 and job["extra_notes"] == 5 and spy.rhythm_calls[1][4:] == (5, 100)
+
+
+@pytest.mark.parametrize("text", ["0", "101", "2.5", "abc", "", "nan", "inf", "-1", "1e3"])
+def test_a_vote_limit_that_is_not_a_whole_number_from_1_to_100_is_refused_before_the_file_is_read_and_nothing_is_left_behind(client, monkeypatch, text):
+    spy = Spy(monkeypatch)
+    r = rhythm(client, tiny(), vote_limit=text)
+    assert r.status_code == 400 and r.json()["detail"] == VOTE_MESSAGE
+    assert leftovers() == [] and spy.calls == []  # nothing was measured: the file was not read
+
+
+@pytest.mark.parametrize("image_type", IMAGE_TYPES)
+def test_the_vote_limit_is_checked_and_echoed_for_every_image_type(client, image_type):
+    ok = post(client, tiny(), image_type=image_type, vote_limit="7")
+    assert ok.status_code == 200 and ok.json()["vote_limit"] == 7
+    assert post(client, tiny(), image_type=image_type).json()["vote_limit"] == 20
+    bad = post(client, tiny(), image_type=image_type, vote_limit="0")
+    assert bad.status_code == 400 and bad.json()["detail"] == VOTE_MESSAGE
+
+
+def test_the_extra_notes_of_rhythm_circles_stop_at_5_while_other_types_still_take_up_to_8(client):
+    assert rhythm(client, tiny(), extra_notes="5").status_code == 200
+    r = rhythm(client, tiny(), extra_notes="6")
+    assert r.status_code == 400 and r.json()["detail"] == "The extra notes must be a whole number from 1 to 5."
+    assert post(client, tiny(), image_type="contour", extra_notes="6").status_code == 200
+
+
+def test_a_different_vote_limit_changes_the_pictures_of_a_file_whose_spacing_changes(client):
+    low = rhythm(client, changing_notes_wav(), vote_limit="2").json()
+    high = rhythm(client, changing_notes_wav(), vote_limit="100").json()
+    assert raws(client, low) != raws(client, high)
+
+
+def tone(seconds, hertz=440.0, rate=44100):
+    time = np.arange(int(seconds * rate)) / rate
+    return 0.5 * np.sin(2 * np.pi * hertz * time) * np.minimum(1.0, np.minimum(time, seconds - time) * 200)
+
+
+def changing_notes_wav():
+    """Notes of different pitch every 0.4 s for 12 s, then every 0.65 s for 12 s, as a WAV (the spacing changes, so the two limits rank the tempos differently)."""
+    rate = 44100
+    pieces = []
+    for index in range(30):
+        pieces.append(tone(0.4, 220.0 * 2 ** ((index * 5 % 12) / 12), rate))
+    for index in range(18):
+        pieces.append(tone(0.65, 220.0 * 2 ** ((index * 7 % 12) / 12), rate))
+    return wav_bytes(np.concatenate(pieces))
+
+
+def test_the_other_image_types_make_the_same_pictures_whatever_the_vote_limit(client):
+    for image_type in ("decay", "contour", "polychord"):
+        one = post(client, tiny(), image_type=image_type, vote_limit="1").json()
+        hundred = post(client, tiny(), image_type=image_type, vote_limit="100").json()
+        assert raws(client, one) == raws(client, hundred), image_type
