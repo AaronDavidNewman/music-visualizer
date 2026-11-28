@@ -58,3 +58,27 @@ For starts `s_0 < s_1 < ... < s_m`, the **cycle** `i = 1..m` has the length `L_i
 - **Start**: see `StartTimes`; **Cycle**: one per start after the first; **Tempo bin**: one of `TEMPOS`; **Vote limit**: the setting; **First and second tempo**: `RankedTempos`
   columns (spec Key Entities).
 - **RhythmData** (existing, frozen): `angles` `(frames, 6)`; `frame_count`.
+
+## Fourth round (2026-11-26): the starts from the rise
+
+| Name | Shape | What |
+|------|-------|------|
+| `OnsetRises` **new** | `(windows,)` | the sum over the 84 notes of how much each note's strength is above the larger of its strength in the 2 windows before, 0 or more (`note_onsets.onset_rises`) |
+| `WaveformRises` **new** | `(frames,)` | the rise of the root-mean-square level of the mixed channels, frame by frame, from 0.10 s before to 0.05 s after one start, 0 or more (`note_onsets._waveform_rise`) |
+| `StartTimes` **changed** | `(starts,)` | the seconds at which a note begins, found from the rise and placed on the waveform; strictly increasing |
+
+`rhythm_angles(peaks, frame_rate, frames, windows, left, right, vote_limit)`: `left`, `right` are `RawSamples` `(samples,)`; no Extra notes.
+
+## Fifth round (2026-11-27): trills, the last 2 starts, two meters
+
+| Name | Shape | What |
+|------|-------|------|
+| `SemitoneLevels` **new** | `(levels, 57)` | `log10(1 + energy)` of each semitone C3 to G#7 in frames of 2048 samples every 256 (`trills.semitone_levels`) |
+| `SemitoneBands` **new** | `(1025, 57)` | which frequencies of a frame's transform belong to which semitone (`trills._band_matrix`) |
+| `TrillScores` **new** | `(windows,)` | 0 to 1: how much two neighbouring notes take turns quickly around each 60 ms window (`trills.trill_scores`) |
+| `TrillNotes` **new** | `(windows,)` | the analysis column of the lower note of the best pair, -1 where the score is 0 |
+| `TrillSpans` **new** | `(spans, 3)` | first window, last window (widened by 4), analysis column of the lowest note of each trill (`trills.trill_spans`, `find_trills`) |
+| `MeterVotes` **new** | `(starts, 2, 18)` | the votes of the 18 tempos for a beat divided in 2 and in 3, each start with its time since the last 2 starts |
+| `MeterTempos` **new** | `(starts, 2)` | the leading tempo and the meter (2 or 3) after each start (`tempo_votes.meter_tempos`, `leading_tempos`) |
+
+Constants: `trills.TRILL_SCORE = 0.2`, `EDGE_WINDOWS = 4`, `TRILL_MARGIN = 1`; `tempo_votes.TRIPLE_NOTE_BEATS`, `TRIPLE_NOTE_POINTS`, `METERS = (2, 3)`, `LOOKBACK = 2`, `DEFAULT_VOTE_LIMIT = 40`.

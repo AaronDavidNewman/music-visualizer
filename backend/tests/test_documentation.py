@@ -40,6 +40,7 @@ PROCESSING_MODULES = {
     "services/note_analysis.py",
     "services/note_grid.py",
     "services/note_layout.py",
+    "services/note_onsets.py",
     "services/note_selection.py",
     "services/polar_chords.py",
     "services/polychord.py",
@@ -48,6 +49,7 @@ PROCESSING_MODULES = {
     "services/spirograph.py",
     "services/tempo_votes.py",
     "services/tempo_finder.py",
+    "services/trills.py",
     "services/video.py",
     "routers/jobs.py",
 }

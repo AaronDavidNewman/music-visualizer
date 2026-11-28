@@ -754,23 +754,23 @@ describe("Polychord (feature 042)", () => {
 });
 
 describe("extra notes (feature 044)", () => {
-  const EIGHT = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"]; // Rhythm Circles since feature 047
+  const SEVEN = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"]; // not Rhythm Circles: its starts come from the rise of the notes since the fourth round of feature 047
 
   it("is a whole number from 1 to 8 in steps of 1, defaulting to 2", () => {
     expect(EXTRA_NOTES_RANGE).toEqual({ min: 1, max: 8, step: 1 });
     expect(DEFAULT_EXTRA_NOTES).toBe(2);
   });
 
-  it("is used by exactly the eight pictures that take the n loudest notes", () => {
-    for (const type of IMAGE_TYPES.map((t) => t.value as string)) expect(usesHeldNotes(type), type).toBe(EIGHT.includes(type));
+  it("is used by exactly the seven pictures that take the n loudest notes", () => {
+    for (const type of IMAGE_TYPES.map((t) => t.value as string)) expect(usesHeldNotes(type), type).toBe(SEVEN.includes(type));
     expect(usesHeldNotes("nonsense")).toBe(false);
   });
 
   it("has the number of notes n of the picture: 5, Notes shown, Number of notes, and 8 for a picture that does not use it", () => {
-    for (const type of ["decay", "decay-exp", "chromatic-decay", "chromatic-wireframe", "rhythm-circles"]) expect(heldNotesCount(type, 7, 8), type).toBe(5);
+    for (const type of ["decay", "decay-exp", "chromatic-decay", "chromatic-wireframe"]) expect(heldNotesCount(type, 7, 8), type).toBe(5);
     expect(heldNotesCount("polar-chords", 7, 8)).toBe(7);
     expect(heldNotesCount("polychord", 7, 8)).toBe(8);
-    for (const type of ["contour", "energy-graphs"]) expect(heldNotesCount(type, 7, 8), type).toBe(8);
+    for (const type of ["contour", "energy-graphs", "rhythm-circles"]) expect(heldNotesCount(type, 7, 8), type).toBe(8); // Rhythm Circles since the fourth round of feature 047
   });
 
   it("has, for Spirograph, the smaller of its Number of notes and 8 (k stops at 8 even for 12 notes)", () => {
@@ -893,7 +893,7 @@ describe("Spirograph (feature 046)", () => {
 describe("the Vote limit of Rhythm Circles (feature 047)", () => {
   it("is a whole number from 1 to 100 in steps of 1, defaulting to 20", () => {
     expect(VOTE_LIMIT_RANGE).toEqual({ min: 1, max: 100, step: 1 });
-    expect(DEFAULT_VOTE_LIMIT).toBe(20);
+    expect(DEFAULT_VOTE_LIMIT).toBe(40); // since the fifth round of feature 047
   });
 
   it.each([1, 20, 100, "20", " 7 ", 50.0, "5.0"])("accepts %j", (value) => {
@@ -909,9 +909,9 @@ describe("the Vote limit of Rhythm Circles (feature 047)", () => {
     expect(formatVoteLimit(100)).toBe("100");
   });
 
-  it("is used with the other Rhythm Circles settings: Extra notes (5) and Minimum distance", () => {
+  it("is used with the other Rhythm Circles setting Minimum distance, and not with Extra notes (the starts do not come from the loudest notes)", () => {
     expect(isRhythmType("rhythm-circles")).toBe(true);
-    expect(usesHeldNotes("rhythm-circles")).toBe(true);
+    expect(usesHeldNotes("rhythm-circles")).toBe(false);
     expect(peakSettingsShown("rhythm-circles", false)).toBe(true);
   });
 });

@@ -197,23 +197,12 @@ def test_a_steady_chord_gives_the_same_pictures_at_every_extra(tmp_path, image_t
         assert draw(tmp_path, f"held{extra}", image_type, values, extra_notes=extra) == off, extra
 
 
-@pytest.mark.parametrize("image_type", ["contour", "energy-graphs"])
+@pytest.mark.parametrize("image_type", ["contour", "energy-graphs", "rhythm-circles"])  # Rhythm Circles since the fourth round of feature 047
 def test_the_other_pictures_ignore_extra_notes(tmp_path, image_type):
     values = fading_list()
     base = draw(tmp_path, "base", image_type, values)
     for extra in (1, 8):
         assert draw(tmp_path, f"extra{extra}", image_type, values, extra_notes=extra) == base
-
-
-def test_rhythm_circles_checks_extra_notes_against_its_5_notes_and_draws_from_finished_rhythm_data_that_ignores_it(tmp_path):
-    # feature 047: the job uses k for the starts of the notes (made before write_frames); write_frames only checks it and draws the rhythm data
-    values = fading_list()
-    base = draw(tmp_path, "base", "rhythm-circles", values)
-    for extra in (1, 5):
-        assert draw(tmp_path, f"extra{extra}", "rhythm-circles", values, extra_notes=extra) == base
-    with pytest.raises(ValueError) as error:
-        draw(tmp_path, "six", "rhythm-circles", values, extra_notes=6)
-    assert str(error.value) == "The extra notes must be a whole number from 1 to 5."
 
 
 @pytest.mark.parametrize(

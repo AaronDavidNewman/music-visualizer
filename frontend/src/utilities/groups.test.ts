@@ -7,7 +7,7 @@ const TYPES = IMAGE_TYPES.map((t) => t.value);
 // What each image type must show, written out here independently of the module under test (spec FR-003 to FR-009).
 const COMMON_TOP = ["window-size", "frame-rate", "colormap", "image-type"];
 const BEAT = ["beat-coloring", "peak-distance"];
-const EIGHT = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"]; // the pictures that take the n loudest notes (feature 044, Spirograph feature 046, Rhythm Circles feature 047)
+const SEVEN = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"]; // the pictures that take the n loudest notes (feature 044, Spirograph feature 046; not Rhythm Circles since the fourth round of feature 047)
 const EXPECTED: Record<string, string[]> = {
   contour: [...COMMON_TOP, "threshold", "notes", "wave-count", "export-obj", ...BEAT, "resolution", "interpolate", "gaussian"],
   decay: [...COMMON_TOP, "decay-rate", "decay-low", "decay-medium", "decay-high", "decay-saturated", "extra-notes", "note-layout", "peak-distance"],
@@ -15,7 +15,7 @@ const EXPECTED: Record<string, string[]> = {
   "polar-chords": [...COMMON_TOP, "polar-notes", "extra-notes", "note-layout", "peak-distance"],
   "energy-graphs": [...COMMON_TOP], // no setting of its own, and the data is not smoothed
   "chromatic-decay": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "extra-notes", "peak-distance"],
-  "rhythm-circles": [...COMMON_TOP, "vote-limit", "extra-notes", "peak-distance"], // feature 047: the Vote limit, the Extra notes of the starts and Minimum distance of the peaks; the data is not smoothed
+  "rhythm-circles": [...COMMON_TOP, "vote-limit", "peak-distance"], // feature 047: the Vote limit and Minimum distance of the peaks; the data is not smoothed
   "chromatic-wireframe": [...COMMON_TOP, "threshold", "chromatic-decay-rate", "extra-notes", "export-obj", "peak-distance"], // the controls of Chromatic Decay (feature 039)
   polychord: [...COMMON_TOP, "polychord-notes", "polychord-min-copies", "polychord-max-copies", "polychord-rotation", "extra-notes", "peak-distance"], // feature 042
   spirograph: [...COMMON_TOP, "spirograph-notes", "spirograph-history", "spirograph-fade", "extra-notes", "peak-distance"], // feature 046: the beat sets the turns and the big circle
@@ -58,7 +58,7 @@ describe("the groups shown for each image type", () => {
   it.each(TYPES)("are, for %s, in this order: the top group, Colormap, Image type, the type's group, Image smoothing", (type) => {
     const want = ["analysis", "colormap", "image-type"];
     if (type !== "energy-graphs") want.push(type); // Energy graphs has no group of its own
-    if (EIGHT.includes(type)) want.push("held-notes"); // feature 044: the eight pictures that take the n loudest notes
+    if (SEVEN.includes(type)) want.push("held-notes"); // feature 044: the seven pictures that take the n loudest notes
     if (type === "contour" || type === "chromatic-wireframe") want.push("obj-export"); // feature 045: the two pictures with the 3D export
     if (type === "decay" || type === "decay-exp" || type === "polar-chords") want.push("note-layout");
     if (type === "contour") want.push("local-peaks");
@@ -392,8 +392,8 @@ describe("the groups of Chromatic Decay (feature 035)", () => {
 });
 
 describe("the groups of Rhythm Circles (features 038 and 047)", () => {
-  it("are Analysis, Colormap, Image type, Rhythm Circles (the Vote limit), Held notes and Local peaks (no checkbox), in this order: no layout, no smoothing", () => {
-    expect(groupsFor("rhythm-circles")).toEqual(["analysis", "colormap", "image-type", "rhythm-circles", "held-notes", "concentric-peaks"]);
+  it("are Analysis, Colormap, Image type, Rhythm Circles (the Vote limit) and Local peaks (no checkbox), in this order: no layout, no smoothing, no Held notes", () => {
+    expect(groupsFor("rhythm-circles")).toEqual(["analysis", "colormap", "image-type", "rhythm-circles", "concentric-peaks"]);
   });
 
   it("has the title Rhythm Circles and the one control Vote limit", () => {
@@ -402,9 +402,9 @@ describe("the groups of Rhythm Circles (features 038 and 047)", () => {
     expect(rowsOf(controlsIn("rhythm-circles").length)).toEqual([1]);
   });
 
-  it("shows the Vote limit, the Extra notes and Minimum distance and none of the settings of the other types", () => {
+  it("shows the Vote limit and Minimum distance and none of the settings of the other types, the Extra notes included", () => {
     expect(groupOf("vote-limit", "rhythm-circles")).toBe("rhythm-circles");
-    expect(groupOf("extra-notes", "rhythm-circles")).toBe("held-notes");
+    expect(groupOf("extra-notes", "rhythm-circles")).toBeUndefined();
     expect(groupOf("peak-distance", "rhythm-circles")).toBe("concentric-peaks");
     for (const control of ["smoothing", "smoothing-window", "threshold", "notes", "resolution", "interpolate", "gaussian", "note-layout", "decay-rate", "chromatic-decay-rate", "polar-notes", "beat-coloring"]) {
       expect(groupOf(control, "rhythm-circles"), control).toBeUndefined();
@@ -445,7 +445,7 @@ describe("the groups of Chromatic Wireframe (feature 039)", () => {
   it("adds no group and no control to any other type", () => {
     for (const type of TYPES.filter((t) => t !== "chromatic-wireframe")) expect(groupsFor(type), type).not.toContain("chromatic-wireframe");
     expect(groupsFor("chromatic-decay")).toEqual(["analysis", "colormap", "image-type", "chromatic-decay", "held-notes", "concentric-peaks"]);
-    expect(groupsFor("rhythm-circles")).toEqual(["analysis", "colormap", "image-type", "rhythm-circles", "held-notes", "concentric-peaks"]);
+    expect(groupsFor("rhythm-circles")).toEqual(["analysis", "colormap", "image-type", "rhythm-circles", "concentric-peaks"]);
   });
 });
 
@@ -481,10 +481,10 @@ describe("the Held notes group (feature 044)", () => {
     expect(rowsOf(controlsIn("held-notes").length)).toEqual([1]);
   });
 
-  it("is shown for exactly the eight pictures that take the n loudest notes, right after the group of the type", () => {
+  it("is shown for exactly the seven pictures that take the n loudest notes, right after the group of the type", () => {
     for (const type of TYPES) {
       const ids = groupsFor(type);
-      if (EIGHT.includes(type)) {
+      if (SEVEN.includes(type)) {
         expect(ids.indexOf("held-notes"), type).toBe(ids.indexOf(type) + 1);
         expect(groupOf("extra-notes", type), type).toBe("held-notes");
       } else {

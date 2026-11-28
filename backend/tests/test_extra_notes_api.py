@@ -8,8 +8,8 @@ from app.services.image_types import IMAGE_TYPES
 
 from .test_jobs_api import SR, client, leftovers, note_tone, wav_bytes  # noqa: F401
 
-FIVE = ("decay", "decay-exp", "chromatic-decay", "chromatic-wireframe", "rhythm-circles")  # rhythm-circles since feature 047: its voted tempos follow the starts of the 5 loudest notes
-OTHER = ("contour", "energy-graphs")
+FIVE = ("decay", "decay-exp", "chromatic-decay", "chromatic-wireframe")
+OTHER = ("contour", "energy-graphs", "rhythm-circles")  # rhythm-circles since the fourth round of feature 047: its starts come from the rise of the notes
 MESSAGE_8 = "The extra notes must be a whole number from 1 to 8."
 
 

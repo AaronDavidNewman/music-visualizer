@@ -332,12 +332,12 @@ def write_frames(
     peak) sets the turns and the big circle's radius of the curves of each frame's entry (``spirograph.peak_percents()``). The colormap, ``beat`` and
     ``extra_notes`` apply; every other setting is checked and ignored.
 
-    ``image_type="rhythm-circles"`` draws six concentric notched rings turned by the two best-voted tempos of the starts of the
-    sustained loudest notes, the tempo of the latest local peak and the rates of change of the three (see ``rhythm_circles``
+    ``image_type="rhythm-circles"`` draws six concentric notched rings turned by the average and the raw best-voted tempo of the starts of the
+    notes, the tempo of the latest local peak and the rates of change of the three (see ``rhythm_circles``
     and ``tempo_votes``), from ``rhythm``, the angles ``(frames, 6)`` of every frame made by ``rhythm_circles.rhythm_angles``
-    (required for this type, ignored by the others; it must have one frame for each row of ``frames``). The voting (the Extra
-    notes and the Vote limit) is done before this call, in ``rhythm_angles``. Only the colormap applies; ``extra_notes`` is
-    checked against the 5 notes of the picture and ignored; every other setting is checked and ignored.
+    (required for this type, ignored by the others; it must have one frame for each row of ``frames``). The voting (the Vote limit; the Extra
+    notes play no part) is done before this call, in ``rhythm_angles``. Only the colormap applies; ``extra_notes`` is
+    checked (0 to 8) and ignored; every other setting is checked and ignored.
 
     ``image_type="polar-chords"`` draws a polar bar graph (see ``polar_chords``): the ``polar_notes`` loudest notes of a
     frame (a whole number from 5 to 8, default 5, checked for every image type and used by this one only) as bars

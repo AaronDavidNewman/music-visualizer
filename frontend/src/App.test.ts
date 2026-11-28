@@ -306,7 +306,8 @@ describe("the result summary for Rhythm Circles (feature 047)", () => {
     expect(summary.indexOf("Vote limit:")).toBeLessThan(summary.indexOf("Extra notes (k):"));
   });
 
-  it("shows the Extra notes line for Rhythm Circles too, as one of the pictures that use it", () => {
+  it("shows the Extra notes line only for the pictures that take the loudest notes, and so not for Rhythm Circles", () => {
     expect(line("Extra notes (k):")).toContain("usesHeldNotes(result.image_type)");
+    expect(line("Extra notes (k):")).not.toContain("isRhythmType");
   });
 });

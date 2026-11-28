@@ -334,28 +334,37 @@ def test_write_frames_ignores_the_data_for_another_type(tmp_path):
         assert (tmp_path / "with" / f"frame_{i:06d}.png").read_bytes() == (tmp_path / "without" / f"frame_{i:06d}.png").read_bytes()
 
 
-# --- the Vote limit and the Extra notes of the voted tempos (feature 047) -----------------------------------------------------------------
+# --- the Vote limit of the voted tempos (feature 047; the Extra notes play no part since the fourth round) -----------------------------------------------------------------
 
 VOTE_MESSAGE = "The vote limit must be a whole number from 1 to 100."
 
 
-def test_the_job_calls_rhythm_angles_with_the_60_ms_windows_the_extra_notes_and_the_vote_limit_and_measures_the_peaks_once(client, monkeypatch):
+def test_the_job_calls_rhythm_angles_with_the_60_ms_windows_the_two_channels_and_the_vote_limit_and_measures_the_peaks_once(client, monkeypatch):
     spy = Spy(monkeypatch)
     job = rhythm(client, pulse_wav()).json()
     assert len(spy.calls) == 1 and len(spy.rhythm_calls) == 1
-    peaks, fps, frames, values, extra, limit = spy.rhythm_calls[0]
+    peaks, fps, frames, values, left, right, limit = spy.rhythm_calls[0]
     assert peaks is spy.results[0] and fps == FPS and frames == job["frame_count"]
-    assert values.ndim == 2 and values.shape[1] == 88 and extra == 2 and limit == 20  # the defaults
+    assert values.ndim == 2 and values.shape[1] == 88 and limit == 40  # the default (20 until the fifth round of feature 047)
+    assert left.ndim == 1 and left.shape == right.shape and left.shape[0] > 0  # the two channels of the file, to place the starts on the waveform
     assert values.shape[0] != frames  # the windows of the analysis (one every 60 ms), not the frames
-    assert job["extra_notes"] == 2 and job["vote_limit"] == 20
+    assert job["extra_notes"] == 2 and job["vote_limit"] == 40  # the default Vote limit since the fifth round of feature 047
 
 
 def test_the_vote_limit_that_is_sent_is_used_and_echoed(client, monkeypatch):
     spy = Spy(monkeypatch)
     job = rhythm(client, tiny(), vote_limit="5").json()
-    assert job["vote_limit"] == 5 and spy.rhythm_calls[0][5] == 5
+    assert job["vote_limit"] == 5 and spy.rhythm_calls[0][6] == 5
     job = rhythm(client, tiny(), vote_limit="100", extra_notes="5").json()
-    assert job["vote_limit"] == 100 and job["extra_notes"] == 5 and spy.rhythm_calls[1][4:] == (5, 100)
+    assert job["vote_limit"] == 100 and job["extra_notes"] == 5 and spy.rhythm_calls[1][6] == 100
+
+
+def test_the_extra_notes_do_not_change_the_rhythm_circles(client, monkeypatch):
+    spy = Spy(monkeypatch)
+    for extra in ("1", "3", "5"):
+        assert rhythm(client, pulse_wav(), extra_notes=extra).json()["extra_notes"] == int(extra)  # still accepted and echoed
+    first, *others = spy.rhythm_results
+    assert all(np.array_equal(first.angles, other.angles) for other in others)  # the starts are not found among the loudest notes any more
 
 
 @pytest.mark.parametrize("text", ["0", "101", "2.5", "abc", "", "nan", "inf", "-1", "1e3"])
@@ -370,16 +379,16 @@ def test_a_vote_limit_that_is_not_a_whole_number_from_1_to_100_is_refused_before
 def test_the_vote_limit_is_checked_and_echoed_for_every_image_type(client, image_type):
     ok = post(client, tiny(), image_type=image_type, vote_limit="7")
     assert ok.status_code == 200 and ok.json()["vote_limit"] == 7
-    assert post(client, tiny(), image_type=image_type).json()["vote_limit"] == 20
+    assert post(client, tiny(), image_type=image_type).json()["vote_limit"] == 40  # the default
     bad = post(client, tiny(), image_type=image_type, vote_limit="0")
     assert bad.status_code == 400 and bad.json()["detail"] == VOTE_MESSAGE
 
 
-def test_the_extra_notes_of_rhythm_circles_stop_at_5_while_other_types_still_take_up_to_8(client):
-    assert rhythm(client, tiny(), extra_notes="5").status_code == 200
-    r = rhythm(client, tiny(), extra_notes="6")
-    assert r.status_code == 400 and r.json()["detail"] == "The extra notes must be a whole number from 1 to 5."
-    assert post(client, tiny(), image_type="contour", extra_notes="6").status_code == 200
+def test_the_extra_notes_of_rhythm_circles_are_accepted_up_to_8_like_a_picture_that_ignores_them(client):
+    for value in ("5", "6", "8"):
+        assert rhythm(client, tiny(), extra_notes=value).status_code == 200
+    r = rhythm(client, tiny(), extra_notes="9")
+    assert r.status_code == 400 and r.json()["detail"] == "The extra notes must be a whole number from 1 to 8."
 
 
 def test_a_different_vote_limit_changes_the_pictures_of_a_file_whose_spacing_changes(client):

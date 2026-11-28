@@ -274,11 +274,67 @@ CircleSeries = npt.NDArray[np.float64]
 
 # StartTimes: when a sustained loudest note starts.
 #   Shape: ``(starts,)``: one entry for each start, in time order.
-#   Meaning: seconds from the start of the file of the middle of each frame in which a sounding note enters the selection of
-#            the loudest notes (the held notes); strictly increasing; notes that enter in the same frame are one start. The
-#            first start only begins the run, each later one is a cycle of the voting.
-#   Made by: ``tempo_votes.note_starts``.
+#   Meaning: seconds from the start of the file at which a note begins; strictly increasing; notes that begin together are one
+#            start. The first start only begins the run, each later one is a cycle of the voting. Found from the rise of the
+#            note strengths and placed on the rise of the waveform (``note_onsets``; until the fourth round of feature 047 they
+#            were the middle of each analysis window in which a sounding note entered the selection of the loudest notes).
+#            Since the fifth round the notes of a trill, and the notes above it, make no starts (``trills``).
+#   Made by: ``note_onsets.pick_onsets`` (the middle of a 60 ms window), ``note_onsets.refine_starts`` and
+#            ``note_onsets.onset_starts`` (placed on the waveform).
 StartTimes = npt.NDArray[np.float64]
+
+# OnsetRises: how much the notes rise in each 60 ms analysis window.
+#   Shape: ``(windows,)``: one entry for each window, in time order.
+#   Meaning: the sum over the 84 notes of how much the strength of the note is above the larger of its strength in the 2 windows
+#            before (never below 0), in the units of ``NoteStrengths``; 0 or more; large where a note or a chord begins, 0 while
+#            notes are sustained or die away.
+#            Within a trill (``TrillSpans``) the notes from one semitone below its lowest note upward are left out.
+#   Made by: ``note_onsets.onset_rises``.
+OnsetRises = npt.NDArray[np.float64]
+
+# WaveformRises: how much the level of the waveform rises, frame by frame, around one start.
+#   Shape: ``(frames,)``: one entry for each frame of 512 samples that begins every 128 samples, from 0.10 s before the start to
+#          0.05 s after it.
+#   Meaning: the root-mean-square level of the mix of the two channels in the frame less the level of the frame before it (0 if
+#            it is lower), in the units of the samples as read from the file; 0 or more; the start is moved to the frame
+#            with the largest.
+#   Made by: ``note_onsets._waveform_rise``.
+WaveformRises = npt.NDArray[np.float64]
+
+# SemitoneLevels: the level of each semitone from C3 to G#7 in each short frame of the waveform (feature 047, fifth round: the trills).
+#   Shape: ``(levels, 57)``: one row for each frame of 2048 samples, the frames 256 samples apart (about 6 ms at 44.1 kHz); the columns are
+#          the semitones C3 (analysis column 15) to G#7 (column 71) in ascending order.
+#   Meaning: ``log10(1 + energy)`` of the transform of the frame (a Hann window over the mix of the two channels) in the band of the
+#            semitone, half a semitone either side; 0 or more.
+#   Made by: ``trills.semitone_levels``.
+SemitoneLevels = npt.NDArray[np.float64]
+
+# SemitoneBands: which frequencies of the transform of a frame belong to which semitone.
+#   Shape: ``(1025, 57)``: one row for each frequency of the transform of 2048 samples, one column for each semitone from C3 to G#7.
+#   Meaning: 1 where the frequency is in the band of the semitone (or is the nearest frequency to a band that holds none), else 0.
+#   Made by: ``trills._band_matrix``.
+SemitoneBands = npt.NDArray[np.float64]
+
+# TrillScores: how much a trill is playing around each 60 ms analysis window.
+#   Shape: ``(windows,)``: one entry for each analysis window, in time order.
+#   Meaning: from 0 to 1: for the best pair of notes 1 or 2 semitones apart that are both sounding, how much they take turns (minus
+#            the correlation of their flicker) times how much of their flicker is at 6 to 20 times a second; 0.2 or more is a trill.
+#   Made by: ``trills.trill_scores``.
+TrillScores = npt.NDArray[np.float64]
+
+# TrillNotes: the lower note of the best pair of each analysis window.
+#   Shape: ``(windows,)``: one entry for each analysis window, in time order.
+#   Meaning: the analysis column (0 = A1, 55 Hz) of the lower note of the pair that gave the window its ``TrillScores`` entry; -1 where
+#            the score is 0.
+#   Made by: ``trills.trill_scores``.
+TrillNotes = npt.NDArray[np.int64]
+
+# TrillSpans: the trills of a file.
+#   Shape: ``(spans, 3)``: one row for each trill, in time order; the columns are the first window, the last window (60 ms analysis
+#          windows, both included) and the analysis column of the trill's lowest note.
+#   Meaning: within the windows of a span, the notes from one semitone below the lowest note upward make no starts.
+#   Made by: ``trills.trill_spans`` and ``trills.find_trills``.
+TrillSpans = npt.NDArray[np.int64]
 
 # FitMatrix: which tempos a note length can be a note of.
 #   Shape: ``(cycles, 18)`` (``(cycles, 18, 10)`` inside ``tempo_votes``, before the 10 note values are combined): one row for each
@@ -306,11 +362,26 @@ TempoPoints = npt.NDArray[np.int64]
 #   Made by: ``tempo_votes.vote_tempos``.
 TempoVotes = npt.NDArray[np.int64]
 
+# MeterVotes: the votes of the 18 tempos after each start, once for beats divided in 2 and once for beats divided in 3 (fifth round).
+#   Shape: ``(starts, 2, 18)``: one row for each start (row 0 all 0); the middle axis is the meter (2, then 3); the last the 18 tempos
+#          ``72 + 4n`` in ascending order.
+#   Meaning: the ``TempoVotes`` of each meter's note values, each start voting with its time since each of the last 2 starts.
+#   Made by: ``tempo_votes.leading_tempos`` (one ``vote_tempos`` for each meter).
+MeterVotes = npt.NDArray[np.int64]
+
 # RankedTempos: the two best-voted tempos after each start.
 #   Shape: ``(starts, 2)``: one row for each start; column 0 the tempo with the most votes, column 1 the next.
 #   Meaning: beats per minute, from 76 to 144, or 120 for a place whose tempo has no votes; a tie goes to the lower tempo.
 #   Made by: ``tempo_votes.ranked_tempos``.
 RankedTempos = npt.NDArray[np.float64]
+
+# MeterTempos: the leading tempo and the meter after each start (fifth round of feature 047).
+#   Shape: ``(starts, 2)``: one row for each start; column 0 the leading tempo, column 1 the meter.
+#   Meaning: the meter is 2 (beats divided in 2) or 3 (divided in 3): the one whose best tempo has more votes, the meter before when
+#            they are equal (2 at first); the tempo is that meter's tempo with the most votes, the tempo before when it is among the
+#            equal best, else the lowest of them; 120 until there is a vote. Beats per minute, from 76 to 144 or 120.
+#   Made by: ``tempo_votes.meter_tempos`` and ``tempo_votes.leading_tempos``.
+MeterTempos = npt.NDArray[np.float64]
 
 # AveragedTempos: the straight average of the last few first tempos after each start.
 #   Shape: ``(starts,)``: one entry for each start.

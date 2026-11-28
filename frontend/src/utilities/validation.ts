@@ -280,9 +280,9 @@ export function formatPolarNotes(value: number): string {
 export const EXTRA_NOTES_RANGE = { min: 1, max: 8, step: 1 } as const;
 export const DEFAULT_EXTRA_NOTES = 2;
 
-/** Whether the picture takes the n loudest notes of each frame and so has the Extra notes setting (feature 044): Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord, Spirograph and Rhythm Circles (feature 047, for the starts of its voted tempos). */
+/** Whether the picture takes the n loudest notes of each frame and so has the Extra notes setting (feature 044): Decay, Decay Exp, Polar Chords, Chromatic Decay, Chromatic Wireframe, Polychord and Spirograph (Rhythm Circles had it for the starts of its voted tempos until the fourth round of feature 047; they now come from the rise of the notes). */
 export function usesHeldNotes(imageType: string): boolean {
-  return ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"].includes(imageType);
+  return ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"].includes(imageType);
 }
 
 /**
@@ -412,7 +412,7 @@ export function validateSpirographFade(value: string | number): string | null {
 
 /** Vote limit of Rhythm Circles (feature 047): the most votes a tempo can have, a whole number from 1 to 100; a low limit lets the tempos change quickly. */
 export const VOTE_LIMIT_RANGE = { min: 1, max: 100, step: 1 } as const;
-export const DEFAULT_VOTE_LIMIT = 20;
+export const DEFAULT_VOTE_LIMIT = 40; // 20 until the fifth round of feature 047
 
 const voteLimitMessage = `The vote limit must be a whole number from ${VOTE_LIMIT_RANGE.min} to ${VOTE_LIMIT_RANGE.max}.`;
 

@@ -3,8 +3,8 @@
 Every expectation is worked out here with plain loops or by hand, not with the code under test.
 
 The circles, outer (column 0) to inner (column 5), are three layers, each a level and the rate of change of that level: the average tempo (columns 0, 1: the straight average of the last 5
-first voted tempos), the raw first voted tempo (2, 3) and the local peak's own tempo (4, 5). The voted tempos come from ``tempo_votes`` (tested in ``test_tempo_votes.py``); here they are taken from it and
-checked by hand on one example. The tempo finder of feature 040 is no longer drawn.
+first voted tempos), the raw first voted tempo (2, 3) and the local peak's own tempo (4, 5). The voted tempos come from ``tempo_votes`` (tested in ``test_tempo_votes.py``) and the starts from ``note_onsets`` (tested in ``test_note_onsets.py``); here they are taken from them and
+checked by hand on one example. The tests that make their notes in the note strengths alone give the job's audio as silence, so that the starts stay at the middle of their window. The tempo finder of feature 040 is no longer drawn.
 """
 
 import math
@@ -15,6 +15,7 @@ import pytest
 
 from app.services import rhythm_circles as rc
 from app.services import tempo_finder
+from app.services import note_onsets as no
 from app.services import tempo_votes as tv
 from app.services.local_peaks import LocalPeak, LocalPeaks
 
@@ -76,6 +77,22 @@ def hand_made_peaks(times, rates, file_rate=44100, sample_count=None):
 
 def silent(frames):
     return np.zeros((frames, 88))
+
+
+def quiet(windows):
+    """The two channels of a file with no sound, as long as the 60 ms ``windows`` (any value that has a length): there is no waveform to place a start on, so the starts stay at the middle of their window."""
+    samples = int(np.shape(windows)[0] * 0.06 * 44100) + 4096 if np.ndim(windows) else 0
+    return np.zeros(samples, dtype=np.int16), np.zeros(samples, dtype=np.int16)
+
+
+def rhythm(peaks, frame_rate, frames, windows, limit=20):
+    """``rhythm_angles`` for note strengths made by hand: the audio is silence (see ``quiet``)."""
+    return rc.rhythm_angles(peaks, frame_rate, frames, windows, *quiet(windows), limit)
+
+
+def starts_of(windows):
+    """The starts of the note strengths made by hand: the middle of each window that begins a note."""
+    return no.pick_onsets(no.onset_rises(windows))
 
 
 def no_peaks(seconds=5):
@@ -285,14 +302,14 @@ def test_the_angles_are_six_columns_the_vote_rings_then_the_peak_rings():
     rates = [60.0] + [120.0] * 7  # the first peak has the default rate, the others 120 beats per minute
     peaks = hand_made_peaks(times, rates)
     values = three_notes(50)
-    data = rc.rhythm_angles(peaks, 10, 50, values, 2, 20)
+    data = rhythm(peaks, 10, 50, values)
     assert data.angles.shape == (50, 6) and data.angles.dtype == np.float64 and data.frame_count == 50
     moments = (np.arange(50) + 0.5) / 10
     peak_times = [p.sample / 44100 for p in peaks.peaks]
     peak_rows = rc.peak_series(peak_times, [p.rate for p in peaks.peaks])
     assert np.allclose(data.angles[:, 4:], rc.circle_angles(peak_times, peak_rows, moments, PEAK_DEFAULTS), rtol=1e-12, atol=1e-12)
-    starts = tv.note_starts(values, 2, 1000 / 60)  # the rows are the 60 ms analysis windows, not the frames
-    raw = tv.ranked_tempos(tv.vote_tempos(starts, 0.06, 20))[:, 0]  # the resolution of the starts: one window, 60 ms
+    starts = starts_of(values)  # the rows are the 60 ms analysis windows, not the frames
+    raw = tv.leading_tempos(starts, rc.START_RESOLUTION, 20)[:, 0]  # the resolution of the starts: 40 ms; both meters, the last 2 starts (fifth round)
     vote_rows = tv.vote_series(starts, np.column_stack([tv.average_tempos(raw), raw]))
     assert np.allclose(data.angles[:, :4], rc.circle_angles(starts, vote_rows, moments, VOTE_DEFAULTS), rtol=1e-12, atol=1e-12)
     # once the peaks come every half second at 120 beats per minute the peak circle advances 2 turns a second: 0.2 turns a frame at 10 frames a second
@@ -300,14 +317,13 @@ def test_the_angles_are_six_columns_the_vote_rings_then_the_peak_rings():
 
 
 def test_a_worked_example_of_the_vote_rings_two_starts_0_6_seconds_apart():
-    # the rows are 60 ms windows: the starts are in windows 0 and 10, at 0.03 s and 0.63 s; the resolution is 60 ms, so 0.6 s gives 2
-    # points to 96, 100 and 104 (a quarter note at those tempos, within 30 ms) and 1 point to 76 and 144 (a dotted eighth and a dotted
-    # quarter): the first (raw) tempo is 96 (ties go to the lower tempo); before the second start it is the starting 120, so the average of
-    # the two is 108. The frames are 100 a second: 120 of them
+    # the rows are 60 ms windows: the starts are in windows 0 and 10, at 0.03 s and 0.63 s; the resolution is 40 ms, so 0.6 s gives 2
+    # points to 100 only (a quarter note, within 20 ms; 96 and 104 are 25 and 23 ms off) and 1 point to 76 (a dotted quarter): the first (raw)
+    # tempo is 100; before the second start it is the starting 120, so the average of the two is 110. The frames are 100 a second: 120 of them
     windows = silent(30)
     windows[0:3, 40] = 1.0
     windows[10:13, 45] = 1.0
-    data = rc.rhythm_angles(no_peaks(), 100, 120, windows, 2, 20)
+    data = rhythm(no_peaks(), 100, 120, windows)
     angles = data.angles
     moments = (np.arange(120) + 0.5) / 100
 
@@ -316,8 +332,8 @@ def test_a_worked_example_of_the_vote_rings_two_starts_0_6_seconds_apart():
 
     assert slope(0, 5, 55) == pytest.approx(120.0) and slope(2, 5, 55) == pytest.approx(120.0)  # before the second start: the starting tempo twice
     assert (angles[:63, [1, 3]] == 0.0).all()  # and no change
-    assert slope(0, 70, 110) == pytest.approx(108.0) and slope(2, 70, 110) == pytest.approx(96.0)  # after it: the average (120 + 96) / 2 and the raw tempo
-    assert slope(1, 70, 110) == pytest.approx((108 - 120) / 0.6) and slope(3, 70, 110) == pytest.approx((96 - 120) / 0.6)  # -20 and -40 revolutions per minute
+    assert slope(0, 70, 110) == pytest.approx(110.0) and slope(2, 70, 110) == pytest.approx(100.0)  # after it: the average (120 + 100) / 2 and the raw tempo
+    assert slope(1, 70, 110) == pytest.approx((110 - 120) / 0.6) and slope(3, 70, 110) == pytest.approx((100 - 120) / 0.6)  # -16.7 and -33.3 revolutions per minute
     assert slope(4, 0, 110) == pytest.approx(60.0) and (angles[:, 5] == 0.0).all()  # the peak circles: no peaks, the defaults
 
 
@@ -330,9 +346,9 @@ def test_the_outer_circle_is_the_straight_average_of_the_last_five_raw_tempos_an
         row += int(gap)
         if row + 3 > 600:
             break
-    data = rc.rhythm_angles(no_peaks(30), 10, 360, windows, 2, 20)
-    starts = tv.note_starts(windows, 2, 1000 / 60)
-    raw = tv.ranked_tempos(tv.vote_tempos(starts, 0.06, 20))[:, 0].tolist()
+    data = rhythm(no_peaks(30), 10, 360, windows)
+    starts = starts_of(windows)
+    raw = tv.leading_tempos(starts, rc.START_RESOLUTION, 20)[:, 0].tolist()
     average = [sum(raw[max(0, i - 4) : i + 1]) / len(raw[max(0, i - 4) : i + 1]) for i in range(len(raw))]  # by hand: the mean of the latest 5 (fewer at the beginning)
     assert len(raw) > 20 and len(set(raw)) > 3 and average != raw  # the example does change tempo, and the average is not the raw tempo
     moments = (np.arange(360) + 0.5) / 10
@@ -344,14 +360,14 @@ def test_the_outer_circle_is_the_straight_average_of_the_last_five_raw_tempos_an
 def test_the_tempo_circles_turn_between_76_and_144_beats_per_minute_or_at_the_starting_tempo():
     rng = np.random.default_rng(8)
     values = (rng.random((300, 88)) ** 6) * (rng.random((300, 88)) < 0.15)
-    data = rc.rhythm_angles(no_peaks(30), 10, 300, values, 2, 20)
+    data = rhythm(no_peaks(30), 10, 300, values)
     for column in (0, 2):
         speed = np.diff(data.angles[:, column]) * 10 * 60  # revolutions per minute over a frame
         assert speed.min() >= 75.999 and speed.max() <= 144.001
 
 
 def test_with_no_peaks_and_no_starts_every_circle_turns_at_the_defaults_and_the_rate_circles_stand_still():
-    data = rc.rhythm_angles(no_peaks(), 10, 20, silent(20), 2, 20)
+    data = rhythm(no_peaks(), 10, 20, silent(20))
     for column, step in ((AVERAGE, 0.2), (RAW, 0.2), (PEAK, 0.1)):  # the default rates 120, 120 and 60: turns a frame at 10 frames a second
         assert np.diff(data.angles[:, column]) == pytest.approx([step] * 19)
     assert (data.angles[:, RATES] == 0.0).all()
@@ -365,32 +381,58 @@ def test_the_peak_rings_equal_the_two_inner_rings_of_the_four_ring_picture():
     spec = util.spec_from_file_location("old_peak_angles", OLD_ANGLES.with_name("old_peak_angles.py"))
     module = util.module_from_spec(spec)
     spec.loader.exec_module(module)  # the module only defines the fixed peaks here; its main block does not run
-    data = rc.rhythm_angles(module.fixed_peaks(), module.FRAME_RATE, module.FRAMES, silent(module.FRAMES), 2, 20)
+    data = rhythm(module.fixed_peaks(), module.FRAME_RATE, module.FRAMES, silent(module.FRAMES))
     assert np.array_equal(data.angles[:, 4:6], np.load(OLD_ANGLES))
 
 
 def test_no_frames_give_no_rows_and_a_bad_frame_rate_or_count_is_refused():
     peaks = hand_made_peaks([0.5, 1.0], [60.0, 120.0])
-    assert rc.rhythm_angles(peaks, 10, 0, silent(0), 2, 20).angles.shape == (0, 6)
+    assert rhythm(peaks, 10, 0, silent(0)).angles.shape == (0, 6)
     for bad in (0, -1, True, float("nan"), "10", None):
         with pytest.raises(ValueError):
-            rc.rhythm_angles(peaks, bad, 5, silent(5), 2, 20)
+            rhythm(peaks, bad, 5, silent(5))
     for bad in (-1, 2.5, True, "3", None):
         with pytest.raises(ValueError):
-            rc.rhythm_angles(peaks, 10, bad, silent(5), 2, 20)
+            rhythm(peaks, 10, bad, silent(5))
 
 
-def test_note_strengths_of_the_wrong_size_an_extra_notes_or_a_vote_limit_that_is_not_allowed_are_refused():
+def test_note_strengths_of_the_wrong_size_or_a_vote_limit_that_is_not_allowed_are_refused():
     peaks = hand_made_peaks([0.5, 1.0], [60.0, 120.0])
     for bad in (np.zeros(5), np.zeros((5, 80)), np.full((5, 88), -1.0)):
         with pytest.raises(ValueError):
-            rc.rhythm_angles(peaks, 10, 5, bad, 2, 20)
-    for extra in (0, 6, True, "2", None):
-        with pytest.raises(ValueError):
-            rc.rhythm_angles(peaks, 10, 5, silent(5), extra, 20)
+            rhythm(peaks, 10, 5, bad)
     for limit in (0, 101, 2.5, True, "20", None):
         with pytest.raises(ValueError):
-            rc.rhythm_angles(peaks, 10, 5, silent(5), 2, limit)
+            rhythm(peaks, 10, 5, silent(5), limit)
+
+
+def test_channels_that_do_not_match_are_refused_and_the_extra_notes_setting_is_not_a_parameter():
+    peaks = hand_made_peaks([0.5, 1.0], [60.0, 120.0])
+    windows = three_notes(40)
+    with pytest.raises(ValueError):
+        rc.rhythm_angles(peaks, 10, 5, windows, np.zeros(2000, dtype=np.int16), np.zeros(1999, dtype=np.int16), 20)
+    with pytest.raises(TypeError):
+        rc.rhythm_angles(peaks, 10, 5, windows, *quiet(windows), 2, 20)  # the earlier signature, with the Extra notes before the limit
+
+
+def test_the_starts_are_placed_on_the_waveform_not_left_at_the_middle_of_their_window():
+    # real audio: a loud burst begins at 0.70 s and another at 1.30 s; the starts that the windows give are the middle of their window (0.69 s and 1.29 s), the ones placed on the waveform are on the bursts
+    windows = silent(40)
+    windows[11:20, 40] = 1.0
+    windows[21:30, 45] = 1.0
+    x = np.zeros(int(44100 * 2.5))
+    for at in (0.70, 1.30):
+        i = int(at * 44100)
+        t = np.arange(8000) / 44100
+        x[i : i + 8000] += 8000 * np.sin(2 * np.pi * 440 * t) * np.exp(-t * 9)
+    channel = x.astype(np.int16)
+    placed = no.onset_starts(windows, channel, channel, 44100)
+    middle = starts_of(windows)
+    assert placed.shape == middle.shape == (2,) and not np.allclose(placed, middle, atol=0.002)  # moved onto the burst
+    data = rc.rhythm_angles(no_peaks(), 100, 250, windows, channel, channel, 20)
+    raw = tv.leading_tempos(placed, rc.START_RESOLUTION, 20)[:, 0]
+    rows = tv.vote_series(placed, np.column_stack([tv.average_tempos(raw), raw]))
+    assert np.allclose(data.angles[:, :4], rc.circle_angles(placed, rows, (np.arange(250) + 0.5) / 100, VOTE_DEFAULTS), rtol=1e-12, atol=1e-12)
 
 
 def test_a_different_vote_limit_changes_the_angles_of_a_file_whose_spacing_changes():
@@ -401,8 +443,8 @@ def test_a_different_vote_limit_changes_the_angles_of_a_file_whose_spacing_chang
         windows[row : row + 3, 20 + index % 40] = 1.0
         row += 11 if index < 29 else 6
     frames = int(windows.shape[0] * 0.06 * 100)  # 100 frames a second over the same time
-    low = rc.rhythm_angles(no_peaks(40), 100, frames, windows, 2, 2).angles
-    high = rc.rhythm_angles(no_peaks(40), 100, frames, windows, 2, 100).angles
+    low = rhythm(no_peaks(40), 100, frames, windows, 2).angles
+    high = rhythm(no_peaks(40), 100, frames, windows, 100).angles
     assert not np.array_equal(low[:, :4], high[:, :4])
     assert np.array_equal(low[:, 4:], high[:, 4:])  # the peak rings do not depend on the votes
 
@@ -413,8 +455,8 @@ def test_the_angles_do_not_depend_on_the_frame_rate():
     rng = np.random.default_rng(11)
     windows = (rng.random((200, 88)) ** 6) * (rng.random((200, 88)) < 0.15)
     peaks = hand_made_peaks([0.5 * i for i in range(1, 20)], [60.0 + 7 * (i % 5) for i in range(19)])
-    slow = rc.rhythm_angles(peaks, 10, 100, windows, 3, 20).angles
-    fast = rc.rhythm_angles(peaks, 30, 300, windows, 3, 20).angles
+    slow = rhythm(peaks, 10, 100, windows).angles
+    fast = rhythm(peaks, 30, 300, windows).angles
     assert np.allclose(fast[1::3], slow, rtol=1e-9, atol=1e-9)
 
 

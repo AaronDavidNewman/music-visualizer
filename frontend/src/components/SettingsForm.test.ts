@@ -925,32 +925,31 @@ describe("the Threshold of Chromatic Decay (feature 037)", () => {
 });
 
 describe("the page for Rhythm Circles (features 038 and 047)", () => {
-  it("shows Analysis, Colormap, Image type, Rhythm Circles (the Vote limit), Held notes (Extra notes) and Local peaks (Minimum distance, no checkbox), in this order", async () => {
+  it("shows Analysis, Colormap, Image type, Rhythm Circles (the Vote limit) and Local peaks (Minimum distance, no checkbox), in this order, and no Held notes", async () => {
     const groups = groupsOf(await renderType("rhythm-circles"));
     expect(groups.map((g) => [g.id, g.title, g.controls])).toEqual([
       ["analysis", "Analysis", TOP],
       ["colormap", "Colormap", ["colormap"]],
       ["image-type", "Image type", ["image-type"]],
       ["rhythm-circles", "Rhythm Circles", ["vote-limit"]],
-      ["held-notes", "Held notes", ["extra-notes"]],
       ["concentric-peaks", "Local peaks", ["peak-distance"]],
     ]);
   });
 
-  it("has the Vote limit slider from 1 to 100 in steps of 1, starting at 20, with its label, readout and help, before Extra notes and Minimum distance", async () => {
+  it("has the Vote limit slider from 1 to 100 in steps of 1, starting at 40, with its label, readout and help, before Minimum distance", async () => {
     const html = await renderType("rhythm-circles");
     const slider = html.match(/<input id="vote-limit"[^>]*>/)?.[0] ?? "";
     expect(slider).toContain('type="range"');
     expect(slider).toContain('min="1"');
     expect(slider).toContain('max="100"');
     expect(slider).toContain('step="1"');
-    expect(slider).toContain('value="20"');
+    expect(slider).toContain('value="40"'); // the default since the fifth round of feature 047
     expect(html).toMatch(/<label[^>]*for="vote-limit"[^>]*>Vote limit<\/label>/);
-    expect(html).toMatch(/<output[^>]*for="vote-limit"[^>]*>20<\/output>/);
+    expect(html).toMatch(/<output[^>]*for="vote-limit"[^>]*>40<\/output>/); // the default since the fifth round of feature 047
     expect(html).toContain('aria-label="About vote limit"');
     expect(html).toContain(voteLimitHelp);
-    expect(html.indexOf('id="vote-limit"')).toBeLessThan(html.indexOf('id="extra-notes"'));
-    expect(html.indexOf('id="extra-notes"')).toBeLessThan(html.indexOf('for="peak-distance"'));
+    expect(html.indexOf('id="vote-limit"')).toBeLessThan(html.indexOf('for="peak-distance"'));
+    expect(html).not.toContain('id="extra-notes"'); // the starts do not come from the loudest notes (fourth round of feature 047)
     expect(slider).not.toContain("disabled");
     expect((await renderType("rhythm-circles", true)).match(/<input id="vote-limit"[^>]*>/)?.[0]).toContain("disabled");
   });
@@ -1122,7 +1121,7 @@ describe("the page for Polychord (feature 042)", () => {
 
 
 describe("the Extra notes (k) control (feature 044)", () => {
-  const SEVEN = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph", "rhythm-circles"]; // eight since feature 047 (the name is old)
+  const SEVEN = ["decay", "decay-exp", "polar-chords", "chromatic-decay", "chromatic-wireframe", "polychord", "spirograph"];
   const slider = (html: string) => html.match(/<input id="extra-notes"[^>]*>/)?.[0] ?? "";
 
   it.each(SEVEN)("is a slider from 1 to the number of notes, starting at 2, with a label and an info button, for %s", async (type) => {
@@ -1143,10 +1142,9 @@ describe("the Extra notes (k) control (feature 044)", () => {
     expect(slider(await renderType("polar-chords"))).toContain('max="5"'); // Notes shown starts at 5
     expect(slider(await renderType("polychord"))).toContain('max="6"'); // Number of notes starts at 6
     expect(slider(await renderType("spirograph"))).toContain('max="8"'); // Number of notes starts at 8, and k stops at 8
-    expect(slider(await renderType("rhythm-circles"))).toContain('max="5"'); // feature 047: its n is 5
   });
 
-  it.each(["contour", "energy-graphs"])("is not shown for %s", async (type) => {
+  it.each(["contour", "energy-graphs", "rhythm-circles"])("is not shown for %s", async (type) => {
     const html = await renderType(type);
     expect(html).not.toContain('id="extra-notes"');
     expect(html).not.toContain('data-group="held-notes"');

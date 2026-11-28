@@ -1,0 +1,63 @@
+sonata.wav: 594 starts, target 116 bpm, time resolution 40 ms
+   limit   5: first or second within 10% of target   81%, first alone   64%, averaged first   67%, first tempo changes  222, votes hash 630468ecccbc, second run identical: True
+   limit  10: first or second within 10% of target   93%, first alone   90%, averaged first   94%, first tempo changes  113, votes hash 2b9ee3b99fed, second run identical: True
+   limit  20: first or second within 10% of target   98%, first alone   97%, averaged first   99%, first tempo changes   39, votes hash ab94c3eb995a, second run identical: True
+   limit 100: first or second within 10% of target   98%, first alone   98%, averaged first   99%, first tempo changes   25, votes hash fd7a2ecc08a7, second run identical: True
+         0 s: first   120, second   120
+        15 s: first   112, second   108
+        30 s: first   112, second   116
+        45 s: first   116, second   120
+        60 s: first   112, second   116
+        75 s: first   140, second   144
+        90 s: first   116, second   120
+       105 s: first   112, second   116
+       120 s: first   112, second   116
+       135 s: first   112, second   116
+       150 s: first   116, second    92
+       165 s: first   120, second   116
+       180 s: first    80, second    92
+almost2.wav: 469 starts, target 90 bpm, time resolution 40 ms
+   limit   5: first or second within 10% of target   77%, first alone   65%, averaged first   77%, first tempo changes  170, votes hash 49806b63ea79, second run identical: True
+   limit  10: first or second within 10% of target   82%, first alone   66%, averaged first   74%, first tempo changes  110, votes hash 7fbc206c18b5, second run identical: True
+   limit  20: first or second within 10% of target   84%, first alone   67%, averaged first   75%, first tempo changes  112, votes hash d3985e7e3541, second run identical: True
+   limit 100: first or second within 10% of target   84%, first alone   67%, averaged first   75%, first tempo changes  112, votes hash d3985e7e3541, second run identical: True
+         0 s: first   120, second   120
+        15 s: first    84, second    76
+        30 s: first    92, second   140
+        45 s: first    84, second   128
+        60 s: first   104, second   108
+        75 s: first    96, second   100
+        90 s: first    96, second    92
+       105 s: first   100, second    76
+       120 s: first   104, second    84
+       135 s: first    92, second    96
+       150 s: first    92, second   136
+       165 s: first    76, second    80
+piano-108bpm.wav: 146 starts, target 108 bpm, time resolution 40 ms
+   limit   5: first or second within 10% of target  100%, first alone  100%, averaged first  100%, first tempo changes   39, votes hash 438d11685615, second run identical: True
+   limit  10: first or second within 10% of target  100%, first alone  100%, averaged first  100%, first tempo changes   34, votes hash 4ba51e339e7b, second run identical: True
+   limit  20: first or second within 10% of target  100%, first alone  100%, averaged first  100%, first tempo changes   26, votes hash c3b3321ac79f, second run identical: True
+   limit 100: first or second within 10% of target  100%, first alone  100%, averaged first  100%, first tempo changes    3, votes hash e66d744ffb8f, second run identical: True
+         0 s: first   120, second   120
+        15 s: first   108, second   112
+        30 s: first   104, second   108
+        45 s: first   112, second   104
+piano2-108bpm.wav: 168 starts, target 108 bpm, time resolution 40 ms
+   limit   5: first or second within 10% of target  100%, first alone  100%, averaged first  100%, first tempo changes   73, votes hash 855fb46a517d, second run identical: True
+   limit  10: first or second within 10% of target  100%, first alone  100%, averaged first  100%, first tempo changes   69, votes hash a5b8131fdccc, second run identical: True
+   limit  20: first or second within 10% of target  100%, first alone  100%, averaged first  100%, first tempo changes   55, votes hash b59aa1d0381a, second run identical: True
+   limit 100: first or second within 10% of target  100%, first alone  100%, averaged first  100%, first tempo changes    2, votes hash ae55265f0dec, second run identical: True
+         0 s: first   120, second   120
+        15 s: first   108, second   112
+        30 s: first   108, second   112
+        45 s: first   104, second   108
+        60 s: first   104, second   108
+        75 s: first   104, second   108
+piano-120bpm.wav: 102 starts, target 120 bpm, time resolution 40 ms
+   limit   5: first or second within 10% of target   78%, first alone   65%, averaged first   58%, first tempo changes   34, votes hash e0fd51580543, second run identical: True
+   limit  10: first or second within 10% of target   86%, first alone   75%, averaged first   67%, first tempo changes   26, votes hash 1f8c61e70b5e, second run identical: True
+   limit  20: first or second within 10% of target   86%, first alone   75%, averaged first   67%, first tempo changes   26, votes hash 1f8c61e70b5e, second run identical: True
+   limit 100: first or second within 10% of target   86%, first alone   75%, averaged first   67%, first tempo changes   26, votes hash 1f8c61e70b5e, second run identical: True
+         0 s: first   120, second   120
+        15 s: first   120, second    76
+        30 s: first    88, second    84

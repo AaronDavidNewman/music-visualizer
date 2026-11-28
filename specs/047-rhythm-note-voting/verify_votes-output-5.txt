@@ -1,0 +1,146 @@
+sonata.wav: 589 starts, target 116 bpm, time resolution 40 ms
+   limit  10: first tempo within 10% of target   78% (within 3%   32%), averaged   78%, beats in 3   13%, first tempo changes  110, hash 21e8c1b654f3, second run identical: True
+   limit  20: first tempo within 10% of target   94% (within 3%   36%), averaged   93%, beats in 3    5%, first tempo changes   89, hash 627654278165, second run identical: True
+   limit  40: first tempo within 10% of target   97% (within 3%   51%), averaged   97%, beats in 3    3%, first tempo changes   60, hash f18ca9b41ebe, second run identical: True
+   limit 100: first tempo within 10% of target   99% (within 3%   80%), averaged  100%, beats in 3    1%, first tempo changes   32, hash 272b23d8bd01, second run identical: True
+         0 s: first   120, meter 2
+        15 s: first   108, meter 2
+        30 s: first   116, meter 2
+        45 s: first   116, meter 2
+        60 s: first   116, meter 2
+        75 s: first   116, meter 2
+        90 s: first   116, meter 2
+       105 s: first   116, meter 2
+       120 s: first   112, meter 2
+       135 s: first   120, meter 2
+       150 s: first   116, meter 2
+       165 s: first   116, meter 2
+       180 s: first   120, meter 2
+almost2.wav: 466 starts, target 90 bpm, time resolution 40 ms
+   limit  10: first tempo within 10% of target   80% (within 3%   38%), averaged   78%, beats in 3    9%, first tempo changes   87, hash 709e306d9834, second run identical: True
+   limit  20: first tempo within 10% of target   93% (within 3%   44%), averaged   91%, beats in 3    7%, first tempo changes   41, hash 53b4f16d274d, second run identical: True
+   limit  40: first tempo within 10% of target   97% (within 3%   32%), averaged   96%, beats in 3    4%, first tempo changes   29, hash dee6f02dd8a6, second run identical: True
+   limit 100: first tempo within 10% of target   97% (within 3%   32%), averaged   96%, beats in 3    4%, first tempo changes   29, hash dee6f02dd8a6, second run identical: True
+         0 s: first   120, meter 2
+        15 s: first    88, meter 3
+        30 s: first    92, meter 2
+        45 s: first    88, meter 2
+        60 s: first    88, meter 2
+        75 s: first    96, meter 2
+        90 s: first    96, meter 2
+       105 s: first    96, meter 2
+       120 s: first    96, meter 2
+       135 s: first    96, meter 2
+       150 s: first    96, meter 2
+       165 s: first    96, meter 2
+piano-108bpm.wav: 146 starts, target 108 bpm, time resolution 40 ms
+   limit  10: first tempo within 10% of target   82% (within 3%   50%), averaged   76%, beats in 3   22%, first tempo changes   22, hash 1506f88eaae2, second run identical: True
+   limit  20: first tempo within 10% of target  100% (within 3%   68%), averaged  100%, beats in 3    0%, first tempo changes   14, hash 5dd7bd32c6b8, second run identical: True
+   limit  40: first tempo within 10% of target  100% (within 3%   82%), averaged  100%, beats in 3    0%, first tempo changes    8, hash 0813d6ce97d2, second run identical: True
+   limit 100: first tempo within 10% of target   94% (within 3%   94%), averaged   91%, beats in 3    6%, first tempo changes    7, hash df9d78f2998b, second run identical: True
+         0 s: first   120, meter 2
+        15 s: first   108, meter 2
+        30 s: first   108, meter 2
+        45 s: first   112, meter 2
+piano2-108bpm.wav: 168 starts, target 108 bpm, time resolution 40 ms
+   limit  10: first tempo within 10% of target  100% (within 3%   90%), averaged  100%, beats in 3    0%, first tempo changes    9, hash e392486c1774, second run identical: True
+   limit  20: first tempo within 10% of target  100% (within 3%   90%), averaged  100%, beats in 3    0%, first tempo changes    9, hash e392486c1774, second run identical: True
+   limit  40: first tempo within 10% of target  100% (within 3%   91%), averaged  100%, beats in 3    0%, first tempo changes    8, hash d3eda78ac4ea, second run identical: True
+   limit 100: first tempo within 10% of target  100% (within 3%  100%), averaged  100%, beats in 3    0%, first tempo changes    2, hash 5178c0108a8c, second run identical: True
+         0 s: first   120, meter 2
+        15 s: first   108, meter 2
+        30 s: first   108, meter 2
+        45 s: first   108, meter 2
+        60 s: first   108, meter 2
+        75 s: first   108, meter 2
+piano-120bpm.wav: 102 starts, target 120 bpm, time resolution 40 ms
+   limit  10: first tempo within 10% of target   60% (within 3%   51%), averaged   53%, beats in 3   27%, first tempo changes   19, hash f5d9cba09427, second run identical: True
+   limit  20: first tempo within 10% of target   83% (within 3%   83%), averaged   81%, beats in 3   80%, first tempo changes    6, hash 824842c999e0, second run identical: True
+   limit  40: first tempo within 10% of target   90% (within 3%   90%), averaged   88%, beats in 3   90%, first tempo changes    5, hash 2ead11dfc0da, second run identical: True
+   limit 100: first tempo within 10% of target   90% (within 3%   90%), averaged   88%, beats in 3   90%, first tempo changes    5, hash 2ead11dfc0da, second run identical: True
+         0 s: first   120, meter 2
+        15 s: first   120, meter 3
+        30 s: first   120, meter 3
+Thunderer.wav: 398 starts, target 122 bpm, time resolution 40 ms
+   limit  10: first tempo within 10% of target   78% (within 3%   55%), averaged   77%, beats in 3   34%, first tempo changes   62, hash 5f8739e034bc, second run identical: True
+   limit  20: first tempo within 10% of target   98% (within 3%   81%), averaged   97%, beats in 3    7%, first tempo changes   30, hash 38d5c8c889b9, second run identical: True
+   limit  40: first tempo within 10% of target  100% (within 3%   94%), averaged  100%, beats in 3    0%, first tempo changes   13, hash 54215d3befe2, second run identical: True
+   limit 100: first tempo within 10% of target  100% (within 3%   94%), averaged  100%, beats in 3    0%, first tempo changes    7, hash 9d528ae7c155, second run identical: True
+         0 s: first   120, meter 2
+        15 s: first   124, meter 2
+        30 s: first   124, meter 2
+        45 s: first   124, meter 2
+        60 s: first   124, meter 2
+        75 s: first   124, meter 2
+        90 s: first   120, meter 2
+       105 s: first   120, meter 2
+       120 s: first   120, meter 2
+       135 s: first   124, meter 2
+       150 s: first   124, meter 2
+WMTS.wav: 1039 starts, target 105 bpm, time resolution 40 ms
+   limit  10: first tempo within 10% of target   88% (within 3%   78%), averaged   88%, beats in 3   24%, first tempo changes  169, hash 7df7514bb805, second run identical: True
+   limit  20: first tempo within 10% of target   90% (within 3%   81%), averaged   89%, beats in 3   24%, first tempo changes  148, hash 33fb078f65d3, second run identical: True
+   limit  40: first tempo within 10% of target   92% (within 3%   84%), averaged   89%, beats in 3   22%, first tempo changes  138, hash d655f44d48af, second run identical: True
+   limit 100: first tempo within 10% of target   96% (within 3%   90%), averaged   94%, beats in 3   14%, first tempo changes  103, hash b415a0635153, second run identical: True
+         0 s: first   120, meter 2
+        15 s: first   108, meter 2
+        30 s: first   108, meter 2
+        45 s: first   104, meter 2
+        60 s: first   104, meter 2
+        75 s: first   104, meter 2
+        90 s: first   104, meter 3
+       105 s: first   108, meter 2
+       120 s: first   104, meter 2
+       135 s: first   104, meter 2
+       150 s: first   108, meter 2
+       165 s: first   144, meter 3
+       180 s: first   144, meter 3
+       195 s: first   112, meter 3
+       210 s: first   108, meter 2
+       225 s: first   108, meter 2
+       240 s: first   104, meter 2
+       255 s: first   104, meter 2
+       270 s: first   108, meter 2
+       285 s: first   108, meter 2
+       300 s: first   108, meter 2
+       315 s: first   108, meter 2
+       330 s: first   104, meter 2
+       345 s: first   108, meter 2
+       360 s: first   108, meter 3
+       375 s: first   108, meter 2
+turnyourlove.wav: 694 starts, target 100 bpm, time resolution 40 ms
+   limit  10: first tempo within 10% of target   76% (within 3%   51%), averaged   69%, beats in 3   38%, first tempo changes   88, hash 3abc4d8b0a4b, second run identical: True
+   limit  20: first tempo within 10% of target   78% (within 3%   60%), averaged   72%, beats in 3   32%, first tempo changes   72, hash 1d5acc1dfc07, second run identical: True
+   limit  40: first tempo within 10% of target   88% (within 3%   66%), averaged   85%, beats in 3   15%, first tempo changes   38, hash 1246221ac001, second run identical: True
+   limit 100: first tempo within 10% of target  100% (within 3%   91%), averaged  100%, beats in 3    0%, first tempo changes    8, hash eef8b775ffe5, second run identical: True
+         0 s: first   120, meter 2
+        15 s: first   104, meter 2
+        30 s: first   104, meter 2
+        45 s: first   100, meter 2
+        60 s: first   100, meter 2
+        75 s: first   100, meter 2
+        90 s: first   100, meter 2
+       105 s: first   100, meter 2
+       120 s: first   100, meter 2
+       135 s: first   100, meter 2
+       150 s: first   100, meter 2
+       165 s: first   100, meter 2
+       180 s: first   136, meter 3
+       195 s: first   136, meter 3
+       210 s: first   136, meter 3
+       225 s: first   100, meter 2
+       240 s: first   104, meter 2
+       255 s: first   100, meter 2
+       270 s: first   100, meter 2
+       285 s: first   100, meter 2
+       300 s: first   136, meter 3
+02_Mean_.wav: 150 starts, target 105 bpm, time resolution 40 ms
+   limit  10: first tempo within 10% of target   43% (within 3%   43%), averaged   35%, beats in 3   84%, first tempo changes   20, hash 9eea9167b565, second run identical: True
+   limit  20: first tempo within 10% of target   49% (within 3%   49%), averaged   43%, beats in 3   64%, first tempo changes   18, hash 3aeac159090a, second run identical: True
+   limit  40: first tempo within 10% of target   32% (within 3%   32%), averaged   27%, beats in 3   79%, first tempo changes   12, hash 3066f6b56e0e, second run identical: True
+   limit 100: first tempo within 10% of target   51% (within 3%   51%), averaged   49%, beats in 3   49%, first tempo changes    7, hash 1ef6099f215e, second run identical: True
+         0 s: first   120, meter 2
+        15 s: first   140, meter 3
+        30 s: first   140, meter 3
+        45 s: first   104, meter 2
+        60 s: first   140, meter 3

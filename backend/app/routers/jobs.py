@@ -22,8 +22,8 @@ Order of operations:
        radius of its curves follow the place in the local energy peak) - ``local_peaks.measure_local_peaks()`` with ``frame_positions()``
        (the beat: ``BeatPositions`` ``(frames,)``), for Polychord also ``polychord.frame_tempos()`` (``FrameTempos``
        ``(frames,)``, from the same measurement). Rhythm Circles (feature 047) calls
-       ``rhythm_circles.rhythm_angles()`` (``CircleAngles`` ``(frames, 6)``) with the local peaks and the 60 ms windows of step 5 (the starts of the
-       sustained loudest notes are found in the windows, not the frames, so they do not depend on the frame rate), Extra notes and the Vote limit.
+       ``rhythm_circles.rhythm_angles()`` (``CircleAngles`` ``(frames, 6)``) with the local peaks, the 60 ms windows of step 5 and the two channels of step 2 (the starts of the
+       notes are found in the windows and placed on the waveform, not found in the frames, so they do not depend on the frame rate) and the Vote limit; Extra notes plays no part.
     7. Average the windows into frames and draw them - ``frame_rendering.average_frames()`` then ``frame_rendering.write_frames()`` (for Energy Graphs ``energy_graphs.frame_energy()`` is made in the same call,
        after the averaging) - one PNG for each frame in the frames folder of the job, and with ``export_obj`` (Contour and
        Chromatic Wireframe only) one OBJ file for each frame in its ``obj`` folder.
@@ -587,11 +587,11 @@ def create_job(
         # Rhythm Circles (features 038, 040 and 047) turns its two inner rings with the local peaks themselves (one
         # measurement, with the minimum distance of the request; the prominence is not a setting (feature 040): every
         # measurement uses 20 percent) and its four outer rings with the average and the raw best-voted tempo of the starts of the
-        # sustained loudest notes (Extra notes, Vote limit), not with the beat
+        # notes (found from the rise of the note strengths and placed on the waveform; Vote limit, not Extra notes), not with the beat
         rhythm = None
         if image_type_value == "rhythm-circles":
             peaks = measure_local_peaks(left, right, file_rate, peak_distance_value, DEFAULT_PROMINENCE)
-            rhythm = rhythm_angles(peaks, fps, frames, result.frames, extra_notes_value, vote_limit_value)  # the starts come from the 60 ms windows, not the frames
+            rhythm = rhythm_angles(peaks, fps, frames, result.frames, left, right, vote_limit_value)  # the starts come from the 60 ms windows and the waveform, not the frames
         # write_frames draws the frames (the averaged note values) as the chosen image type; for the contour, a resolution
         # above 1 first interpolates the grid of note values to a finer one, a number of notes below 84 first builds the picture from the notes with the most
         # energy in the file only, and an interpolate value above 1 draws only every n-th frame and makes the others

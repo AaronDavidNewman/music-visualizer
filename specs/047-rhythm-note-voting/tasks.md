@@ -199,3 +199,21 @@ description: "Task list for 047-rhythm-note-voting"
 
 All 45 tasks done. Differences from the plan, none of them a change of the rule: the page group id is `rhythm-circles` (research Decision 14); T039 is covered by `test_the_other_image_types_make_the_same_pictures_whatever_the_vote_limit` in `test_rhythm_circles_api.py`; `specs/041-code-readability-docs/tools/verify_frames.py` was not run (its baseline predates feature 043, so it cannot be a no-change check; `tools/verify_drawing.py` of this feature was used, with Rhythm Circles skipped by design); the page was not looked at in a browser (quickstart section 5). Results: whole backend suite 32 failed / 5727 passed, the failing ids exactly those of `baseline-failures-before.txt` (saved as `baseline-failures-after.txt`); frontend 1030 tests pass and `vue-tsc` is clean; sample files in `verify_votes-output.txt` (sonata 64% near 116, almost2 14 to 19% near 90).
 
+## Fourth round (2026-11-26): the starts from the rise of the notes
+
+- [X] T046 Create `backend/app/services/note_onsets.py` (`onset_rises`, `pick_onsets`, `refine_starts`, `onset_starts`) with the module docstring and Order of operations, and the aliases `OnsetRises`, `WaveformRises` (and the text of `StartTimes`) in `array_types.py`; add it to `PROCESSING_MODULES` in `tests/test_documentation.py`.
+- [X] T047 Create `backend/tests/test_note_onsets.py` (rises by hand, peaks by hand, refinement on synthetic bursts, ten synthetic notes through the real analysis).
+- [X] T048 `rhythm_angles(peaks, frame_rate, frames, windows, left, right, vote_limit)` takes the starts from `onset_starts` with `START_RESOLUTION = 0.04`; the job passes `left, right`; update `test_rhythm_circles.py` and `test_rhythm_circles_api.py`.
+- [X] T049 Delete `tempo_votes.note_starts` and its tests; `test_tempo_votes_files.py` and `tools/verify_votes.py` use `onset_starts` (and the three piano files).
+- [X] T050 Remove Rhythm Circles from `HELD_NOTES_TYPES` and from the page's Held notes (`usesHeldNotes`, groups, help texts) and update the backend and frontend tests.
+- [X] T051 Documents: README, spec (fourth-round Revision), research Decision 17, data-model, contract, `verify_votes-output-4.txt`, `full-run-4.txt`, `baseline-failures-after-4.txt`.
+
+## Fifth round (2026-11-27): trills, the last 2 starts, a beat divided in 2 or 3
+
+- [X] T052 Create `backend/app/services/trills.py` (`semitone_levels`, `trill_scores`, `trill_spans`, `find_trills`) with its Order of operations and the aliases `SemitoneLevels`, `SemitoneBands`, `TrillScores`, `TrillNotes`, `TrillSpans` in `array_types.py`; add it to `PROCESSING_MODULES`.
+- [X] T053 `note_onsets.onset_rises(values, spans)` leaves out the trill's notes; `onset_starts` finds the trills first.
+- [X] T054 `tempo_votes`: `TRIPLE_NOTE_BEATS`/`TRIPLE_NOTE_POINTS`, `meter` and `lookback` in `vote_tempos`, `meter_tempos`, `leading_tempos`, `DEFAULT_VOTE_LIMIT = 40`; aliases `MeterVotes`, `MeterTempos`.
+- [X] T055 `rhythm_angles` takes its tempo from `leading_tempos`; update `test_rhythm_circles.py`, `test_rhythm_circles_api.py` (default 40), `test_tempo_votes_files.py`.
+- [X] T056 Tests: new `backend/tests/test_trills.py` (synthetic trill over a bass), trill tests in `test_note_onsets.py`, fifth-round tests in `test_tempo_votes.py`.
+- [X] T057 Frontend: `DEFAULT_VOTE_LIMIT = 40`, the Vote limit and Rhythm Circles help (and the stale "Extra notes" in the latter); tests.
+- [X] T058 Documents: README, spec Revision (fifth round), research Decision 18, data-model, contract, `tools/verify_votes.py` (nine files, `leading_tempos`), `verify_votes-output-5.txt`, `full-run-5.txt`, `baseline-failures-after-5.txt`.

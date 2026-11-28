@@ -32,7 +32,7 @@ def test_the_tempos_are_the_18_metronome_markings_from_76_to_144():
 def test_the_note_values_are_the_half_quarter_eighth_sixteenth_dotted_and_the_two_triplets():
     assert len(tv.NOTE_BEATS) == 10
     assert sorted(tv.NOTE_BEATS) == pytest.approx(sorted([2, 1, 1 / 2, 1 / 4, 3, 3 / 2, 3 / 4, 3 / 8, 1 / 3, 2 / 3]))
-    assert tv.DEFAULT_VOTE_LIMIT == 20 and tv.NO_VOTES_TEMPO == START_TEMPO == 120.0
+    assert tv.DEFAULT_VOTE_LIMIT == 40 and tv.NO_VOTES_TEMPO == START_TEMPO == 120.0  # 40 since the fifth round of feature 047 (it was 20)
 
 
 def test_a_plain_note_gives_two_points_and_a_dotted_note_or_a_triplet_one():
@@ -343,99 +343,124 @@ def test_vote_series_refuses_inputs_that_do_not_match(starts, ranked):
         tv.vote_series(starts, ranked)
 
 
-# --- the starts of the sustained loudest notes ------------------------------------------------------------------------------
 
-FPS = 10.0
-
-
-def silent(frames):
-    return np.zeros((frames, 88))
+# --- the fifth round: beats divided in 3, the last 2 starts, the meter and the leading tempo --------------------------------
 
 
-def starts_of(values, extra=2, fps=FPS):
-    return tv.note_starts(values, extra, fps)
+def column(tempo):
+    return tv.TEMPOS.index(tempo)
 
 
-def test_starts_are_the_seconds_of_the_middle_of_a_frame_in_strictly_increasing_order():
-    values = silent(40)
-    values[3:20, 40] = 1.0
-    values[25:30, 45] = 0.5
-    got = starts_of(values)
-    assert got.dtype == np.float64 and got.ndim == 1
-    assert got.tolist() == pytest.approx([(3 + 0.5) / FPS, (25 + 0.5) / FPS])
-    assert (np.diff(got) > 0).all()
-    assert starts_of(values, fps=30.0).tolist() == pytest.approx([3.5 / 30, 25.5 / 30])
+def test_the_note_values_of_a_beat_divided_in_3_and_the_other_constants_of_the_fifth_round():
+    assert tv.TRIPLE_NOTE_BEATS == pytest.approx((2.0, 1.0, 2 / 3, 1 / 3, 1 / 6, 0.5, 4 / 3, 3.0))
+    assert tv.TRIPLE_NOTE_POINTS == (2, 2, 2, 2, 2, 1, 1, 1)
+    assert tv.METERS == (2, 3) and tv.LOOKBACK == 2
 
 
-def test_a_note_that_sounds_for_a_long_time_is_one_start_at_its_first_frame():
-    values = silent(80)
-    values[3:63, 40] = 1.0
-    assert starts_of(values).tolist() == pytest.approx([0.35])
+def test_a_third_and_a_sixth_of_a_second_are_plain_notes_of_120_when_its_beat_is_divided_in_3_and_triplets_when_in_2():
+    for length in (1 / 3, 1 / 6):
+        assert tv.tempo_points([length], 0.0, meter=3)[0, column(120)] == 2  # a quarter and an eighth note of a dotted-quarter beat
+        assert tv.tempo_points([length], 0.0, meter=2)[0, column(120)] == 1  # the two triplets
+        assert tv.tempo_points([length], 0.0)[0, column(120)] == 1  # meter 2 unless said
+    assert tv.tempo_points([0.25], 0.0, meter=3)[0, column(120)] == 1  # half a beat: a dotted eighth when the beat is divided in 3
+    assert tv.tempo_points([0.25], 0.0, meter=2)[0, column(120)] == 2  # and a plain eighth when it is divided in 2
+    assert tv.fitting_tempos([0.5], 0.0, meter=3).shape == (1, 18)
 
 
-def test_notes_that_enter_in_the_same_frame_are_one_start():
-    values = silent(30)
-    values[5:25, [40, 44, 47]] = 1.0  # a chord
-    assert starts_of(values).tolist() == pytest.approx([0.55])
-
-
-def test_a_note_that_drops_out_and_sounds_again_is_a_new_start():
-    values = silent(30)
-    values[0:10, 40] = 1.0
-    values[15:21, 40] = 1.0
-    assert starts_of(values).tolist() == pytest.approx([0.05, 1.55])
-
-
-def test_the_sounding_notes_of_the_first_frame_are_the_first_start():
-    values = silent(10)
-    values[0, [10, 20]] = [1.0, 0.5]
-    assert starts_of(values).tolist() == pytest.approx([0.05])
-
-
-def test_silence_has_no_start_and_the_zero_places_of_a_frame_are_not_notes():
-    assert starts_of(silent(20)).shape == (0,)
-    values = silent(20)
-    values[4:, 33] = 0.7  # one note sounds: four of the five places hold notes of strength 0, which never start
-    assert starts_of(values).tolist() == pytest.approx([0.45])
-    assert starts_of(silent(0)).shape == (0,)
-
-
-def test_only_the_84_notes_count_not_the_extra_columns():
-    values = silent(20)
-    values[:, 84:] = 1.0
-    assert starts_of(values).shape == (0,)
-
-
-def test_a_held_note_is_one_start_while_it_stays_among_the_loudest_n_plus_k_and_extra_notes_change_the_starts():
-    # note 40 (strength 0.5) sounds all the time; nine louder notes sound in frames 10 to 29
-    values = silent(50)
-    values[:, 40] = 0.5
-    values[10:30, 50:59] = 1.0
-    assert starts_of(values, extra=5).tolist() == pytest.approx([0.05, 1.05])  # 40 is among the loudest 5 + 5: held, never starts again
-    assert starts_of(values, extra=1).tolist() == pytest.approx([0.05, 1.05, 3.05])  # dropped at rank 9: it starts again in frame 30
-
-
-def test_the_starts_do_not_change_the_input_and_are_the_same_twice():
-    values = np.random.default_rng(5).random((60, 88)) ** 4
-    before = values.copy()
-    a, b = starts_of(values), starts_of(values)
-    assert np.array_equal(values, before) and np.array_equal(a, b)
-    assert (np.diff(a) > 0).all() and (a >= 0.5 / FPS).all() and (a <= 59.5 / FPS).all()
-
-
-@pytest.mark.parametrize("extra", [0, 6, -1, True, "2", None, 2.5, float("nan")])
-def test_note_starts_refuses_an_extra_notes_that_is_not_allowed_for_5_notes(extra):
+@pytest.mark.parametrize("meter", [1, 4, True, "2", None, 2.5])
+def test_a_meter_that_is_not_2_or_3_is_refused(meter):
     with pytest.raises(ValueError):
-        tv.note_starts(silent(5), extra, FPS)
-
-
-@pytest.mark.parametrize("values", [np.zeros(88), np.zeros((5, 80)), np.zeros((2, 5, 88)), np.full((5, 88), -1.0), np.full((5, 88), np.nan), "abc", None])
-def test_note_starts_refuses_values_that_are_not_note_strengths(values):
+        tv.tempo_points([0.5], 0.0, meter=meter)
     with pytest.raises(ValueError):
-        tv.note_starts(values, 2, FPS)
+        tv.vote_tempos([0.0, 0.5], 0.0, 20, meter=meter)
 
 
-@pytest.mark.parametrize("rate", [0, -1.0, float("nan"), float("inf"), True, "30", None])
-def test_note_starts_refuses_a_frame_rate_that_is_not_a_positive_number(rate):
+def by_hand(starts, resolution, limit, meter, lookback):
+    """The votes with a plain loop: at each start the best points of its time since each of the last ``lookback`` starts."""
+    votes = [np.zeros(18, dtype=np.int64)]
+    for i in range(1, len(starts)):
+        lengths = [starts[i] - starts[i - back] for back in range(1, lookback + 1) if i - back >= 0]
+        points = tv.tempo_points(lengths, resolution, meter).max(axis=0)
+        now = np.maximum(votes[-1] - 1, 0)
+        votes.append(np.where(points > 0, np.minimum(now + points, limit), now))
+    return np.array(votes)
+
+
+@pytest.mark.parametrize("meter", [2, 3])
+@pytest.mark.parametrize("lookback", [1, 2, 3])
+def test_a_start_votes_with_the_best_points_of_its_time_since_each_of_the_last_starts(meter, lookback):
+    rng = np.random.default_rng(meter * 10 + lookback)
+    starts = np.cumsum(rng.uniform(0.12, 0.8, 40))
+    assert np.array_equal(tv.vote_tempos(starts, 0.04, 30, meter, lookback), by_hand(starts, 0.04, 30, meter, lookback))
+    assert np.array_equal(tv.vote_tempos(starts, 0.04, 30), by_hand(starts, 0.04, 30, 2, 1))  # one start back and meter 2 unless said
+    assert tv.vote_tempos(starts[:1], 0.04, 30, meter, lookback).shape == (1, 18) and tv.vote_tempos([], 0.04, 30, meter, lookback).shape == (0, 18)
+
+
+def test_a_note_between_the_beats_does_not_hide_the_beat_when_the_last_2_starts_vote():
+    beats = np.arange(24) * 0.5  # 120 beats per minute
+    starts = np.sort(np.concatenate([beats, beats + 0.29]))  # a note 0.29 s after each beat: 0.29 and 0.21 s fit no note of 120
+    one = tv.ranked_tempos(tv.vote_tempos(starts, 0.04, 40, 2, 1))[-1, 0]
+    two = tv.ranked_tempos(tv.vote_tempos(starts, 0.04, 40, 2, 2))[-1, 0]
+    assert abs(one - 120) > 4 and abs(two - 120) <= 4  # 0.5 s fits 116 and 120 alike (the tie goes to 116)
+
+
+@pytest.mark.parametrize("lookback", [0, -1, 1.5, True, "2", None])
+def test_a_lookback_that_is_not_a_whole_number_of_at_least_1_is_refused(lookback):
     with pytest.raises(ValueError):
-        tv.note_starts(silent(5), 2, rate)
+        tv.vote_tempos([0.0, 0.5], 0.0, 20, 2, lookback)
+
+
+def table(*rows):
+    """Votes of the two meters from rows of ({tempo: votes} for 2, {tempo: votes} for 3)."""
+    votes = np.zeros((len(rows), 2, 18), dtype=np.int64)
+    for i, (two, three) in enumerate(rows):
+        for place, given in enumerate((two, three)):
+            for tempo, count in given.items():
+                votes[i, place, column(tempo)] = count
+    return votes
+
+
+def test_the_meter_starts_as_2_and_the_tempo_as_120_until_there_is_a_vote():
+    assert tv.meter_tempos(table(({}, {}), ({}, {}))).tolist() == [[120.0, 2.0], [120.0, 2.0]]
+    assert tv.meter_tempos(np.zeros((0, 2, 18))).shape == (0, 2)
+
+
+def test_the_meter_whose_best_tempo_has_more_votes_is_chosen_and_an_equal_best_keeps_the_meter():
+    got = tv.meter_tempos(table(
+        ({100: 5}, {132: 4}),  # 2 leads
+        ({100: 5}, {132: 6}),  # 3 leads: its tempo
+        ({100: 6}, {132: 6}),  # equal: the meter stays 3
+        ({100: 7}, {132: 6}),  # 2 leads again
+    ))
+    assert got.tolist() == [[100.0, 2.0], [132.0, 3.0], [132.0, 3.0], [100.0, 2.0]]
+
+
+def test_a_tie_keeps_the_tempo_before_when_it_is_one_of_the_best_else_the_lowest_of_them():
+    got = tv.meter_tempos(table(
+        ({104: 3}, {}),
+        ({96: 4, 104: 4}, {}),  # 104 is one of the best: it stays (the ranking would give 96)
+        ({96: 5, 112: 5}, {}),  # 104 is not: the lowest of the best
+        ({}, {}),  # no vote: the tempo stays
+    ))
+    assert got[:, 0].tolist() == [104.0, 104.0, 96.0, 96.0]
+
+
+def test_meter_tempos_refuses_votes_that_are_not_a_table_of_two_meters_of_18_whole_numbers():
+    for bad in (np.zeros((3, 18)), np.zeros((3, 3, 18)), np.zeros((3, 2, 17)), np.full((3, 2, 18), -1), np.full((3, 2, 18), 0.5), np.full((3, 2, 18), np.nan)):
+        with pytest.raises(ValueError):
+            tv.meter_tempos(bad)
+
+
+def test_the_leading_tempo_is_the_meter_choice_of_the_votes_of_both_meters_with_the_last_2_starts():
+    rng = np.random.default_rng(5)
+    starts = np.cumsum(rng.uniform(0.15, 0.7, 60))
+    votes = np.stack([tv.vote_tempos(starts, 0.04, 40, meter, 2) for meter in (2, 3)], axis=1)
+    got = tv.leading_tempos(starts, 0.04, 40)
+    assert got.shape == (60, 2) and np.array_equal(got, tv.meter_tempos(votes))
+    assert set(np.unique(got[:, 0])) <= set(tv.TEMPOS) | {120.0} and set(np.unique(got[:, 1])) <= {2.0, 3.0}
+
+
+def test_a_dotted_quarter_then_a_quarter_and_an_eighth_at_120_is_read_with_the_beat_divided_in_3():
+    starts = np.cumsum([0.0] + [0.5, 1 / 3, 1 / 6] * 8)  # 6/8 at 120: the beat is a dotted quarter, 0.5 s
+    assert tv.leading_tempos(starts, 0.04, 40)[-1].tolist() == [120.0, 3.0]
+    assert tv.ranked_tempos(tv.vote_tempos(starts, 0.04, 40, 2, 2))[-1, 0] == 88.0  # with the beat divided in 2 alone the quarter and eighth are an eighth and a sixteenth of 88

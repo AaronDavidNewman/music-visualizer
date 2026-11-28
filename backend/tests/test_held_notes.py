@@ -324,12 +324,12 @@ def test_the_other_types_do_not_depend_on_the_spirograph_notes():
     assert notes_of("polychord", 7, 6) == 6  # three arguments, as before
 
 
-def test_the_types_that_take_the_n_loudest_notes_are_eight_and_include_spirograph_and_rhythm_circles():
-    assert len(HELD_NOTES_TYPES) == 8
+def test_the_types_that_take_the_n_loudest_notes_are_seven_and_include_spirograph_but_not_rhythm_circles():
+    assert len(HELD_NOTES_TYPES) == 7
     assert "spirograph" in HELD_NOTES_TYPES
-    assert "rhythm-circles" in HELD_NOTES_TYPES  # feature 047: its voted tempos follow the starts of the sustained loudest notes
+    assert "rhythm-circles" not in HELD_NOTES_TYPES  # its starts come from the rise of the notes since the fourth round of feature 047, not from the loudest notes
 
 
-def test_rhythm_circles_takes_the_five_loudest_notes_whatever_the_other_notes_settings():
+def test_rhythm_circles_does_not_take_the_loudest_notes_so_its_extra_notes_can_be_as_wide_as_any_picture_that_ignores_it():
     for polar, polychord, spirograph in ((5, 5, 5), (8, 8, 12)):
-        assert notes_of("rhythm-circles", polar, polychord, spirograph) == 5
+        assert notes_of("rhythm-circles", polar, polychord, spirograph) == MAX_EXTRA_NOTES

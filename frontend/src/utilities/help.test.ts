@@ -315,17 +315,21 @@ describe("the image type help for Rhythm Circles (features 038 and 047)", () => 
     expect(text()).toContain("the difference between the last two peak tempos divided by the time between them");
   });
 
-  it("says how the notes vote: the starts of the loudest notes, the note values, 18 tempos, 2 votes won and 1 lost, the limit", () => {
+  it("says how the notes vote: the starts of the notes, the note values, 18 tempos, 2 votes won and 1 lost, the limit", () => {
     const t = text();
     for (const piece of [
-      "every time a new one of the loudest notes starts",
+      "every time a new note starts",
       "a half, a quarter, an eighth or a sixteenth note, any of those dotted, or a triplet note",
       "18 tempos (76 to 144 beats per minute in steps of 4",
       "the metronome markings",
       "gets 2 votes (1 if it fits only as a dotted note or a triplet), and every tempo loses 1 vote",
       "never below 0, and never above the Vote limit",
       "A tempo with no votes is shown as 120",
-      "Extra notes setting keeps a sustained note as one note",
+      "the rise of the notes of the music, placed on the rise of the sound itself",
+      "the times since each of the two starts before it", // the fifth round of feature 047
+      "once for a beat divided in 2 and once for a beat divided in 3",
+      "the tempo already shown stays",
+      "A trill, a flurry of very short notes a step or two apart, is heard as out of time and is left out",
     ]) expect(t, piece).toContain(piece);
   });
 
@@ -350,8 +354,9 @@ describe("the image type help for Rhythm Circles (features 038 and 047)", () => 
     expect(text()).toContain("an eighth");
   });
 
-  it("names the settings that apply: Extra notes, Vote limit and Minimum distance, and says the others are ignored", () => {
-    expect(text()).toContain("Extra notes, Vote limit and Minimum distance (for the peaks) apply to it");
+  it("names the settings that apply: Vote limit and Minimum distance (not Extra notes since the fourth round of feature 047), and says the others are ignored", () => {
+    expect(text()).toContain("Vote limit and Minimum distance (for the peaks) apply to it");
+    expect(text()).not.toContain("Extra notes");
     expect(text()).not.toContain("Prominence");
     expect(text()).toContain("the other settings are ignored");
   });

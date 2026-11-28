@@ -3,10 +3,12 @@ rotate.
 
 Each circle is a ring of one color with a **notch** (an arc of 1/8 of the circle) in a contrasting color, and it
 rotates; the notch shows the rotation. The speeds come from two measurements of the sound. The **voted tempos**
-(``tempo_votes``, feature 047) are found from the notes: every time a new one of the sustained loudest notes starts, the
-time since the previous start is a note length, and the tempos (the 18 metronome markings from 76 to 144 beats per minute)
-at which that length could be a half, quarter, eighth or sixteenth note, dotted or a triplet, are voted for; the
-tempo with the most votes is the **first** (raw) tempo, and the **average** of the last 5 first tempos steadies it. The **local peaks** (``local_peaks``: the
+(``tempo_votes``, feature 047) are found from the notes: every time a note begins (``note_onsets``: found from the rise of the note
+strengths and placed on the rise of the waveform; feature 047, fourth round; the notes of a trill and above it make no starts, fifth
+round), the time since each of the 2 starts before it is a note length, and the tempos (the 18 metronome markings from 76 to 144 beats
+per minute) at which that length could be a half, quarter, eighth or sixteenth note, dotted or a triplet, are voted for, and again
+with the note values of a beat divided in 3; the meter whose best tempo has more votes gives the **first** (raw) tempo (a tie keeps
+the tempo before), and the **average** of the last 5 first tempos steadies it. The **local peaks** (``local_peaks``: the
 periodic maxima of its energy, the beats) give the tempo of the latest peak, unchanged. There are three **layers**, each a
 **level** and, inside it, the **rate of change** of that level (the circles of the tempo finder's current tempo, which
 were here from feature 040 until feature 047, are gone). From the outer circle to the innermost:
@@ -35,18 +37,20 @@ The numbers are pure functions of the starts and the peaks (``peak_series``, ``c
 ``rhythm_angles``: small arrays, testable without audio); the picture (``write_rhythm_frames``) is drawn independently for
 every frame from the angles.
 
-This module knows nothing about the audio, the job or the page: the peaks, the note strengths, the Extra notes and Vote
-limit settings, the frame rate and the picture size are passed in.
+This module knows nothing about the job or the page: the peaks, the note strengths and the two channels of the audio (for the
+starts), the Vote limit setting, the frame rate and the picture size are passed in.
 
 Order of operations:
     1. Take the times and the rates of the peaks - ``rhythm_angles()`` - ``PeakTimes`` ``(peaks,)`` (each peak's sample
        over the file's sample rate) and ``PeakRates`` ``(peaks,)`` (each peak's rate in beats per minute).
     2. Make the peak circles' series - ``peak_series()`` - ``CircleSeries`` ``(peaks, 2)``: the peak's rate and its rate
        of change (the difference from the previous peak over the seconds between them), in revolutions per minute.
-    3. Find the starts of the sustained loudest notes - ``tempo_votes.note_starts()`` on the 60 ms analysis windows, not on
-       the frames, so the starts do not depend on the frame rate - ``StartTimes`` ``(starts,)``.
-    4. Vote and make the vote circles' series - ``tempo_votes.vote_tempos()`` (``TempoVotes`` ``(starts, 18)``),
-       ``tempo_votes.ranked_tempos()`` (``RankedTempos`` ``(starts, 2)``; only its first column, the raw tempo, is used),
+    3. Find the starts of the notes - ``note_onsets.onset_starts()`` on the 60 ms analysis windows, not on the frames, so the
+       starts do not depend on the frame rate, and on the ``RawSamples`` ``(samples,)`` of the two channels, which place each start
+       on the waveform - ``StartTimes`` ``(starts,)``.
+    4. Vote and make the vote circles' series - ``tempo_votes.leading_tempos()`` (``MeterTempos`` ``(starts, 2)``: the votes of
+       both meters with the last 2 starts, ``MeterVotes`` ``(starts, 2, 18)``, and the meter and its leading tempo; only column 0,
+       the raw tempo, is used),
        ``tempo_votes.average_tempos()`` (``AveragedTempos`` ``(starts,)``: the straight average of the last 5 raw tempos) and
        ``tempo_votes.vote_series()`` (``CircleSeries`` ``(starts, 4)``): the average tempo, its rate of change, the raw tempo,
        its rate of change.
@@ -90,15 +94,16 @@ from .array_types import (
     PixelAngles,
     PixelNumbers,
     PixelWeights,
+    RawSamples,
     CenterDistances,
     Rgb,
 )
-from .buffer_interval import BUFFER_INTERVAL_MS
 from .colormaps import COLORMAP_STEPS, MIDDLE_COLOR_ROW, check_colormap, lookup_table
 from .frame_saving import SAVE_WORKERS
 from .local_peaks import DEFAULT_RATE, LocalPeaks
 from .tempo_finder import START_TEMPO
-from .tempo_votes import average_tempos, check_vote_limit, note_starts, ranked_tempos, vote_series, vote_tempos
+from .note_onsets import onset_starts
+from .tempo_votes import average_tempos, check_vote_limit, leading_tempos, vote_series
 
 LAYERS = 3  # the average tempo, the raw (first voted) tempo and the local peak's own tempo: each a level and the rate of change of that level
 CIRCLES = 2 * LAYERS  # outer to inner: the level and the rate of change of each layer
@@ -107,6 +112,7 @@ VOTE_DEFAULTS = (START_TEMPO, 0.0, START_TEMPO, 0.0)
 PEAK_DEFAULTS = (DEFAULT_RATE, 0.0)  # and before the first peak: the rate of 60, with no change
 DEFAULT_SPEEDS = VOTE_DEFAULTS + PEAK_DEFAULTS
 NOTCH = 1 / 8  # the arc of a notch, as a share of the circle
+START_RESOLUTION = 0.04  # seconds: how well a start is known (the starts are placed on the waveform), so a length fits within 20 ms
 # what ``_geometry`` returns: pixel numbers, ring, coverage, distance, angle
 _Geometry = tuple[PixelNumbers, Indices, PixelWeights, CenterDistances, PixelAngles]
 MARGIN = 10  # pixels between the outer circle and the nearer edge of the picture
@@ -288,22 +294,27 @@ def _check_data(data: RhythmData) -> CircleAngles:
     return angles.astype(np.float64)
 
 
-def rhythm_angles(peaks: LocalPeaks, frame_rate: float, frames: int, windows: NoteStrengths, extra_notes: int, vote_limit: int) -> RhythmData:
+def rhythm_angles(
+    peaks: LocalPeaks, frame_rate: float, frames: int, windows: NoteStrengths, left: RawSamples, right: RawSamples, vote_limit: int
+) -> RhythmData:
     """The angles of the six circles at the middle of each of ``frames`` frames of ``frame_rate`` frames a second, from the
     local peaks and the note strengths of a file.
 
     The time of a peak is its sample over the file's sample rate and its tempo its rate in beats per minute (see
     :func:`peak_series`); the middle of frame ``f`` is at ``(f + 0.5) / frame_rate`` seconds, as for the position in the
-    local peak of the other pictures. The starts of the sustained loudest notes (``extra_notes`` the Extra notes setting) are
-    voted on (``vote_limit`` the Vote limit); they are found in the 60 ms analysis windows (``windows``, one row every
-    ``BUFFER_INTERVAL_MS``), not in the frames, with a time resolution of that step, so the voted tempos do not depend on
-    the frame rate (it only decides at which moments the finished tempos are sampled into angles); the average of the last 5
-    first tempos and its change turn the first two circles, the raw first tempo and its change the next two, the peaks the last
-    two.
+    local peak of the other pictures. The starts of the notes are voted on (``vote_limit`` the Vote limit); they are found
+    from the rise of the note strengths in the 60 ms analysis windows (``windows``, one row every ``BUFFER_INTERVAL_MS``), not in the frames,
+    and placed on the waveform of the two channels (``left`` and ``right``, at the file's sample rate, ``peaks.file_rate``), and are
+    known to :data:`START_RESOLUTION`, 40 ms (``note_onsets``; the notes of a trill and above it make none); the votes are those of
+    ``tempo_votes.leading_tempos`` (the last 2 starts, a beat divided in 2 or in 3, a tie keeps the tempo), so the voted tempos do not depend on the frame rate (it only decides at which
+    moments the finished tempos are sampled into angles); the average of the last 5 first tempos and its change turn the first two
+    circles, the raw first tempo and its change the next two, the peaks the last two. The Extra notes setting plays no part.
 
     Arrays:
         ``windows``: ``ArrayLike`` ``(windows, 88)`` - the strength of each note in each 60 ms analysis window
             (``NoteStrengths``, ``AnalysisResult.frames``); any number of rows, not tied to the frames.
+        ``left``, ``right``: ``RawSamples`` ``(samples,)`` - the two channels of the file as read, of the same length; the starts are
+            placed on their waveform.
 
     Returns:
         ``RhythmData`` - its ``angles`` ``CircleAngles`` ``(frames, 6)``.
@@ -319,10 +330,8 @@ def rhythm_angles(peaks: LocalPeaks, frame_rate: float, frames: int, windows: No
     moments = (np.arange(int(frames)) + 0.5) / float(frame_rate)
     peak_times = [peak.sample / peaks.file_rate for peak in peaks.peaks]
     peak_rows = peak_series(peak_times, [peak.rate for peak in peaks.peaks])
-    window_rate = 1000.0 / BUFFER_INTERVAL_MS  # analysis windows a second: the rows of ``windows`` are 60 ms apart
-    starts = note_starts(array, extra_notes, window_rate)
-    resolution = BUFFER_INTERVAL_MS / 1000  # a start is known to a window: 60 ms, so a length fits within 30 ms
-    raw = ranked_tempos(vote_tempos(starts, resolution, limit))[:, 0]  # the first tempo after each start
+    starts = onset_starts(array, left, right, peaks.file_rate)  # the rows of ``windows`` are 60 ms apart
+    raw = leading_tempos(starts, START_RESOLUTION, limit)[:, 0]  # the first tempo after each start (the meter in column 1 is not drawn)
     vote_rows = vote_series(starts, np.column_stack([average_tempos(raw), raw]))  # the average first, the raw tempo inside it
     vote_angles = circle_angles(starts, vote_rows, moments, VOTE_DEFAULTS)
     peak_angles = circle_angles(peak_times, peak_rows, moments, PEAK_DEFAULTS)

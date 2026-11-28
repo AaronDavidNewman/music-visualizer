@@ -46,3 +46,27 @@ notch never jumps. A speed is constant between two events (starts for the first 
 
 Group **Rhythm Circles** (group id `rhythm-circles`, this type only): slider **Vote limit** (1 to 100, step 1, default 20, readout the number) with an info text; then **Held notes** (Extra notes, 1 to 5) and
 **Local peaks** (Minimum distance, no checkbox). The result summary shows the Vote limit for this type. The other types show none of this.
+
+## Fourth round (2026-11-26): `note_onsets`
+
+| Function | Returns | Rule |
+|----------|---------|------|
+| `onset_rises(values) -> OnsetRises` | `(windows,)` | the summed rise of the 84 notes over the larger of the 2 windows before |
+| `pick_onsets(rises) -> StartTimes` | `(starts,)` seconds | peaks: largest within 2 windows, at least 20% of the largest within 33 windows; under 2 windows apart: the larger |
+| `refine_starts(starts, left, right, sample_rate) -> StartTimes` | `(starts,)` seconds | each start moves to the largest rise of the waveform level from 0.10 s before to 0.05 s after; within 30 ms of the one before: dropped |
+| `onset_starts(values, left, right, sample_rate) -> StartTimes` | `(starts,)` seconds | `refine_starts(pick_onsets(onset_rises(values)), ...)` |
+
+`rhythm_angles(peaks, frame_rate, frames, windows, left, right, vote_limit)`; the fit resolution is `rhythm_circles.START_RESOLUTION` (0.04 s). `tempo_votes.note_starts` no longer exists. The Extra notes setting is accepted (1 to 8) and ignored for Rhythm Circles.
+
+## Fifth round (2026-11-27)
+
+| Function | Returns | Rule |
+|----------|---------|------|
+| `trills.find_trills(left, right, sample_rate, windows) -> TrillSpans` | `(spans, 3)` | `trill_spans(*trill_scores(semitone_levels(left, right, sample_rate), sample_rate, windows))` |
+| `note_onsets.onset_rises(values, spans=()) -> OnsetRises` | `(windows,)` | as before, without the notes from one semitone below each trill's lowest note upward inside it |
+| `note_onsets.onset_starts(values, left, right, sample_rate)` | `(starts,)` | finds the trills first; otherwise as before |
+| `tempo_votes.vote_tempos(starts, resolution, limit, meter=2, lookback=1)` | `(starts, 18)` | with `lookback` k the best points of the times since each of the last k starts; `meter` 3 the note values of a beat divided in 3 |
+| `tempo_votes.meter_tempos(votes) -> MeterTempos` | `(starts, 2)` | the meter whose best tempo has more votes (equal: stays); its tempo with the most votes, the tempo before when among the best |
+| `tempo_votes.leading_tempos(starts, resolution, limit) -> MeterTempos` | `(starts, 2)` | both meters with `LOOKBACK` 2, then `meter_tempos`; Rhythm Circles takes column 0 |
+
+The request field `vote_limit` defaults to 40 (was 20); everything else in the request and the answer is unchanged.

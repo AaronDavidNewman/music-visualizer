@@ -43,8 +43,10 @@ Pipeline overview:
                * BEAT: ``local_peaks.measure_local_peaks()`` then ``LocalPeaks.frame_positions()`` - ``BeatPositions``
                  ``(frames,)``: the place of each frame in the local energy peak, 0 to 1. Done before AVERAGE.
                * RHYTHM: ``local_peaks.measure_local_peaks()`` then ``rhythm_circles.rhythm_angles()`` (which asks
-                 ``tempo_votes.note_starts()`` for the starts of the sustained loudest notes in the 60 ms ANALYZE windows,
-                 then ``vote_tempos()``, ``ranked_tempos()``, ``average_tempos()`` and ``vote_series()`` for the average and the raw best-voted tempo) -
+                 ``note_onsets.onset_starts()`` for the starts of the notes (the rise of the note strengths of the 60 ms ANALYZE windows
+                 without the notes of the trills that ``trills.find_trills()`` finds, placed on the waveform of the two channels),
+                 then ``leading_tempos()`` (the votes of both meters with the last 2 starts, the meter and its leading tempo),
+                 ``average_tempos()`` and ``vote_series()`` for the average and the raw best-voted tempo) -
                  ``CircleAngles`` ``(frames, 6)``: the angle of each ring in each frame. Needs only the ANALYZE windows
                  (the voted tempos do not depend on the frame rate).
                * ENERGY: ``energy_graphs.frame_energy()`` - two ``EnergyTotals`` ``(frames, 84)``: the running rank
@@ -54,7 +56,7 @@ Pipeline overview:
                the only smoothing of the note data: the frame rate decides how many windows each frame averages, and
                the frames are not blended with each other. Energy Graphs and Rhythm Circles draw from their
                measurement and do not draw from these values (Rhythm Circles finds the starts of its voted
-               tempos in the windows, before averaging).
+               tempos in the windows and on the waveform, before averaging).
     DRAW     - the type's own stages (below) - ``Pictures`` ``(height, width, 3)`` for each frame, 400 rows by 600
                columns.
     SAVE     - each picture is written as ``frame_<index>.png`` (a few threads, ``frame_saving.SAVE_WORKERS``) and
@@ -117,13 +119,14 @@ Pipeline overview:
         2. ``chromatic_decay.write_chromatic_frames()`` - the target of the beat (``ring_levels()``,
            ``ring_colors_of()``), then ``chromatic_decay._frame()`` for each frame: the 12 circles on a ring in
            circle-of-fifths order: ``Pictures``.
-    rhythm-circles - MEASURE: RHYTHM (no beat; the local peaks for the two inner rings, the held loudest notes for the voting). Settings that
-      apply: Extra notes (k, 1 to 5), Vote limit (1 to 100, default 20), Minimum distance (the peaks), the colormap.
+    rhythm-circles - MEASURE: RHYTHM (no beat; the local peaks for the two inner rings, the rise of the notes for the voting). Settings that
+      apply: Vote limit (1 to 100, default 40 since the fifth round), Minimum distance (the peaks), the colormap; Extra notes (k) plays no part (feature 047, fourth round).
       DRAW:
-        1. ``tempo_votes.note_starts()`` - ``StartTimes`` ``(starts,)`` (the starts of the held 5 loudest notes, made with
-           ``held_notes.hold_loudest()``: ``LoudestIndices`` ``(frames, 5)``), then ``tempo_votes.vote_tempos()`` -
-           ``TempoVotes`` ``(starts, 18)`` (with ``fitting_tempos()``: ``FitMatrix`` ``(cycles, 18)``),
-           ``tempo_votes.ranked_tempos()`` - ``RankedTempos`` ``(starts, 2)``, ``tempo_votes.average_tempos()`` -
+        1. ``note_onsets.onset_starts()`` - ``StartTimes`` ``(starts,)`` (the trills: ``trills.find_trills()`` - ``TrillSpans`` ``(spans, 3)``
+           from ``SemitoneLevels`` ``(levels, 57)`` and ``TrillScores`` ``(windows,)``; the starts of the notes: ``OnsetRises`` ``(windows,)``
+           without the notes of the trills, the peaks of the rise, each placed on the waveform: ``RawSamples`` ``(samples,)``), then
+           ``tempo_votes.leading_tempos()`` - ``MeterTempos`` ``(starts, 2)`` (``vote_tempos()`` for each meter with the last 2 starts:
+           ``MeterVotes`` ``(starts, 2, 18)``, then ``meter_tempos()``), ``tempo_votes.average_tempos()`` -
            ``AveragedTempos`` ``(starts,)`` and ``tempo_votes.vote_series()`` - ``CircleSeries`` ``(starts, 4)``; ``rhythm_circles.peak_series()`` - ``CircleSeries`` ``(peaks, 2)``; both turned
            into angles by ``rhythm_circles.circle_angles()`` and joined: ``CircleAngles`` ``(frames, 6)``.
         2. ``rhythm_circles.write_rhythm_frames()`` - ``rhythm_circles.ring_colors_rows()`` and
